@@ -174,6 +174,7 @@ async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Resp
         }
         proxy_req = proxy_req.header(key_str, value.as_bytes());
     }
+    proxy_req = proxy_req.header("host", format!("localhost:{port}"));
 
     match proxy_req.send().await {
         Ok(resp) => {

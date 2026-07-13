@@ -12,4 +12,4 @@ RUN bun install --frozen-lockfile --registry=https://registry.npmmirror.com
 COPY . .
 RUN bun run build
 EXPOSE 4321
-CMD ["bun", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
+CMD ["bun", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321", "--allowed-hosts", "true"]
