@@ -1,0 +1,136 @@
+---
+import type { Product } from "../data/products.ts";
+
+export interface Props {
+  t: any;
+  products: Product[];
+}
+
+const { t, products } = Astro.props;
+
+const defaultActiveId = "tact";
+const routes = ["0x81.uk", "tact.0x81.uk"];
+---
+
+<section class="ide" id="matrix">
+  <div class="ide-window">
+    <div class="ide-titlebar">
+      <div class="ide-traffic-lights">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="ide-titlebar-title">{t.ide.window_title}</div>
+      <div class="ide-titlebar-status">
+        <span class="badge-dot"></span>
+        <span>{t.ide.ready}</span>
+      </div>
+    </div>
+
+    <div class="ide-body">
+      <div class="ide-explorer">
+        <div class="ide-explorer-heading">{t.ide.products}</div>
+        {
+          products.map((product) => (
+            <div
+              class="ide-explorer-item"
+              data-product={product.id}
+              data-active={String(product.id === defaultActiveId)}
+            >
+              <span>{product.id}</span>
+              <span class={`status-pill ${product.status === "live" ? "is-live" : "is-soon"}`}>
+                {product.status === "live" ? t.ide.live : t.ide.soon}
+              </span>
+            </div>
+          ))
+        }
+
+        <div class="ide-explorer-heading">{t.ide.routes}</div>
+        {
+          routes.map((route) => (
+            <div class="ide-explorer-route">{route}</div>
+          ))
+        }
+      </div>
+
+      <div class="ide-main">
+        <div class="ide-tabs">
+          {
+            products.map((product) => (
+              <div
+                class="ide-tab"
+                data-product={product.id}
+                data-active={String(product.id === defaultActiveId)}
+              >
+                {product.fileName}
+              </div>
+            ))
+          }
+        </div>
+
+        {
+          products.map((product) => (
+            <div
+              class="ide-panel"
+              data-product={product.id}
+              data-active={String(product.id === defaultActiveId)}
+            >
+              <div class="ide-code">
+                {product.codeLines.map((line, index) => (
+                  <div class="ide-code-line">
+                    <span class="ide-code-line-number">{index + 1}</span>
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+              <p class="ide-blurb">{t.products[product.id].blurb}</p>
+              {product.status === "live" && product.url ? (
+                <a class="ide-open-link" href={product.url} target="_blank" rel="noopener noreferrer">
+                  {t.ide.open_product}
+                </a>
+              ) : (
+                <p class="ide-coming-soon">{t.ide.coming_soon}</p>
+              )}
+            </div>
+          ))
+        }
+
+        <div class="ide-terminal" data-tact={t.ide.terminal_tact} data-soon={t.ide.terminal_soon}>
+          {defaultActiveId === "tact" ? t.ide.terminal_tact : t.ide.terminal_soon}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const root = document.getElementById("matrix");
+  if (root) {
+    const explorerItems = root.querySelectorAll<HTMLElement>(".ide-explorer-item[data-product]");
+    const tabs = root.querySelectorAll<HTMLElement>(".ide-tab[data-product]");
+    const panels = root.querySelectorAll<HTMLElement>(".ide-panel[data-product]");
+    const terminal = root.querySelector<HTMLElement>(".ide-terminal");
+
+    const setActive = (id: string) => {
+      explorerItems.forEach((el) => {
+        el.setAttribute("data-active", String(el.dataset.product === id));
+      });
+      tabs.forEach((el) => {
+        el.setAttribute("data-active", String(el.dataset.product === id));
+      });
+      panels.forEach((el) => {
+        el.setAttribute("data-active", String(el.dataset.product === id));
+      });
+      if (terminal) {
+        terminal.textContent = id === "tact" ? terminal.dataset.tact ?? "" : terminal.dataset.soon ?? "";
+      }
+    };
+
+    [...explorerItems, ...tabs].forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = el.dataset.product;
+        if (id) setActive(id);
+      });
+    });
+  }
+</script>
