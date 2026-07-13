@@ -1,0 +1,16 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Nav from "../../components/Nav.astro";
+import Hero from "../../components/Hero.astro";
+import ProductMatrixIDE from "../../components/ProductMatrixIDE.astro";
+import Footer from "../../components/Footer.astro";
+import zh from "../../i18n/zh.json";
+import { products } from "../../data/products";
+const t = zh;
+---
+<BaseLayout title={t.site.title} description={t.site.description} lang="zh">
+  <Nav {t} currentLang="zh" />
+  <Hero {t} />
+  <ProductMatrixIDE {t} {products} />
+  <Footer {t} />
+</BaseLayout>

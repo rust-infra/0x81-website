@@ -1,6 +1,16 @@
 ---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Nav from "../components/Nav.astro";
+import Hero from "../components/Hero.astro";
+import ProductMatrixIDE from "../components/ProductMatrixIDE.astro";
+import Footer from "../components/Footer.astro";
+import en from "../i18n/en.json";
+import { products } from "../data/products";
+const t = en;
 ---
-<html lang="en">
-  <head><meta charset="utf-8" /><title>ai.0x81</title></head>
-  <body><h1>ai.0x81</h1></body>
-</html>
+<BaseLayout title={t.site.title} description={t.site.description} lang="en">
+  <Nav {t} currentLang="en" />
+  <Hero {t} />
+  <ProductMatrixIDE {t} {products} />
+  <Footer {t} />
+</BaseLayout>
