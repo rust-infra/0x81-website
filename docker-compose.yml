@@ -5,6 +5,12 @@ services:
       - "4321:4321"
     restart: unless-stopped
 
+  0xindex:
+    build: ./0xindex
+    ports:
+      - "4320:4320"
+    restart: unless-stopped
+
   website-rs:
     build:
       context: ./website-rs
@@ -15,8 +21,10 @@ services:
     environment:
       - RUST_LOG=info
       - PROXY_UPSTREAM_HOST_TACT=website
+      - PROXY_UPSTREAM_HOST_INDEX=0xindex
     depends_on:
       - website
+      - 0xindex
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

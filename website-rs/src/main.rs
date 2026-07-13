@@ -127,16 +127,23 @@ static PROXY_CLIENT: std::sync::LazyLock<reqwest::Client> =
     std::sync::LazyLock::new(reqwest::Client::new);
 
 async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
-    let host = req
+    let host_header = req
         .headers()
         .get("host")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_lowercase();
+    let host = host_header
+        .rsplit_once(':')
+        .map(|(host, _port)| host)
+        .unwrap_or(&host_header);
 
     if host == "tact.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_TACT");
-        proxy_request(req, &upstream,4321).await
+        proxy_request(req, &upstream, 4321).await
+    } else if host == "0x81.uk" || host == "www.0x81.uk" {
+        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_INDEX");
+        proxy_request(req, &upstream, 4320).await
     } else {
         next.run(req).await
     }
