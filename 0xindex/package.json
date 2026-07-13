@@ -1,0 +1,15 @@
+{
+  "name": "0xindex",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "astro dev --port 4320",
+    "build": "astro build",
+    "preview": "astro preview --port 4320",
+    "start": "bun run server.ts"
+  },
+  "dependencies": {
+    "astro": "^5.7.0"
+  }
+}
