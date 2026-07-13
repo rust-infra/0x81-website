@@ -1,0 +1,17 @@
+---
+// StatusBar.astro — Top status line (TUI-style)
+
+export interface Props {
+  mode?: string;
+  model?: string;
+}
+
+const { mode = "default", model = "claude-sonnet-4" } = Astro.props;
+---
+
+<div class="status-bar" slot="status-bar">
+  <span>tact-ui</span>
+  <span class="spacer"></span>
+  <span>mode: {mode}</span>
+  <span>model: {model}</span>
+</div>

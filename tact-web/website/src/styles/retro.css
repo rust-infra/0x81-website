@@ -1,0 +1,11 @@
+/* retro.css — TUI retro palette tokens */
+:root {
+  --bg: #0f0c06;
+  --fg: #ffb432;
+  --accent: #ffd250;
+  --success: #c8ff50;
+  --error: #ff3c28;
+  --border: #64461e;
+  --status-bar: #281c0c;
+  --bg-secondary: #1a140e;
+}

@@ -1,0 +1,216 @@
+/* global.css — Base styles for tact product website */
+
+@import "./retro.css";
+
+/* --- Reset & base --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: "JetBrains Mono", "Noto Sans SC", monospace;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 16px;
+  line-height: 1.6;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+img, svg {
+  max-width: 100%;
+  display: block;
+}
+
+code, pre {
+  font-family: "JetBrains Mono", monospace;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* --- Utility --- */
+.container {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
+
+/* --- Status bar --- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--status-bar);
+  border-bottom: 1px solid var(--border);
+  padding: 0.375rem 1.5rem;
+  font-size: 0.75rem;
+  color: var(--border);
+  flex-shrink: 0;
+}
+.status-bar span {
+  white-space: nowrap;
+}
+.status-bar .spacer {
+  flex: 1;
+}
+
+/* --- Footer --- */
+.site-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  background: var(--status-bar);
+  padding: 2rem 1.5rem;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--border);
+}
+.site-footer a {
+  color: var(--fg);
+}
+.site-footer .footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* --- Scanline overlay --- */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  z-index: 9999;
+}
+
+/* --- Button styles --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn:hover {
+  background: var(--status-bar);
+  border-color: var(--accent);
+}
+.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+.btn-primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn-copy {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+/* --- Section spacing --- */
+section {
+  padding: 4rem 0;
+}
+section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+  color: var(--accent);
+}
+
+/* --- Box-drawing frames --- */
+.frame {
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+  position: relative;
+}
+.frame::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  transform: translateY(-50%);
+  background: var(--bg);
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  color: var(--border);
+  white-space: nowrap;
+  max-width: calc(100% - 1.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Code blocks --- */
+.code-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 1rem;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  position: relative;
+}
+.code-block .copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+/* --- Blinking cursor --- */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: "▌";
+  color: var(--fg);
+  animation: blink 1s step-end infinite;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  html { font-size: 14px; }
+  section { padding: 2.5rem 0; }
+  .container { padding: 0 1rem; }
+}

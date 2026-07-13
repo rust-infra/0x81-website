@@ -1,0 +1,96 @@
+{
+  "site": {
+    "title": "tact — 终端优先的 AI 编程代理",
+    "description": "tact 是一个用 Rust 构建的终端优先 AI 编程代理。自托管、MIT 许可、可通过 MCP、技能和钩子系统扩展。"
+  },
+  "nav": {
+    "features": "功能",
+    "install": "安装",
+    "github": "GitHub"
+  },
+  "hero": {
+    "tagline": "AI 编程代理。",
+    "subtitle": "Rust 原生构建 · MIT 开源许可 · 代码不离机",
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
+    "cta_install": "复制安装命令",
+    "cta_github": "在 GitHub 上查看",
+    "copied": "已复制！"
+  },
+  "value_props": {
+    "rust_binary": {
+      "title": "原生 Rust 二进制",
+      "desc": "约 15MB，无需 Electron 或 Node.js。单个二进制，即刻启动。"
+    },
+    "self_hosted": {
+      "title": "自托管设计",
+      "desc": "API 请求直连 LLM 提供商。无云端中继，默认无遥测。"
+    },
+    "mit": {
+      "title": "MIT 许可",
+      "desc": "真正开源。可自由复制、修改、再分发，无任何限制。"
+    },
+    "extensible": {
+      "title": "可扩展",
+      "desc": "MCP 服务器 · 自定义技能 · 钩子系统 · 40+ 内置工具"
+    }
+  },
+  "features": {
+    "title": "功能特性",
+    "agent_loop": {
+      "title": "代理循环",
+      "desc": "流式输出、自动上下文压缩、崩溃恢复。支持无头和交互两种模式。"
+    },
+    "tools": {
+      "title": "40+ 工具",
+      "desc": "文件读写、Shell 命令、LSP、Web 搜索、团队消息、工作树隔离、定时任务。"
+    },
+    "permissions": {
+      "title": "权限模式",
+      "desc": "选择安全级别：默认（逐操作确认）、计划（审阅后执行）、自动（完全自主）。"
+    },
+    "subagents": {
+      "title": "子代理与工作树",
+      "desc": "在隔离的 git 工作树中生成子代理，实现并行沙盒化任务执行。"
+    },
+    "mcp": {
+      "title": "原生 MCP",
+      "desc": "将任何 MCP 服务器作为工具提供者使用。借助不断增长的 MCP 生态扩展 tact。"
+    }
+  },
+  "install": {
+    "title": "快速开始",
+    "step1": {
+      "title": "安装",
+      "desc": "在 Unix 或 Windows 上运行安装脚本。",
+      "tab_unix": "Unix",
+      "tab_windows": "Windows",
+      "cmd_unix": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
+      "cmd_windows": "powershell -c \"irm https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.ps1 | iex\""
+    },
+    "step2": {
+      "title": "配置",
+      "desc": "在项目根目录创建 tact.toml 文件。",
+      "config": "[llm]\nprovider = \"deepseek\"\n\n[llm.providers.deepseek]\napi_key = \"sk-ant-...\"\nbase_url = \"https://api.deepseek.com\"\nmodel = \"deepseek-v4-flash\"\nmodels = [\n    \"deepseek-v4-flash\",\n    \"deepseek-v4-pro\",\n]"
+    },
+    "step3": {
+      "title": "运行",
+      "desc": "启动交互模式或无头模式。",
+      "cmd_interactive": "tact-ui --config=tact.toml",
+      "cmd_headless": "tact-ui --config=tact.toml headless \"重构这个模块\""
+    }
+  },
+  "theme_preview": {
+    "title": "主题预览",
+    "retro": "复古",
+    "nord": "北欧",
+    "brutal": "粗野",
+    "dark": "暗色"
+  },
+  "footer": {
+    "github": "GitHub",
+    "issues": "问题反馈",
+    "contributing": "贡献指南",
+    "mit": "MIT 许可",
+    "built_with": "由 Rg0x80 用 🦀 打造"
+  }
+}

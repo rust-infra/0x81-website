@@ -1,0 +1,96 @@
+{
+  "site": {
+    "title": "tact — Terminal-first AI coding agent",
+    "description": "tact is a terminal-first AI coding agent built in Rust. Self-hosted, MIT licensed, extensible via MCP, skills, and hooks."
+  },
+  "nav": {
+    "features": "Features",
+    "install": "Install",
+    "github": "GitHub"
+  },
+  "hero": {
+    "tagline": "AI coding agent.",
+    "subtitle": "Built in Rust. MIT licensed. Your code never leaves your machine.",
+    "install_cmd": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
+    "cta_install": "Copy install command",
+    "cta_github": "View on GitHub",
+    "copied": "Copied!"
+  },
+  "value_props": {
+    "rust_binary": {
+      "title": "Native Rust binary",
+      "desc": "~15MB, no Electron, no Node.js. One binary, instant start."
+    },
+    "self_hosted": {
+      "title": "Self-hosted by design",
+      "desc": "Your API calls go direct. No cloud relay, no telemetry by default."
+    },
+    "mit": {
+      "title": "MIT licensed",
+      "desc": "Truly open source. Fork, modify, redistribute without restrictions."
+    },
+    "extensible": {
+      "title": "Extensible",
+      "desc": "MCP servers · Custom skills · Hook system · 40+ built-in tools"
+    }
+  },
+  "features": {
+    "title": "Features",
+    "agent_loop": {
+      "title": "Agent loop",
+      "desc": "Streaming outputs, automatic context compaction, crash recovery. Run headless or interactive."
+    },
+    "tools": {
+      "title": "40+ tools",
+      "desc": "File I/O, Shell, LSP, Web search, Team messaging, Worktree isolation, Cron scheduling."
+    },
+    "permissions": {
+      "title": "Permission modes",
+      "desc": "Choose your safety level: default (ask per action), plan (review before execution), auto (fully autonomous)."
+    },
+    "subagents": {
+      "title": "Sub-agents & worktrees",
+      "desc": "Spawn child agents in isolated git worktrees for parallel, sandboxed task execution."
+    },
+    "mcp": {
+      "title": "Native MCP",
+      "desc": "Use any MCP server as a tool provider. Extend tact with the growing MCP ecosystem."
+    }
+  },
+  "install": {
+    "title": "Quick Start",
+    "step1": {
+      "title": "Install",
+      "desc": "Run the install script on Unix or Windows.",
+      "tab_unix": "Unix",
+      "tab_windows": "Windows",
+      "cmd_unix": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
+      "cmd_windows": "powershell -c \"irm https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.ps1 | iex\""
+    },
+    "step2": {
+      "title": "Configure",
+      "desc": "Create a tact.toml in your project root.",
+      "config": "[llm]\nprovider = \"deepseek\"\n\n[llm.providers.deepseek]\napi_key = \"sk-ant-...\"\nbase_url = \"https://api.deepseek.com\"\nmodel = \"deepseek-v4-flash\"\nmodels = [\n    \"deepseek-v4-flash\",\n    \"deepseek-v4-pro\",\n]"
+    },
+    "step3": {
+      "title": "Run",
+      "desc": "Launch interactive or headless mode.",
+      "cmd_interactive": "tact-ui --config=tact.toml",
+      "cmd_headless": "tact-ui --config=tact.toml headless \"Refactor this module\""
+    }
+  },
+  "theme_preview": {
+    "title": "Theme preview",
+    "retro": "retro",
+    "nord": "nord",
+    "brutal": "brutal",
+    "dark": "dark"
+  },
+  "footer": {
+    "github": "GitHub",
+    "issues": "Issues",
+    "contributing": "Contributing",
+    "mit": "MIT",
+    "built_with": "Built with 🦀 by Rg0x80"
+  }
+}

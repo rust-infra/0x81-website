@@ -1,0 +1,98 @@
+---
+// ThemePreview.astro — Terminal screenshot replicas in each theme
+
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+
+const themes = [
+  { id: "retro", name: t.theme_preview.retro, bg: "#0f0c06", fg: "#ffb432", accent: "#c8ff50" },
+  { id: "nord", name: t.theme_preview.nord, bg: "#2e3440", fg: "#d8dee9", accent: "#88c0d0" },
+  { id: "brutal", name: t.theme_preview.brutal, bg: "#1a1a1a", fg: "#ffffff", accent: "#ff0055" },
+  { id: "dark", name: t.theme_preview.dark, bg: "#0d1117", fg: "#c9d1d9", accent: "#58a6ff" },
+];
+---
+
+<section id="theme-preview">
+  <div class="container">
+    <h2>{t.theme_preview.title}</h2>
+    <div class="theme-grid">
+      {themes.map((theme) => (
+        <div class="theme-card" style={`--card-bg: ${theme.bg}; --card-fg: ${theme.fg}; --card-accent: ${theme.accent}`}>
+          <div class="term-titlebar">
+            <span class="term-dot red"></span>
+            <span class="term-dot yellow"></span>
+            <span class="term-dot green"></span>
+            <span class="term-label">tact-ui — {theme.name}</span>
+          </div>
+          <div class="term-body">
+            <span class="prompt">❯</span> tact-ui headless "bump deps"
+            <div class="term-output">
+              <span class="dim">┌─ tact-agent ────────────────────</span>
+              <span>│ ✓ Updated crate: clap v4 → v4.5</span>
+              <span>│ ✓ Updated crate: serde v1 → v1.2</span>
+              <span class="dim">└──────────────────────────────</span>
+            </div>
+            <span class="prompt">❯</span> <span class="cursor-blink"></span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+  }
+  .theme-card {
+    background: var(--card-bg);
+    color: var(--card-fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+  .term-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.6rem;
+    background: rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .term-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .term-dot.red { background: #ff5f56; }
+  .term-dot.yellow { background: #ffbd2e; }
+  .term-dot.green { background: #27c93f; }
+  .term-label {
+    margin-left: 0.5rem;
+    opacity: 0.6;
+    font-size: 0.7rem;
+  }
+  .term-body {
+    padding: 0.75rem;
+    font-size: 0.7rem;
+  }
+  .prompt {
+    color: var(--card-accent);
+  }
+  .term-output {
+    display: flex;
+    flex-direction: column;
+    padding-left: 0.6rem;
+    margin: 0.25rem 0;
+  }
+  .dim {
+    opacity: 0.5;
+  }
+</style>

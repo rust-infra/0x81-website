@@ -1,0 +1,21 @@
+---
+// Footer.astro
+
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/rust-infra/tact" target="_blank" rel="noopener">{t.footer.github}</a>
+      <a href="https://github.com/rust-infra/tact/issues" target="_blank" rel="noopener">{t.footer.issues}</a>
+      <a href="https://github.com/rust-infra/tact/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">{t.footer.contributing}</a>
+      <a href="https://github.com/rust-infra/tact/blob/main/LICENSE" target="_blank" rel="noopener">{t.footer.mit}</a>
+    </div>
+    <p>{t.footer.built_with}</p>
+  </div>
+</footer>

@@ -1,0 +1,104 @@
+---
+// Hero.astro — Top hero section with tagline and CTA
+
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="hero">
+  <div class="container">
+    <div class="hero-inner">
+      <h1 class="hero-tagline">
+        {t.hero.tagline}
+        <span class="cursor-blink"></span>
+      </h1>
+      <p class="hero-subtitle">{t.hero.subtitle}</p>
+
+      <div class="hero-actions">
+        <div
+          class="code-block hero-install"
+          data-lang="bash"
+          data-cmd-unix={t.install.step1.cmd_unix}
+          data-cmd-windows={t.install.step1.cmd_windows}
+        >
+          <code id="hero-cmd">{t.install.step1.cmd_unix}</code>
+          <button class="btn btn-copy copy-btn" data-copy="hero-cmd">
+            <span class="copy-text">{t.hero.cta_install}</span>
+          </button>
+        </div>
+
+        <a href="https://github.com/rust-infra/tact" target="_blank" rel="noopener" class="btn btn-primary">
+          {t.hero.cta_github} ↗
+        </a>
+      </div>
+
+      <p class="hero-meta">
+        ~15 MB · Rust · MIT · 40+ tools · MCP-native
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  #hero {
+    padding: 5rem 0 3rem;
+    text-align: center;
+  }
+  .hero-inner {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .hero-tagline {
+    font-size: 2.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .hero-subtitle {
+    font-size: 1rem;
+    opacity: 0.75;
+    margin-bottom: 2rem;
+  }
+  .hero-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  .hero-install {
+    width: 100%;
+    max-width: 640px;
+    text-align: left;
+  }
+  .hero-meta {
+    margin-top: 2rem;
+    font-size: 0.75rem;
+    color: var(--border);
+  }
+  .btn-primary {
+    font-size: 1rem;
+    padding: 0.75rem 2rem;
+  }
+
+  @media (max-width: 600px) {
+    #hero { padding: 3rem 0 2rem; }
+    .hero-tagline { font-size: 1.6rem; }
+  }
+</style>
+
+<script>
+  const block = document.querySelector(".hero-install");
+  const code = document.getElementById("hero-cmd");
+  if (block instanceof HTMLElement && code) {
+    const platform = navigator.userAgentData?.platform ?? navigator.platform ?? navigator.userAgent;
+    const isWindows = /Win/i.test(platform);
+    const cmd = block.dataset[isWindows ? "cmdWindows" : "cmdUnix"];
+    if (cmd) {
+      code.textContent = cmd;
+      block.dataset.lang = isWindows ? "powershell" : "bash";
+    }
+  }
+</script>
