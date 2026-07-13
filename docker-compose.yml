@@ -1,0 +1,10 @@
+services:
+  website:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_DIR: website
+    ports:
+      - "4321:4321"
+    restart: unless-stopped

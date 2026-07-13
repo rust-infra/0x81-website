@@ -1,0 +1,11 @@
+.git
+**/.git
+**/node_modules
+**/dist
+**/.astro
+**/.gitignore
+**/*.md
+**/bun.lockb
+Dockerfile
+docker-compose.yml
+.dockerignore
