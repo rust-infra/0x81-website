@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG APP_DIR=website
-ARG BASE_IMAGE=docker.npmmirror.com/library/node:22-alpine
+ARG BASE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
 
 FROM ${BASE_IMAGE}
 ARG APP_DIR
