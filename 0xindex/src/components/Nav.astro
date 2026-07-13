@@ -1,0 +1,26 @@
+---
+export interface Props {
+  t: any;
+  currentLang: "en" | "zh";
+}
+
+const { t, currentLang } = Astro.props;
+
+const homeHref = currentLang === "zh" ? "/zh" : "/";
+const langHref = currentLang === "en" ? "/zh" : "/";
+---
+
+<nav class="nav">
+  <a class="nav-brand" href={homeHref}>
+    <span>ai.0x81</span>
+  </a>
+  <div class="nav-links">
+    <a class="nav-link" href="#matrix">{t.nav.products}</a>
+  </div>
+  <div class="nav-actions">
+    <a class="nav-lang" href={langHref}>{t.nav.lang_other}</a>
+    <a class="nav-link" href="https://github.com/rust-infra" target="_blank" rel="noopener noreferrer">
+      {t.nav.github}
+    </a>
+  </div>
+</nav>

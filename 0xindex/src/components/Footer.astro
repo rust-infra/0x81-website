@@ -1,0 +1,13 @@
+---
+export interface Props {
+  t: any;
+}
+
+const { t } = Astro.props;
+---
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>{t.footer.line}</span>
+  </div>
+</footer>

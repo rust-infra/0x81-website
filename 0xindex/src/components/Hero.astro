@@ -1,0 +1,20 @@
+---
+export interface Props {
+  t: any;
+}
+
+const { t } = Astro.props;
+---
+
+<section class="hero">
+  <div class="badge">
+    <span class="badge-dot"></span>
+    <span>{t.hero.badge}</span>
+  </div>
+  <h1 class="hero-title">{t.hero.title}</h1>
+  <p class="hero-subtitle">{t.hero.subtitle}</p>
+  <div class="hero-actions">
+    <a class="btn-primary" href="https://tact.0x81.uk">{t.hero.cta_tact}</a>
+    <a class="btn-secondary" href="#matrix">{t.hero.cta_matrix}</a>
+  </div>
+</section>
