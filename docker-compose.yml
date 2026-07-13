@@ -1,10 +1,23 @@
 services:
   website:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_DIR: website
+    build: ./website
     ports:
       - "4321:4321"
     restart: unless-stopped
+
+  website-rs:
+    build:
+      context: ./website-rs
+      args:
+        REGISTRY: docker.m.daocloud.io/library/
+    ports:
+      - "80:80"
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
