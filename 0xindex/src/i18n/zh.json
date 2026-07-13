@@ -1,0 +1,45 @@
+{
+  "site": {
+    "title": "ai.0x81 — AI 产品索引",
+    "description": "一个目录，多个 runtime。从 tact 开始 —— 终端优先的 coding agent。"
+  },
+  "nav": {
+    "products": "产品",
+    "github": "GitHub",
+    "lang_other": "English"
+  },
+  "hero": {
+    "badge": "v0.1 · tact 已上线 · nova / orbit 孵化中",
+    "title": "AI 产品，集中索引。",
+    "subtitle": "一个目录，多个 runtime。从 tact 开始 —— 终端优先的 coding agent。",
+    "cta_tact": "打开 tact",
+    "cta_matrix": "浏览矩阵"
+  },
+  "ide": {
+    "window_title": "ai.0x81 — matrix",
+    "explorer": "EXPLORER",
+    "products": "PRODUCTS",
+    "routes": "ROUTES",
+    "ready": "Ready",
+    "live": "LIVE",
+    "soon": "SOON",
+    "open_product": "打开产品 →",
+    "coming_soon": "孵化中 — 尚未公开。",
+    "terminal_tact": "$ open tact.0x81.uk",
+    "terminal_soon": "$ waiting for release"
+  },
+  "footer": {
+    "line": "ai.0x81 · 0x81.uk"
+  },
+  "products": {
+    "tact": {
+      "blurb": "终端优先的 AI coding agent。Rust · MCP · 本地自托管。"
+    },
+    "nova": {
+      "blurb": "推理网关 — 即将推出。"
+    },
+    "orbit": {
+      "blurb": "评测与链路追踪 — 即将推出。"
+    }
+  }
+}
