@@ -135,19 +135,27 @@ async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
         .to_lowercase();
 
     if host == "tact.0x81.uk" {
-        proxy_request(req, 4321).await
+        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_TACT");
+        proxy_request(req, &upstream,4321).await
     } else {
         next.run(req).await
     }
 }
 
-async fn proxy_request(req: Request, port: i32) -> Response {
+fn proxy_upstream_host(up_stream_host: &'static str) -> String {
+    std::env::var(up_stream_host).unwrap_or_else(|_| "127.0.0.1".into())
+}
+
+async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
     let headers = req.headers().clone();
 
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    let target_url = format!("http://127.0.0.1:{port}{}", path_and_query);
+    let target_url = format!(
+        "http://{up_stream_host}:{port}{}",
+        path_and_query
+    );
 
     let body_bytes = match to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,

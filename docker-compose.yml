@@ -14,6 +14,9 @@ services:
       - "80:80"
     environment:
       - RUST_LOG=info
+      - PROXY_UPSTREAM_HOST_TACT=website
+    depends_on:
+      - website
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
