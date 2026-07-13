@@ -1,10 +1,15 @@
 # syntax=docker/dockerfile:1
 
 ARG APP_DIR=website
+ARG BASE_IMAGE=docker.npmmirror.com/library/node:22-alpine
 
-FROM node:22-alpine
+FROM ${BASE_IMAGE}
 ARG APP_DIR
 WORKDIR /app
+
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org#https://mirrors.aliyun.com#g' /etc/apk/repositories \
+  && npm config set registry https://registry.npmmirror.com
+
 COPY ${APP_DIR}/package.json ${APP_DIR}/package-lock.json ./
 RUN npm ci
 COPY ${APP_DIR}/ .
