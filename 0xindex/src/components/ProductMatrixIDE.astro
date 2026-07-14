@@ -9,7 +9,6 @@ export interface Props {
 const { t, products } = Astro.props;
 
 const defaultActiveId = "tact";
-const routes = ["0x81.uk", "tact.0x81.uk"];
 ---
 
 <section class="ide" id="matrix">
@@ -36,19 +35,17 @@ const routes = ["0x81.uk", "tact.0x81.uk"];
               class="ide-explorer-item"
               data-product={product.id}
               data-active={String(product.id === defaultActiveId)}
+              data-terminal={
+                product.status === "live" && product.url
+                  ? `$ open ${product.url}`
+                  : t.ide.terminal_soon
+              }
             >
               <span>{product.id}</span>
               <span class={`status-pill ${product.status === "live" ? "is-live" : "is-soon"}`}>
                 {product.status === "live" ? t.ide.live : t.ide.soon}
               </span>
             </div>
-          ))
-        }
-
-        <div class="ide-explorer-heading">{t.ide.routes}</div>
-        {
-          routes.map((route) => (
-            <div class="ide-explorer-route">{route}</div>
           ))
         }
       </div>
@@ -95,8 +92,15 @@ const routes = ["0x81.uk", "tact.0x81.uk"];
           ))
         }
 
-        <div class="ide-terminal" data-tact={t.ide.terminal_tact} data-soon={t.ide.terminal_soon}>
-          {defaultActiveId === "tact" ? t.ide.terminal_tact : t.ide.terminal_soon}
+        <div class="ide-terminal">
+          {
+            (() => {
+              const active = products.find((p) => p.id === defaultActiveId);
+              return active?.status === "live" && active.url
+                ? `$ open ${active.url}`
+                : t.ide.terminal_soon;
+            })()
+          }
         </div>
       </div>
     </div>
@@ -122,7 +126,8 @@ const routes = ["0x81.uk", "tact.0x81.uk"];
         el.setAttribute("data-active", String(el.dataset.product === id));
       });
       if (terminal) {
-        terminal.textContent = id === "tact" ? terminal.dataset.tact ?? "" : terminal.dataset.soon ?? "";
+        const item = [...explorerItems].find((el) => el.dataset.product === id);
+        terminal.textContent = item?.dataset.terminal ?? "";
       }
     };
 

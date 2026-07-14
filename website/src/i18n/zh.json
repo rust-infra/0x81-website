@@ -4,6 +4,7 @@
     "description": "tact 是一个用 Rust 构建的终端优先 AI 编程代理。自托管、MIT 许可、可通过 MCP、技能和钩子系统扩展。"
   },
   "nav": {
+    "index": "ai.0x81",
     "features": "功能",
     "install": "安装",
     "github": "GitHub"
@@ -12,7 +13,7 @@
     "tagline": "AI 编程代理。",
     "subtitle": "Rust 原生构建 · MIT 开源许可 · 代码不离机",
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
-    "cta_install": "复制安装命令",
+    "cta_install": "复制",
     "cta_github": "在 GitHub 上查看",
     "copied": "已复制！"
   },

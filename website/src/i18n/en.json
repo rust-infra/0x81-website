@@ -4,6 +4,7 @@
     "description": "tact is a terminal-first AI coding agent built in Rust. Self-hosted, MIT licensed, extensible via MCP, skills, and hooks."
   },
   "nav": {
+    "index": "ai.0x81",
     "features": "Features",
     "install": "Install",
     "github": "GitHub"
@@ -12,7 +13,7 @@
     "tagline": "AI coding agent.",
     "subtitle": "Built in Rust. MIT licensed. Your code never leaves your machine.",
     "install_cmd": "curl -sSL https://raw.githubusercontent.com/rust-infra/tact/main/scripts/install.sh | bash",
-    "cta_install": "Copy install command",
+    "cta_install": "Copy",
     "cta_github": "View on GitHub",
     "copied": "Copied!"
   },

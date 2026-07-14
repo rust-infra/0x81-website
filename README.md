@@ -75,7 +75,7 @@ Compose 环境变量：
 ```
 
 - 品牌：`ai.0x81`，matrix-first（青黑 IDE）
-- tact 外链到产品站；nova / orbit 为孵化占位
+- tact / crab 外链到各自产品站
 - 改产品需同步：`products.ts` + `en.json` + `zh.json`（`products.<id>.blurb`）
 
 ### `website`（tact）

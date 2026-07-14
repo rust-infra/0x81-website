@@ -4,6 +4,7 @@
     "description": "轻量级 Rust 代理：让 Codex CLI 通过 OpenAI Responses API 对接 DeepSeek 或 Kimi Code。密钥只走环境变量，从不写入配置文件。"
   },
   "nav": {
+    "index": "ai.0x81",
     "features": "功能",
     "install": "安装",
     "github": "GitHub"
@@ -11,7 +12,7 @@
   "hero": {
     "tagline": "Codex → DeepSeek / Kimi。",
     "subtitle": "面向 OpenAI Responses API 的 Rust 代理。单进程多提供商；密钥永不写入 crabbridge.toml。",
-    "cta_install": "复制安装命令",
+    "cta_install": "复制",
     "cta_github": "在 GitHub 上查看",
     "copied": "已复制！",
     "meta": "Rust · 本地 :11435 · Responses API · SQLite 会话 · MIT"

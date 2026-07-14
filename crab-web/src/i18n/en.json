@@ -4,6 +4,7 @@
     "description": "Lightweight Rust proxy that lets Codex CLI talk to DeepSeek or Kimi Code through the OpenAI Responses API. Keys stay in your environment — never in config."
   },
   "nav": {
+    "index": "ai.0x81",
     "features": "Features",
     "install": "Install",
     "github": "GitHub"
@@ -11,7 +12,7 @@
   "hero": {
     "tagline": "Codex → DeepSeek / Kimi.",
     "subtitle": "Rust proxy for the OpenAI Responses API. One process, multiple providers. Keys never touch crabbridge.toml.",
-    "cta_install": "Copy install command",
+    "cta_install": "Copy",
     "cta_github": "View on GitHub",
     "copied": "Copied!",
     "meta": "Rust · local :11435 · Responses API · SQLite sessions · MIT"

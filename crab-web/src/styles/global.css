@@ -187,15 +187,15 @@ section h2 {
 .code-block {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  padding: 1rem;
+  padding: 1rem 1rem 2.75rem;
   font-size: 0.85rem;
   overflow-x: auto;
   position: relative;
 }
 .code-block .copy-btn {
   position: absolute;
-  top: 0.5rem;
   right: 0.5rem;
+  bottom: 0.5rem;
 }
 
 /* --- Blinking cursor --- */

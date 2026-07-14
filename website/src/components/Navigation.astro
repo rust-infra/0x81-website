@@ -9,14 +9,19 @@ export interface Props {
 const { t, currentLang } = Astro.props;
 const otherLang = currentLang === "en" ? "zh" : "en";
 const otherLabel = currentLang === "en" ? "中文" : "English";
+const indexHref = currentLang === "zh" ? "https://0x81.uk/zh" : "https://0x81.uk/";
 ---
 
 <nav class="top-nav">
   <div class="container nav-inner">
-    <a href="/" class="logo">
-      <span class="logo-icon">[t]</span>
-      <span class="logo-text">tact</span>
-    </a>
+    <div class="brand-group">
+      <a href={indexHref} class="parent-brand">{t.nav.index}</a>
+      <span class="brand-sep" aria-hidden="true">/</span>
+      <a href="/" class="logo">
+        <span class="logo-icon">[t]</span>
+        <span class="logo-text">tact</span>
+      </a>
+    </div>
 
     <div class="nav-links">
       <a href="#features">{t.nav.features}</a>
@@ -40,6 +45,27 @@ const otherLabel = currentLang === "en" ? "中文" : "English";
     align-items: center;
     justify-content: space-between;
     height: 3rem;
+  }
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .parent-brand {
+    color: var(--border);
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .parent-brand:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .brand-sep {
+    color: var(--border);
+    opacity: 0.6;
+    font-size: 0.85rem;
   }
   .logo {
     display: flex;

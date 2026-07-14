@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "ai.0x81 — AI product index",
-    "description": "One catalog. Many runtimes. Start with tact — a terminal-first coding agent."
+    "description": "One catalog. Many runtimes. Live now: tact and CrabBridge."
   },
   "nav": {
     "products": "Products",
@@ -9,23 +9,22 @@
     "lang_other": "中文"
   },
   "hero": {
-    "badge": "v0.1 · tact live · nova / orbit incubating",
+    "badge": "v0.1 · tact / crab live",
     "title": "AI products, indexed.",
-    "subtitle": "One catalog. Many runtimes. Start with tact — a terminal-first coding agent.",
+    "subtitle": "One catalog. Many runtimes. Live now: tact (coding agent) and crab (Codex ↔ DeepSeek / Kimi).",
     "cta_tact": "Open tact",
+    "cta_crab": "Open crab",
     "cta_matrix": "Browse matrix"
   },
   "ide": {
     "window_title": "ai.0x81 — matrix",
     "explorer": "EXPLORER",
     "products": "PRODUCTS",
-    "routes": "ROUTES",
     "ready": "Ready",
     "live": "LIVE",
     "soon": "SOON",
     "open_product": "Open product →",
     "coming_soon": "Incubating — not public yet.",
-    "terminal_tact": "$ open http://tact.0x81.uk",
     "terminal_soon": "$ waiting for release"
   },
   "footer": {
@@ -35,11 +34,8 @@
     "tact": {
       "blurb": "Terminal-first AI coding agent. Rust. MCP. Self-hosted."
     },
-    "nova": {
-      "blurb": "Inference gateway — coming soon."
-    },
-    "orbit": {
-      "blurb": "Evals and traces — coming soon."
+    "crab": {
+      "blurb": "CrabBridge — Codex ↔ DeepSeek / Kimi via the Responses API."
     }
   }
 }
