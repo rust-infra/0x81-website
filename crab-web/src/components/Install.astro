@@ -1,0 +1,144 @@
+---
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="install">
+  <div class="container">
+    <h2>{t.install.title}</h2>
+
+    <div class="install-step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>{t.install.step1.title}</h3>
+        <p>{t.install.step1.desc}</p>
+
+        <div class="os-tabs" role="tablist" aria-label="Install platform">
+          <label class="os-tab">
+            <input type="radio" name="install-os" value="unix" checked />
+            {t.install.step1.tab_unix}
+          </label>
+          <label class="os-tab">
+            <input type="radio" name="install-os" value="windows" />
+            {t.install.step1.tab_windows}
+          </label>
+        </div>
+
+        <div class="code-block install-cmd unix" data-lang="bash">
+          <code id="install-cmd-unix">{t.install.step1.cmd_unix}</code>
+          <button class="btn btn-copy copy-btn" data-copy="install-cmd-unix">{t.hero.cta_install}</button>
+        </div>
+        <div class="code-block install-cmd windows" data-lang="powershell">
+          <code id="install-cmd-windows">{t.install.step1.cmd_windows}</code>
+          <button class="btn btn-copy copy-btn" data-copy="install-cmd-windows">{t.hero.cta_install}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="install-step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>{t.install.step2.title}</h3>
+        <p>{t.install.step2.desc}</p>
+
+        <div class="code-block" data-lang="toml">
+          <pre><code id="config-cmd">{t.install.step2.config}</code></pre>
+          <button class="btn btn-copy copy-btn" data-copy="config-cmd">{t.hero.cta_install}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="install-step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>{t.install.step3.title}</h3>
+        <p>{t.install.step3.desc}</p>
+
+        <div class="code-block" data-lang="bash">
+          <code>{t.install.step3.cmd_interactive}</code>
+          <span class="cursor-blink"></span>
+        </div>
+
+        <div class="code-block" data-lang="bash" style="margin-top: 0.75rem">
+          <code id="serve-cmd">{t.install.step3.cmd_headless}</code>
+          <button class="btn btn-copy copy-btn" data-copy="serve-cmd">{t.hero.cta_install}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .install-step {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+    align-items: flex-start;
+  }
+  .step-number {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+  .step-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .step-content h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.4rem;
+  }
+  .step-content p {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-bottom: 0.75rem;
+  }
+  #install .code-block {
+    margin-bottom: 0;
+  }
+  .os-tabs {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .os-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--muted, color-mix(in srgb, var(--fg) 70%, transparent));
+    cursor: pointer;
+    user-select: none;
+  }
+  .os-tab:has(input:checked) {
+    color: var(--accent);
+  }
+  .os-tab input {
+    accent-color: var(--accent);
+  }
+  .install-cmd.windows {
+    display: none;
+  }
+  .step-content:has(input[value="windows"]:checked) .install-cmd.unix {
+    display: none;
+  }
+  .step-content:has(input[value="windows"]:checked) .install-cmd.windows {
+    display: block;
+  }
+  .step-content:has(input[value="unix"]:checked) .install-cmd.unix {
+    display: block;
+  }
+  .step-content:has(input[value="unix"]:checked) .install-cmd.windows {
+    display: none;
+  }
+</style>

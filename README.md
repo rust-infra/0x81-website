@@ -1,1 +1,123 @@
 # 0x81-website
+
+Host 分流网关 + 多个 Astro 静态站点：
+
+| 域名 | 服务 | 说明 |
+|------|------|------|
+| `0x81.uk` / `www.0x81.uk` | `0xindex` | 产品索引站（`ai.0x81`） |
+| `tact.0x81.uk` | `website` | tact 产品落地页 |
+| `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
+
+## 架构
+
+```
+Browser / CDN
+      │
+      ▼
+website-rs :80          Axum 网关
+      ├─ Host: 0x81.uk / www.0x81.uk  →  0xindex :4320
+      ├─ Host: tact.0x81.uk           →  website :4321
+      ├─ Host: crab.0x81.uk           →  crab-web :4322
+      └─ 其它 Host                      →  本地路由（/health 等）
+              │
+              ▼
+         Bun 静态服务（各服务 dist/）
+```
+
+### 仓库结构
+
+```
+0x81-website/
+├── website-rs/       # 入口网关（Rust / Axum :80）
+├── 0xindex/          # 主站 ai.0x81（Astro → Bun :4320）
+├── website/          # tact 站（Astro → Bun :4321）
+├── crab-web/         # CrabBridge 站（Astro → Bun :4322）
+├── docs/             # 设计稿与实现计划
+└── docker-compose.yml
+```
+
+### 请求路径
+
+1. 流量进入 `website-rs:80`
+2. `proxy_or_next` 按 `Host` 反代到对应上游
+3. 转发时将 `Host` 改写为 `localhost:<port>`
+4. 回写响应时注入 `Cache-Control`，并经 gzip（`CompressionLayer`）与 CORS（`CorsLayer`）
+
+Compose 环境变量：
+
+- `PROXY_UPSTREAM_HOST_INDEX=0xindex`
+- `PROXY_UPSTREAM_HOST_TACT=website`
+- `PROXY_UPSTREAM_HOST_CRAB=crab-web`
+
+### 网关横切能力
+
+| 能力 | 说明 |
+|------|------|
+| Host 路由 | `0x81.uk` → 4320，`tact.0x81.uk` → 4321，`crab.0x81.uk` → 4322 |
+| 压缩 | `CompressionLayer` |
+| CORS | `CorsLayer::permissive()` |
+| 缓存头 | `/_astro/*` 一年 `immutable`；HTML `max-age=60, must-revalidate`；图片/字体一天；错误 `no-store` |
+| 健康检查 | `GET /health` |
+
+## 前端应用
+
+构建模式相同：**Docker 多阶段 = `bun install` → `astro build` → 运行期只保留 `dist/` + `server.ts`**（不用 `astro preview`）。
+
+### `0xindex`（产品索引）
+
+```
+0xindex/src/
+├── pages/index.astro      # /    EN
+├── pages/zh/index.astro   # /zh  ZH
+├── data/products.ts       # 产品目录
+├── i18n/{en,zh}.json      # 文案
+└── components/            # Nav · Hero · ProductMatrixIDE · Footer
+```
+
+- 品牌：`ai.0x81`，matrix-first（青黑 IDE）
+- tact 外链到产品站；nova / orbit 为孵化占位
+- 改产品需同步：`products.ts` + `en.json` + `zh.json`（`products.<id>.blurb`）
+
+### `website`（tact）
+
+- 琥珀 CRT / TUI 产品落地页，端口 `4321`
+- Astro 静态 + Bun `server.ts`
+
+### `crab-web`（CrabBridge）
+
+- 与 tact **同款**琥珀 TUI 视觉与组件结构，端口 `4322`
+- 产品：[rust-infra/crab-bridge-rs](https://github.com/rust-infra/crab-bridge-rs) — Codex ↔ DeepSeek / Kimi Responses 代理
+- 设计说明：`docs/superpowers/specs/2026-07-14-crab-web-design.md`
+
+## 本地运行
+
+```bash
+docker compose up -d --build
+```
+
+服务：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| `website-rs` | `80` | 网关入口 |
+| `0xindex` | `4320` | 主站（也可直接访问） |
+| `website` | `4321` | tact（也可直接访问） |
+| `crab-web` | `4322` | CrabBridge（也可直接访问） |
+
+本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
+
+单独开发前端：
+
+```bash
+cd 0xindex && bun install && bun run dev
+# 或
+cd website && bun install && bun run dev
+# 或
+cd crab-web && bun install && bun run dev
+```
+
+## 相关文档
+
+- 主站设计：`docs/superpowers/specs/2026-07-14-0xindex-main-site-design.md`
+- 主站实现计划：`docs/superpowers/plans/2026-07-14-0xindex-main-site.md`
+- CrabBridge 站设计：`docs/superpowers/specs/2026-07-14-crab-web-design.md`

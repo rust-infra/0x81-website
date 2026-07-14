@@ -1,0 +1,15 @@
+---
+export interface Props {
+  route?: string;
+  bind?: string;
+}
+
+const { route = "deepseek", bind = "127.0.0.1:11435" } = Astro.props;
+---
+
+<div class="status-bar" slot="status-bar">
+  <span>crabridge</span>
+  <span class="spacer"></span>
+  <span>route: {route}</span>
+  <span>bind: {bind}</span>
+</div>

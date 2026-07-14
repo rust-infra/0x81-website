@@ -1,0 +1,61 @@
+---
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+
+const features = [
+  { key: "responses", icon: "⇄" },
+  { key: "streaming", icon: "↻" },
+  { key: "sessions", icon: "⊞" },
+  { key: "routing", icon: "⚙" },
+  { key: "ops", icon: "⚒" },
+];
+---
+
+<section id="features">
+  <div class="container">
+    <h2>{t.features.title}</h2>
+    <div class="features-grid">
+      {features.map(({ key, icon }) => (
+        <div class="feature-card">
+          <span class="feature-icon">{icon}</span>
+          <h3>{t.features[key].title}</h3>
+          <p>{t.features[key].desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .feature-card {
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    transition: border-color 0.15s;
+  }
+  .feature-card:hover {
+    border-color: var(--accent);
+  }
+  .feature-icon {
+    font-size: 1.75rem;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  .feature-card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--fg);
+  }
+  .feature-card p {
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+</style>

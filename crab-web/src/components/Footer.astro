@@ -1,0 +1,20 @@
+---
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+const repo = "https://github.com/rust-infra/crab-bridge-rs";
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href={repo} target="_blank" rel="noopener">{t.footer.github}</a>
+      <a href={`${repo}/issues`} target="_blank" rel="noopener">{t.footer.issues}</a>
+      <a href={`${repo}/blob/main/README.md`} target="_blank" rel="noopener">{t.footer.contributing}</a>
+      <a href={`${repo}/blob/main/LICENSE`} target="_blank" rel="noopener">{t.footer.mit}</a>
+    </div>
+    <p>{t.footer.built_with}</p>
+  </div>
+</footer>

@@ -11,6 +11,12 @@ services:
       - "4320:4320"
     restart: unless-stopped
 
+  crab-web:
+    build: ./crab-web
+    ports:
+      - "4322:4322"
+    restart: unless-stopped
+
   website-rs:
     build:
       context: ./website-rs
@@ -22,9 +28,11 @@ services:
       - RUST_LOG=info
       - PROXY_UPSTREAM_HOST_TACT=website
       - PROXY_UPSTREAM_HOST_INDEX=0xindex
+      - PROXY_UPSTREAM_HOST_CRAB=crab-web
     depends_on:
       - website
       - 0xindex
+      - crab-web
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

@@ -25,7 +25,7 @@
     "soon": "SOON",
     "open_product": "打开产品 →",
     "coming_soon": "孵化中 — 尚未公开。",
-    "terminal_tact": "$ open tact.0x81.uk",
+    "terminal_tact": "$ open http://tact.0x81.uk",
     "terminal_soon": "$ waiting for release"
   },
   "footer": {

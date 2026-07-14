@@ -1,0 +1,56 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import StatusBar from "../../components/StatusBar.astro";
+import Navigation from "../../components/Navigation.astro";
+import Hero from "../../components/Hero.astro";
+import ValueProps from "../../components/ValueProps.astro";
+import Features from "../../components/Features.astro";
+import Install from "../../components/Install.astro";
+import BridgePreview from "../../components/BridgePreview.astro";
+import Footer from "../../components/Footer.astro";
+
+import zh from "../../i18n/zh.json" with { type: "json" };
+
+const t = zh;
+---
+
+<BaseLayout title={t.site.title} description={t.site.description} lang="zh">
+  <StatusBar slot="status-bar" />
+  <Navigation slot="nav" {t} currentLang="zh" />
+  <Hero {t} />
+  <ValueProps {t} />
+  <Features {t} />
+  <Install {t} />
+  <BridgePreview {t} />
+  <Footer slot="footer" {t} />
+</BaseLayout>
+
+<script>
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-copy]");
+    if (!btn) return;
+
+    const id = btn.getAttribute("data-copy");
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const text = el.textContent.trim();
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => { btn.textContent = original; }, 2000);
+    }).catch(() => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      const original = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => { btn.textContent = original; }, 2000);
+    });
+  });
+</script>

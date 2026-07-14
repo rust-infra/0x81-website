@@ -1,0 +1,95 @@
+{
+  "site": {
+    "title": "CrabBridge — Codex ↔ DeepSeek / Kimi",
+    "description": "Lightweight Rust proxy that lets Codex CLI talk to DeepSeek or Kimi Code through the OpenAI Responses API. Keys stay in your environment — never in config."
+  },
+  "nav": {
+    "features": "Features",
+    "install": "Install",
+    "github": "GitHub"
+  },
+  "hero": {
+    "tagline": "Codex → DeepSeek / Kimi.",
+    "subtitle": "Rust proxy for the OpenAI Responses API. One process, multiple providers. Keys never touch crabbridge.toml.",
+    "cta_install": "Copy install command",
+    "cta_github": "View on GitHub",
+    "copied": "Copied!",
+    "meta": "Rust · local :11435 · Responses API · SQLite sessions · MIT"
+  },
+  "value_props": {
+    "bridge": {
+      "title": "Responses API bridge",
+      "desc": "Accepts Codex Responses requests, translates to upstream Chat Completions — including streaming SSE."
+    },
+    "multi_provider": {
+      "title": "Multi-provider routes",
+      "desc": "One process hosts DeepSeek and Kimi. Pick by path: /deepseek/v1 or /kimi/v1."
+    },
+    "keys_safe": {
+      "title": "Keys stay out of config",
+      "desc": "API keys arrive as Bearer tokens from Codex env_key. Never stored in crabbridge.toml."
+    },
+    "desktop": {
+      "title": "Desktop + CLI",
+      "desc": "Tray app auto-starts the bridge; Setup Wizard wires ~/.codex/config.toml in one click."
+    }
+  },
+  "features": {
+    "title": "Features",
+    "responses": {
+      "title": "Codex-native wire",
+      "desc": "wire_api = \"responses\". Point Codex at the bridge — no Chat Completions shim on the client side."
+    },
+    "streaming": {
+      "title": "Streaming SSE",
+      "desc": "Upstream streams stay streamed. Low-friction agent loops, not buffered blobs."
+    },
+    "sessions": {
+      "title": "SQLite sessions",
+      "desc": "Multi-turn state persists locally so bridge restarts don't wipe context."
+    },
+    "routing": {
+      "title": "Path-based providers",
+      "desc": "Switch models by changing model_provider — same host, different /{provider}/v1 base URL."
+    },
+    "ops": {
+      "title": "Health & metrics",
+      "desc": "/health, /admin dashboard, and Prometheus /metrics for a peek under the shell."
+    }
+  },
+  "install": {
+    "title": "Quick Start",
+    "step1": {
+      "title": "Install",
+      "desc": "Install the crabridge binary (macOS / Linux / Windows scripts upstream).",
+      "tab_unix": "Unix",
+      "tab_windows": "Windows",
+      "cmd_unix": "curl -sSL https://raw.githubusercontent.com/rust-infra/crab-bridge-rs/main/scripts/install-macos.sh | bash",
+      "cmd_windows": "powershell -ExecutionPolicy Bypass -c \"irm https://raw.githubusercontent.com/rust-infra/crab-bridge-rs/main/scripts/install-windows.ps1 | iex\""
+    },
+    "step2": {
+      "title": "Configure Codex",
+      "desc": "Export your API keys, then point Codex at the bridge (or use the desktop Setup Wizard).",
+      "config": "model_provider = \"crabbridge-deepseek\"\nmodel = \"deepseek-v4-pro\"\n\n[model_providers.crabbridge-deepseek]\nname = \"crabbridge-deepseek\"\nbase_url = \"http://127.0.0.1:11435/deepseek/v1\"\nwire_api = \"responses\"\nenv_key = \"DEEPSEEK_API_KEY\"\n\n[model_providers.crabbridge-kimi]\nname = \"crabbridge-kimi\"\nbase_url = \"http://127.0.0.1:11435/kimi/v1\"\nwire_api = \"responses\"\nenv_key = \"KIMI_API_KEY\""
+    },
+    "step3": {
+      "title": "Serve",
+      "desc": "Start the bridge. Default listen: 127.0.0.1:11435.",
+      "cmd_interactive": "export DEEPSEEK_API_KEY=sk-...",
+      "cmd_headless": "crabridge serve"
+    }
+  },
+  "bridge_preview": {
+    "title": "Desktop app",
+    "caption": "Start / stop the bridge, open Admin, and run Setup Wizard — keys stay in your environment or keychain.",
+    "window_title": "crabbridge-desktop",
+    "alt": "CrabBridge desktop app in dark mode: running status, Start Bridge / Stop / Admin, Current setup for DeepSeek, and ready checklist"
+  },
+  "footer": {
+    "github": "GitHub",
+    "issues": "Issues",
+    "contributing": "Contributing",
+    "mit": "MIT",
+    "built_with": "Built with 🦀 by Rg0x80"
+  }
+}

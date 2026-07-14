@@ -1,0 +1,95 @@
+{
+  "site": {
+    "title": "CrabBridge — Codex ↔ DeepSeek / Kimi",
+    "description": "轻量级 Rust 代理：让 Codex CLI 通过 OpenAI Responses API 对接 DeepSeek 或 Kimi Code。密钥只走环境变量，从不写入配置文件。"
+  },
+  "nav": {
+    "features": "功能",
+    "install": "安装",
+    "github": "GitHub"
+  },
+  "hero": {
+    "tagline": "Codex → DeepSeek / Kimi。",
+    "subtitle": "面向 OpenAI Responses API 的 Rust 代理。单进程多提供商；密钥永不写入 crabbridge.toml。",
+    "cta_install": "复制安装命令",
+    "cta_github": "在 GitHub 上查看",
+    "copied": "已复制！",
+    "meta": "Rust · 本地 :11435 · Responses API · SQLite 会话 · MIT"
+  },
+  "value_props": {
+    "bridge": {
+      "title": "Responses API 桥接",
+      "desc": "接收 Codex Responses 请求，转换为上游 Chat Completions —— 含流式 SSE。"
+    },
+    "multi_provider": {
+      "title": "多提供商路由",
+      "desc": "单进程同时托管 DeepSeek 与 Kimi。按路径选择：/deepseek/v1 或 /kimi/v1。"
+    },
+    "keys_safe": {
+      "title": "密钥不进配置",
+      "desc": "API Key 以 Codex env_key 的 Bearer 透传。绝不落盘到 crabbridge.toml。"
+    },
+    "desktop": {
+      "title": "桌面端 + CLI",
+      "desc": "托盘应用自动拉起桥接；Setup Wizard 一键写入 ~/.codex/config.toml。"
+    }
+  },
+  "features": {
+    "title": "功能特性",
+    "responses": {
+      "title": "Codex 原生协议",
+      "desc": "wire_api = \"responses\"。把 Codex 指到桥即可，客户端无需 Chat Completions 适配。"
+    },
+    "streaming": {
+      "title": "流式 SSE",
+      "desc": "上游流式保持流式。适合作代理循环，而不是整段缓冲。"
+    },
+    "sessions": {
+      "title": "SQLite 会话",
+      "desc": "多轮状态本地持久化，桥接重启不会丢掉上下文。"
+    },
+    "routing": {
+      "title": "路径选择提供商",
+      "desc": "改 model_provider 即可切换模型——同一主机，不同 /{provider}/v1。"
+    },
+    "ops": {
+      "title": "健康检查与指标",
+      "desc": "/health、/admin 控制台，以及 Prometheus /metrics。"
+    }
+  },
+  "install": {
+    "title": "快速开始",
+    "step1": {
+      "title": "安装",
+      "desc": "安装 crabridge 二进制（上游提供 macOS / Linux / Windows 脚本）。",
+      "tab_unix": "Unix",
+      "tab_windows": "Windows",
+      "cmd_unix": "curl -sSL https://raw.githubusercontent.com/rust-infra/crab-bridge-rs/main/scripts/install-macos.sh | bash",
+      "cmd_windows": "powershell -ExecutionPolicy Bypass -c \"irm https://raw.githubusercontent.com/rust-infra/crab-bridge-rs/main/scripts/install-windows.ps1 | iex\""
+    },
+    "step2": {
+      "title": "配置 Codex",
+      "desc": "导出 API Key，再把 Codex 指到桥（也可用桌面端 Setup Wizard）。",
+      "config": "model_provider = \"crabbridge-deepseek\"\nmodel = \"deepseek-v4-pro\"\n\n[model_providers.crabbridge-deepseek]\nname = \"crabbridge-deepseek\"\nbase_url = \"http://127.0.0.1:11435/deepseek/v1\"\nwire_api = \"responses\"\nenv_key = \"DEEPSEEK_API_KEY\"\n\n[model_providers.crabbridge-kimi]\nname = \"crabbridge-kimi\"\nbase_url = \"http://127.0.0.1:11435/kimi/v1\"\nwire_api = \"responses\"\nenv_key = \"KIMI_API_KEY\""
+    },
+    "step3": {
+      "title": "启动",
+      "desc": "启动桥接。默认监听：127.0.0.1:11435。",
+      "cmd_interactive": "export DEEPSEEK_API_KEY=sk-...",
+      "cmd_headless": "crabridge serve"
+    }
+  },
+  "bridge_preview": {
+    "title": "桌面应用",
+    "caption": "启停桥接、打开 Admin、运行 Setup Wizard —— 密钥只留在环境变量或钥匙串。",
+    "window_title": "crabbridge-desktop",
+    "alt": "CrabBridge 深色桌面应用：running 状态、Start Bridge / Stop / Admin、DeepSeek 当前配置与就绪说明"
+  },
+  "footer": {
+    "github": "GitHub",
+    "issues": "问题反馈",
+    "contributing": "贡献指南",
+    "mit": "MIT 许可",
+    "built_with": "由 Rg0x80 用 🦀 打造"
+  }
+}

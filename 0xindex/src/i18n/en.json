@@ -25,7 +25,7 @@
     "soon": "SOON",
     "open_product": "Open product →",
     "coming_soon": "Incubating — not public yet.",
-    "terminal_tact": "$ open tact.0x81.uk",
+    "terminal_tact": "$ open http://tact.0x81.uk",
     "terminal_soon": "$ waiting for release"
   },
   "footer": {

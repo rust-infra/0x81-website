@@ -141,6 +141,9 @@ async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
     if host == "tact.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_TACT");
         proxy_request(req, &upstream, 4321).await
+    } else if host == "crab.0x81.uk" {
+        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_CRAB");
+        proxy_request(req, &upstream, 4322).await
     } else if host == "0x81.uk" || host == "www.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_INDEX");
         proxy_request(req, &upstream, 4320).await
@@ -157,12 +160,10 @@ async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Resp
     let method = req.method().clone();
     let uri = req.uri().clone();
     let headers = req.headers().clone();
+    let path = uri.path().to_string();
 
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    let target_url = format!(
-        "http://{up_stream_host}:{port}{}",
-        path_and_query
-    );
+    let target_url = format!("http://{up_stream_host}:{port}{}", path_and_query);
 
     let body_bytes = match to_bytes(req.into_body(), usize::MAX).await {
         Ok(bytes) => bytes,
@@ -186,16 +187,20 @@ async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Resp
     match proxy_req.send().await {
         Ok(resp) => {
             let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let cache_control = cache_control_for(&path, status);
 
             let mut response_builder = Response::builder().status(status);
 
             for (key, value) in resp.headers().iter() {
                 let key_str = key.as_str();
-                if is_hop_by_hop_header(key_str) {
+                if is_hop_by_hop_header(key_str) || key_str.eq_ignore_ascii_case("cache-control")
+                {
                     continue;
                 }
                 response_builder = response_builder.header(key_str, value.as_bytes());
             }
+
+            response_builder = response_builder.header("cache-control", cache_control);
 
             let body_bytes = match resp.bytes().await {
                 Ok(bytes) => bytes,
@@ -213,6 +218,36 @@ async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Resp
             tracing::error!("proxy request failed: {}", err);
             StatusCode::BAD_GATEWAY.into_response()
         }
+    }
+}
+
+/// Conservative Cache-Control for proxied static sites.
+/// Astro hashed assets under `/_astro/` are safe to cache forever; HTML stays short.
+fn cache_control_for(path: &str, status: StatusCode) -> &'static str {
+    if !status.is_success() {
+        return "no-store";
+    }
+
+    if path.starts_with("/_astro/") {
+        return "public, max-age=31536000, immutable";
+    }
+
+    let file_name = path.rsplit('/').next().unwrap_or(path);
+    let ext = file_name
+        .rsplit_once('.')
+        .filter(|(stem, _)| !stem.is_empty())
+        .map(|(_, ext)| ext.to_ascii_lowercase());
+
+    match ext.as_deref() {
+        // Documents: revalidate quickly so deploys show up soon.
+        None | Some("html") | Some("htm") => "public, max-age=60, must-revalidate",
+        // Low-churn static assets: one day is enough and still conservative.
+        Some("svg") | Some("ico") | Some("png") | Some("jpg") | Some("jpeg") | Some("webp")
+        | Some("gif") | Some("woff") | Some("woff2") | Some("ttf") | Some("otf") => {
+            "public, max-age=86400"
+        }
+        // Unknown extensions: short browser cache only.
+        Some(_) => "public, max-age=60",
     }
 }
 

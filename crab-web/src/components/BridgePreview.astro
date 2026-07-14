@@ -1,0 +1,54 @@
+---
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="bridge-preview">
+  <div class="container">
+    <h2>{t.bridge_preview.title}</h2>
+    <p class="preview-caption">{t.bridge_preview.caption}</p>
+
+    <figure class="app-frame">
+      <img
+        src="/images/desktop-app.png"
+        alt={t.bridge_preview.alt}
+        width="754"
+        height="1024"
+        loading="lazy"
+      />
+    </figure>
+  </div>
+</section>
+
+<style>
+  .preview-caption {
+    font-size: 0.9rem;
+    opacity: 0.75;
+    margin: -0.5rem 0 1.5rem;
+    max-width: 40rem;
+  }
+  .app-frame {
+    margin: 0 auto;
+    max-width: 480px;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent),
+      0 24px 48px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    background: #141414;
+  }
+  .app-frame img {
+    width: 100%;
+    height: auto;
+    display: block;
+    line-height: 10.4px;
+  }
+
+  @media (max-width: 600px) {
+    .app-frame {
+      max-width: 100%;
+    }
+  }
+</style>

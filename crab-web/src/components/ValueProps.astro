@@ -1,0 +1,63 @@
+---
+export interface Props {
+  t: Record<string, any>;
+}
+
+const { t } = Astro.props;
+
+const cards = [
+  { key: "bridge", icon: "⬡" },
+  { key: "multi_provider", icon: "◈" },
+  { key: "keys_safe", icon: "◇" },
+  { key: "desktop", icon: "▤" },
+];
+---
+
+<section id="value-props">
+  <div class="container">
+    <div class="prop-grid">
+      {cards.map(({ key, icon }) => (
+        <div class="prop-card frame" data-label={t.value_props[key].title}>
+          <div class="prop-icon">{icon}</div>
+          <p class="prop-desc">{t.value_props[key].desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .prop-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+  .prop-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .prop-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--accent);
+  }
+  .prop-desc {
+    font-size: 0.85rem;
+    color: var(--fg);
+    opacity: 0.85;
+  }
+
+  @media (max-width: 900px) {
+    .prop-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 520px) {
+    .prop-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
