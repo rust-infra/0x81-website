@@ -6,3 +6,4 @@ dist
 *.md
 package-lock.json
 .dockerignore
+.DS_Store
