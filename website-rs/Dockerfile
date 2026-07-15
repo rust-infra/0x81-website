@@ -25,6 +25,6 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.o
 
 COPY --from=builder /app/target/release/website-rs /app/website-rs
 
-EXPOSE 80
+EXPOSE 80 443
 
 CMD ["./website-rs"]

@@ -24,11 +24,16 @@ services:
         REGISTRY: docker.m.daocloud.io/library/
     ports:
       - "80:80"
+      - "443:443"
     environment:
       - RUST_LOG=info
       - PROXY_UPSTREAM_HOST_TACT=website
       - PROXY_UPSTREAM_HOST_INDEX=0xindex
       - PROXY_UPSTREAM_HOST_CRAB=crab-web
+      - TLS_CERT_PATH=/certs/origin.pem
+      - TLS_KEY_PATH=/certs/origin-key.pem
+    volumes:
+      - ./certs:/certs:ro
     depends_on:
       - website
       - 0xindex

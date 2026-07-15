@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 ARG BASE_IMAGE=docker.m.daocloud.io/oven/bun:1-alpine
 
 FROM ${BASE_IMAGE} AS build

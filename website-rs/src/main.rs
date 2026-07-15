@@ -18,9 +18,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use axum_server::tls_rustls::RustlsConfig;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpListener;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::{Level, info};
 
@@ -270,6 +271,10 @@ fn is_hop_by_hop_header(name: &str) -> bool {
 async fn main() {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls crypto provider");
+
     let state = AppState {
         db: Arc::new(Database::new()),
     };
@@ -286,13 +291,57 @@ async fn main() {
         .layer(CorsLayer::permissive()) // CORS
         .with_state(state);
 
-    let listener = TcpListener::bind("0.0.0.0:80").await.unwrap();
-    info!("Server listening on {}", listener.local_addr().unwrap());
+    let handle = axum_server::Handle::new();
+    tokio::spawn({
+        let handle = handle.clone();
+        async move {
+            shutdown_signal().await;
+            handle.graceful_shutdown(Some(std::time::Duration::from_secs(10)));
+        }
+    });
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    let http_addr = SocketAddr::from(([0, 0, 0, 0], 80));
+    info!("HTTP listening on {}", http_addr);
+    let http = axum_server::bind(http_addr)
+        .handle(handle.clone())
+        .serve(app.clone().into_make_service());
+
+    // Cloudflare Full (strict) needs an HTTPS origin: serve 443 with the
+    // Cloudflare Origin Certificate when cert/key paths are provided.
+    let tls_paths = std::env::var("TLS_CERT_PATH")
+        .ok()
+        .zip(std::env::var("TLS_KEY_PATH").ok())
+        .filter(|(cert, key)| {
+            let both_exist =
+                std::path::Path::new(cert).is_file() && std::path::Path::new(key).is_file();
+            if !both_exist {
+                tracing::warn!("TLS cert/key not found at {cert} / {key}; serving HTTP only");
+            }
+            both_exist
+        });
+
+    match tls_paths {
+        Some((cert_path, key_path)) => {
+            let tls_config = RustlsConfig::from_pem_file(&cert_path, &key_path)
+                .await
+                .unwrap_or_else(|err| {
+                    panic!("failed to load TLS cert/key ({cert_path}, {key_path}): {err}")
+                });
+            let https_addr = SocketAddr::from(([0, 0, 0, 0], 443));
+            info!("HTTPS listening on {}", https_addr);
+            let https = axum_server::bind_rustls(https_addr, tls_config)
+                .handle(handle)
+                .serve(app.into_make_service());
+
+            let (http_result, https_result) = tokio::join!(http, https);
+            http_result.unwrap();
+            https_result.unwrap();
+        }
+        None => {
+            info!("TLS_CERT_PATH / TLS_KEY_PATH not set; serving HTTP only");
+            http.await.unwrap();
+        }
+    }
 }
 
 async fn shutdown_signal() {

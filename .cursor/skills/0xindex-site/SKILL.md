@@ -38,7 +38,7 @@ Update **three places** in lockstep:
 3. **`src/i18n/zh.json`** — mirror `products.<id>.blurb` (meaning, not literal translation of English tone)
 
 Rules:
-- `live` products need `url` (external link, e.g. `http://tact.0x81.uk`)
+- `live` products need `url` (external link, e.g. `https://tact.0x81.uk`)
 - `soon` products: no `url`; IDE shows incubating state
 - `codeLines` are decorative IDE panel content — keep syntax plausible
 - Product `id` must match i18n key under `products`

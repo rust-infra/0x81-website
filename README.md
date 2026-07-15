@@ -54,10 +54,20 @@ Compose 环境变量：
 | 能力 | 说明 |
 |------|------|
 | Host 路由 | `0x81.uk` → 4320，`tact.0x81.uk` → 4321，`crab.0x81.uk` → 4322 |
+| TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
 | 缓存头 | `/_astro/*` 一年 `immutable`；HTML `max-age=60, must-revalidate`；图片/字体一天；错误 `no-store` |
 | 健康检查 | `GET /health` |
+
+### HTTPS（Cloudflare Full (strict)）
+
+1. Cloudflare → SSL/TLS → **Origin Server** → Create Certificate，覆盖 `0x81.uk, *.0x81.uk`
+2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）
+3. `docker compose up -d --build` 后网关同时监听 80/443
+4. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
+
+缺少证书文件时网关自动退回仅 HTTP（本地开发无需证书）。
 
 ## 前端应用
 
