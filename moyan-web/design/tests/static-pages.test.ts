@@ -46,8 +46,8 @@ it.each(['index', 'decks', 'stats', 'settings'])('has web %s page', (name) => {
 it.each(executableDesignFiles)('keeps %s isolated from production services, persistence, and file transfer', (file) => {
   const source = readFileSync(`design/${file}`, 'utf8')
 
-  expect(source).not.toMatch(/fetch\s*\(|\/api\/|XMLHttpRequest|axios\b/i)
+  expect(source).not.toMatch(/fetch\s*\(|\/api\/|XMLHttpRequest|axios\b|sendBeacon\s*\(|new\s+WebSocket\b|new\s+EventSource\b|\$\.(?:ajax|get|post)\s*\(/i)
   expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/i)
-  expect(source).not.toMatch(/FileReader|<input\b[^>]*\btype\s*=\s*["']?file\b/i)
-  expect(source).not.toMatch(/\bdownload\s*=|URL\.createObjectURL|\b(?:upload|download)\s*\(/i)
+  expect(source).not.toMatch(/FileReader|<input\b[^>]*\btype\s*=\s*["']?file\b|\.type\s*=\s*["']file["']/i)
+  expect(source).not.toMatch(/\bdownload\s*=|\.download\s*=|URL\.createObjectURL|\b(?:upload|download)\s*\(/i)
 })
