@@ -12,6 +12,12 @@ const designPages = [
   'web/settings.html',
 ]
 
+const executableDesignFiles = [
+  ...designPages,
+  'assets/mock-data.js',
+  'assets/prototype.js',
+]
+
 it('loads the shared design system from every mobile page', () => {
   const html = readFileSync('design/mobile/index.html', 'utf8')
   expect(html).toContain('../assets/tokens.css')
@@ -37,10 +43,11 @@ it.each(['index', 'decks', 'stats', 'settings'])('has web %s page', (name) => {
   expect(html).toContain('data-toast')
 })
 
-it.each(designPages)('keeps %s isolated from production services and file transfer', (file) => {
-  const html = readFileSync(`design/${file}`, 'utf8')
+it.each(executableDesignFiles)('keeps %s isolated from production services, persistence, and file transfer', (file) => {
+  const source = readFileSync(`design/${file}`, 'utf8')
 
-  expect(html).not.toMatch(/fetch\s*\(|\/api\/|localStorage|XMLHttpRequest|axios\b/i)
-  expect(html).not.toMatch(/<input\b[^>]*\btype\s*=\s*["']?file\b/i)
-  expect(html).not.toMatch(/\bdownload\s*=|URL\.createObjectURL|\b(?:upload|download)\s*\(/i)
+  expect(source).not.toMatch(/fetch\s*\(|\/api\/|XMLHttpRequest|axios\b/i)
+  expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/i)
+  expect(source).not.toMatch(/FileReader|<input\b[^>]*\btype\s*=\s*["']?file\b/i)
+  expect(source).not.toMatch(/\bdownload\s*=|URL\.createObjectURL|\b(?:upload|download)\s*\(/i)
 })
