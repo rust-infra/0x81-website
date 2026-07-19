@@ -6,3 +6,10 @@ it('loads the shared design system from every mobile page', () => {
   expect(html).toContain('../assets/tokens.css')
   expect(html).toContain('../assets/mobile.css')
 })
+
+it('provides shared modal and toast surfaces', () => {
+  const css = readFileSync('design/assets/tokens.css', 'utf8')
+  expect(css).toContain('.modal {')
+  expect(css).toContain('.toast {')
+  expect(css).toContain('border-radius:var(--radius)')
+})

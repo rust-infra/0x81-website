@@ -1,4 +1,6 @@
 :root { --paper:#f6f2e9; --surface:#fff; --ink:#282723; --muted:#81786d; --accent:#9e4540; --border:#ded7ca; --radius:6px; }
 body { margin:0; background:var(--paper); color:var(--ink); font-family:Inter,system-ui,sans-serif; }
 .display { font-family:'Noto Serif SC',Georgia,serif; }
+.modal { background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 16px 40px rgb(40 39 35 / 18%); }
+.toast { background:var(--ink); color:var(--surface); border:1px solid var(--ink); border-radius:var(--radius); box-shadow:0 12px 28px rgb(40 39 35 / 16%); }
 .toast[hidden] { display:none; }
