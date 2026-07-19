@@ -13,3 +13,9 @@ it('provides shared modal and toast surfaces', () => {
   expect(css).toContain('.toast {')
   expect(css).toContain('border-radius:var(--radius)')
 })
+
+it.each(['index', 'decks', 'stats', 'settings'])('has mobile %s page', (name) => {
+  const html = readFileSync(`design/mobile/${name}.html`, 'utf8')
+  expect(html).toContain('data-toast')
+  expect(html).toContain('bottom-nav')
+})

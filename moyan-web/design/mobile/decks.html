@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>墨言 - 词库</title>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/mobile.css">
+</head>
+<body>
+  <main class="mobile-shell">
+    <header class="mobile-header"><div><p class="eyebrow">管理你的学习内容</p><h1 class="wordmark display">词库</h1></div><button class="round-button" type="button" data-open-modal="add-deck" aria-label="添加词库">+</button></header>
+    <div class="search"><input type="search" data-search placeholder="搜索词库" aria-label="搜索词库"></div>
+    <div class="filter-row" aria-label="词库筛选">
+      <button class="is-active" type="button" data-filter="all">全部</button><button type="button" data-filter="due">待复习</button><button type="button" data-filter="built-in">内置</button><button type="button" data-filter="custom">自建</button>
+    </div>
+    <section aria-labelledby="deck-list-title"><div class="section-head"><h2 id="deck-list-title">我的词库</h2><span class="section-kicker" data-count></span></div><div class="deck-stack" data-decks></div><p class="empty-state" data-no-results hidden>没有匹配的词库。试试其他关键词。</p></section>
+  </main>
+  <nav class="bottom-nav" aria-label="主导航"><a href="index.html">学习</a><a class="is-active" href="decks.html" aria-current="page">词库</a><a href="stats.html">统计</a><a href="settings.html">设置</a></nav>
+  <div class="toast" data-toast hidden role="status"></div>
+  <div class="modal-backdrop" data-modal="add-deck" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
+      <button class="modal-close" type="button" data-close-modal aria-label="关闭">×</button><h2 class="display" id="add-title">添加词库</h2><p>选择一种方式开始整理新词。</p>
+      <div class="modal-actions"><button class="choice-button" type="button" data-toast-action="已创建空白词库"><strong>空白词库</strong><span>从零开始录入词汇</span></button><button class="choice-button" type="button" data-toast-action="Anki 导入将在正式版开放"><strong>导入 Anki</strong><span>从 .apkg 整理已有卡片</span></button><button class="choice-button" type="button" data-toast-action="CSV 导入将在正式版开放"><strong>导入 CSV</strong><span>从表格建立词库</span></button></div>
+    </section>
+  </div>
+  <script type="module">
+    import { filterDecks, sortDecks } from '../assets/mock-data.js'
+    import { showToast } from '../assets/prototype.js'
+    let query = ''; let filter = 'all'
+    const root = document
+    const render = () => {
+      const decks = sortDecks(filterDecks(query, filter), 'name')
+      root.querySelector('[data-count]').textContent = `${decks.length} 个词库`
+      root.querySelector('[data-decks]').innerHTML = decks.map((deck) => `<article class="deck-card" data-deck="${deck.id}"><div class="deck-row"><div><h3>${deck.name}</h3><p>${deck.words} 词 · 正确率 ${deck.accuracy}%</p></div><button class="icon-button" type="button" data-details="${deck.id}">详情</button></div><div class="progress"><i style="width:${deck.progress}%"></i></div><div class="details" data-detail="${deck.id}" hidden>当前进度 ${deck.progress}%，${deck.due ? `有 ${deck.due} 个词等待复习` : '今日没有待复习项目'}。</div></article>`).join('')
+      root.querySelector('[data-no-results]').hidden = decks.length !== 0
+      root.querySelectorAll('[data-details]').forEach((button) => button.addEventListener('click', () => { const detail = root.querySelector(`[data-detail="${button.dataset.details}"]`); detail.hidden = !detail.hidden; button.textContent = detail.hidden ? '详情' : '收起' }))
+    }
+    root.querySelector('[data-search]').addEventListener('input', (event) => { query = event.target.value; render() })
+    root.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => { filter = button.dataset.filter; root.querySelectorAll('[data-filter]').forEach((node) => node.classList.toggle('is-active', node === button)); render() }))
+    root.querySelectorAll('[data-open-modal]').forEach((button) => button.addEventListener('click', () => { root.querySelector(`[data-modal="${button.dataset.openModal}"]`).hidden = false }))
+    root.querySelectorAll('[data-close-modal]').forEach((button) => button.addEventListener('click', () => { button.closest('[data-modal]').hidden = true }))
+    root.querySelectorAll('[data-toast-action]').forEach((button) => button.addEventListener('click', () => { showToast(root, button.dataset.toastAction); button.closest('[data-modal]').hidden = true }))
+    render()
+  </script>
+</body>
+</html>

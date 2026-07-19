@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>墨言 - 设置</title>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/mobile.css">
+</head>
+<body>
+  <main class="mobile-shell">
+    <header class="mobile-header"><div><p class="eyebrow">按照你的方式学习</p><h1 class="wordmark display">设置</h1></div><span class="avatar" aria-hidden="true">若</span></header>
+    <div class="tab-row" role="tablist" aria-label="设置分类"><button class="is-active" type="button" role="tab" data-tab="general">通用</button><button type="button" role="tab" data-tab="voice">语音</button><button type="button" role="tab" data-tab="theme">主题</button></div>
+    <section class="tab-pane is-active" data-pane="general" role="tabpanel">
+      <div class="section-head"><h2>通用</h2></div>
+      <div class="setting-group"><div class="settings-row"><span>学习语言</span><button class="icon-button" type="button" data-language>简体中文</button></div><div class="settings-row"><span>每日提醒</span><button class="toggle is-on" type="button" aria-pressed="true" data-toggle="每日提醒"></button></div><div class="settings-row"><span>自动播放释义</span><button class="toggle" type="button" aria-pressed="false" data-toggle="自动播放释义"></button></div></div>
+      <div class="setting-group"><div class="settings-row"><span>学习目标</span><button class="icon-button" type="button" data-toast-action="每日目标为 24 个词">24 个词</button></div><div class="settings-row"><span>数据与隐私</span><button class="icon-button" type="button" data-toast-action="数据仅保留在当前演示中">查看</button></div></div>
+    </section>
+    <section class="tab-pane" data-pane="voice" role="tabpanel">
+      <div class="section-head"><h2>语音</h2></div>
+      <div class="setting-group"><div class="settings-row"><span>发音</span><button class="icon-button" type="button" data-voice>美式英语</button></div><div class="settings-row"><span>自动朗读单词</span><button class="toggle is-on" type="button" aria-pressed="true" data-toggle="自动朗读单词"></button></div><div class="settings-row"><span>练习时语速</span><button class="icon-button" type="button" data-toast-action="当前朗读速度：正常">正常</button></div></div>
+      <button class="primary-button wide" type="button" data-toast-action="正在播放 algorithm 的标准发音">试听发音</button>
+    </section>
+    <section class="tab-pane" data-pane="theme" role="tabpanel">
+      <div class="section-head"><h2>主题</h2></div>
+      <div class="setting-group"><h2>选择阅读背景</h2><div class="theme-grid" data-themes></div></div>
+    </section>
+  </main>
+  <nav class="bottom-nav" aria-label="主导航"><a href="index.html">学习</a><a href="decks.html">词库</a><a href="stats.html">统计</a><a class="is-active" href="settings.html" aria-current="page">设置</a></nav>
+  <div class="toast" data-toast hidden role="status"></div>
+  <script type="module">
+    import { THEMES } from '../assets/mock-data.js'
+    import { bindPrototype, showToast } from '../assets/prototype.js'
+    const root = document
+    bindPrototype(root)
+    root.querySelector('[data-themes]').innerHTML = THEMES.map((theme, index) => `<button class="theme-button ${index === 0 ? 'is-active' : ''}" type="button" data-theme="${theme.id}" style="--theme-paper:${theme.paper}"><i class="swatch" style="background:${theme.paper}"></i>${theme.label}</button>`).join('')
+    root.querySelectorAll('[data-toggle]').forEach((button) => button.addEventListener('click', () => { button.classList.toggle('is-on'); button.setAttribute('aria-pressed', button.classList.contains('is-on')); showToast(root, `${button.dataset.toggle}已${button.classList.contains('is-on') ? '开启' : '关闭'}`) }))
+    root.querySelector('[data-language]').addEventListener('click', (event) => { event.currentTarget.textContent = event.currentTarget.textContent === '简体中文' ? 'English' : '简体中文'; showToast(root, '语言显示已更新') })
+    root.querySelector('[data-voice]').addEventListener('click', (event) => { event.currentTarget.textContent = event.currentTarget.textContent === '美式英语' ? '英式英语' : '美式英语'; showToast(root, '发音偏好已更新') })
+    root.querySelectorAll('[data-theme]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-theme]').forEach((node) => node.classList.toggle('is-active', node === button)); root.documentElement.style.setProperty('--paper', button.style.getPropertyValue('--theme-paper')); showToast(root, '主题预览已更新') }))
+    root.querySelectorAll('[data-toast-action]').forEach((button) => button.addEventListener('click', () => showToast(root, button.dataset.toastAction)))
+  </script>
+</body>
+</html>
