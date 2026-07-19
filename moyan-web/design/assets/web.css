@@ -18,10 +18,10 @@ button { cursor:pointer; }
 .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
 .section-head h2 { margin:0; font-size:18px; }
 .section-head p { margin:0; color:var(--muted); font-size:13px; }
-.surface, .metric, .deck-card, .activity-card, .setting-panel, .preview-card, .word-card, .quality-card { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.surface, .metric, .deck-card, .activity-card, .setting-panel, .preview-card, .word-card, .quality-card { border:1px solid var(--border); border-radius:var(--card-radius); background:var(--surface); }
 .home-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(320px,.8fr); gap:28px; }
 .daily-list { display:grid; gap:8px; }
-.daily-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:12px; padding:14px 15px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.daily-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:12px; padding:14px 15px; border:1px solid var(--border); border-radius:var(--card-radius); background:var(--surface); }
 .daily-row.is-done { opacity:.58; }
 .daily-check { display:grid; place-items:center; width:22px; height:22px; border:1px solid var(--border); border-radius:50%; color:var(--accent); font-size:12px; }
 .daily-row strong, .daily-row span { display:block; }

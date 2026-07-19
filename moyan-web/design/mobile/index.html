@@ -14,11 +14,25 @@
       <button class="avatar" type="button" data-toast-action="个人资料将在正式版开放" aria-label="个人资料">若</button>
     </header>
 
-    <section class="hero" aria-labelledby="daily-title">
-      <p class="section-kicker">DAY 18 · 连续学习</p>
-      <h2 class="display" id="daily-title">今天，学好 24 个词</h2>
-      <p>约 12 分钟。计算机英语有 18 个词等待复习。</p>
-      <button class="primary-button wide" type="button" data-open-modal="study">开始今日训练</button>
+    <section class="study-hero" aria-labelledby="daily-title">
+      <div class="study-hero__eyebrow"><span class="study-hero__icon">⌘</span><span>每日必修</span></div>
+      <div class="study-hero__content">
+        <div>
+          <h2 class="display" id="daily-title">开始今日训练</h2>
+          <p>还有 24 个词等待浸润，预计 12 分钟完成。</p>
+        </div>
+        <button class="hero-arrow" type="button" data-open-modal="study" aria-label="开始今日训练">→</button>
+      </div>
+      <div class="study-hero__ghost" aria-hidden="true">eventual consistency</div>
+    </section>
+
+    <section class="secondary-entry" aria-labelledby="typing-title">
+      <div class="secondary-entry__icon">⌨</div>
+      <div class="secondary-entry__copy">
+        <h2 id="typing-title">打字训练</h2>
+        <p>通过打字强化单词记忆</p>
+      </div>
+      <button class="secondary-entry__arrow" type="button" data-toast-action="打字训练将在下一版设计稿中展开" aria-label="打开打字训练">→</button>
     </section>
 
     <section aria-labelledby="overview-title">
@@ -32,7 +46,7 @@
     </section>
 
     <section aria-labelledby="due-title">
-      <div class="section-head"><h2 id="due-title">等待复习</h2><a class="text-link" href="decks.html">全部词库</a></div>
+      <div class="section-head"><h2 id="due-title">等待复习</h2><a class="text-link" href="decks.html">All Decks</a></div>
       <div class="deck-stack" data-due-decks></div>
       <p class="empty-state" data-no-due hidden>今天的复习已完成。明天再见。</p>
     </section>
@@ -40,7 +54,7 @@
 
   <nav class="bottom-nav" aria-label="主导航">
     <a class="is-active" href="index.html" aria-current="page">学习</a>
-    <a href="decks.html">词库</a>
+    <a href="decks.html">Decks</a>
     <a href="stats.html">统计</a>
     <a href="settings.html">设置</a>
   </nav>
