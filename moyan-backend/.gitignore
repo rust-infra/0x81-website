@@ -1,0 +1,31 @@
+# Rust / Cargo
+/target
+**/*.rs.bk
+Cargo.lock
+
+# SQLx offline mode query metadata (optional)
+.sqlx/
+
+# Build artifacts
+/build
+dist/
+
+# Test coverage
+coverage/
+*.profraw
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Logs
+*.log

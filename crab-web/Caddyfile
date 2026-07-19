@@ -1,0 +1,6 @@
+:4322 {
+    root * /usr/share/caddy/html
+    encode gzip
+    try_files {path} {path}/ {path}.html /404.html
+    file_server
+}

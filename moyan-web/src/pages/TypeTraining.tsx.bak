@@ -1,0 +1,799 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
+import {
+  X, RotateCcw, Keyboard, FileText, Zap, Trophy,
+  Volume2, VolumeX, Layers, CalendarDays, ArrowRight,
+  Trash2, History,
+} from 'lucide-react';
+import { db, type TypeHistory } from '../db';
+import type { Card, Deck } from '../db';
+import { t } from '../i18n/translations';
+import { getCurrentTheme } from '../theme';
+import {
+  speak,
+  stopAllAudio,
+  preloadWebSpeechVoices,
+  getSpeechSettings,
+} from '../services/speechService';
+
+// Split example into EN/ZH segments
+interface ExampleSegment { text: string; lang: 'en' | 'zh'; }
+
+function splitExample(text: string): ExampleSegment[] {
+  const firstCJK = text.search(/[\u4e00-\u9fff]/);
+  if (firstCJK === -1) return [{ text, lang: 'en' }];
+  const lastCJK = text.search(/[\u4e00-\u9fff][^\u4e00-\u9fff]*$/);
+  const cjkEnd = lastCJK >= 0 ? lastCJK + 1 : text.length;
+  const enPart = text.slice(0, firstCJK).trim().replace(/[\s—–]+$/, '');
+  const zhPart = text.slice(firstCJK, cjkEnd).trim();
+  const trailing = text.slice(cjkEnd).trim();
+  const segs: ExampleSegment[] = [];
+  if (enPart) segs.push({ text: enPart, lang: 'en' });
+  if (zhPart || trailing) segs.push({ text: zhPart + (trailing ? ` ${trailing}` : ''), lang: 'zh' });
+  return segs;
+}
+
+// ---- IndexedDB-based History tracking ----
+
+async function getHistoryCounts(): Promise<Record<number, number>> {
+  const all = await db.typeHistory.toArray();
+  const counts: Record<number, number> = {};
+  for (const h of all) {
+    counts[h.cardId] = (counts[h.cardId] || 0) + 1;
+  }
+  return counts;
+}
+
+async function getLastTimes(): Promise<Record<number, Date>> {
+  const all = await db.typeHistory.toArray();
+  const last: Record<number, Date> = {};
+  for (const h of all) {
+    const existing = last[h.cardId];
+    if (!existing || h.createdAt > existing) {
+      last[h.cardId] = h.createdAt;
+    }
+  }
+  return last;
+}
+
+async function recordHistory(
+  cardId: number,
+  cardFront: string,
+  mode: 'word' | 'sentence',
+  correctChars: number,
+  wrongChars: number,
+  accuracy: number,
+  wpm: number,
+  durationMs: number
+) {
+  await db.typeHistory.add({
+    cardId,
+    cardFront,
+    mode,
+    correctChars,
+    wrongChars,
+    accuracy,
+    wpm,
+    durationMs,
+    createdAt: new Date(),
+  });
+}
+
+async function clearHistory() {
+  await db.typeHistory.clear();
+}
+
+async function sortCardsByHistory(cards: Card[]): Promise<Card[]> {
+  const counts = await getHistoryCounts();
+  const lastTimes = await getLastTimes();
+  return [...cards].sort((a, b) => {
+    const ca = counts[a.id!] || 0;
+    const cb = counts[b.id!] || 0;
+    // Primary: fewer practices first
+    if (ca !== cb) return ca - cb;
+    // Secondary: older last practice first (or never practiced)
+    const la = lastTimes[a.id!]?.getTime() || 0;
+    const lb = lastTimes[b.id!]?.getTime() || 0;
+    return la - lb;
+  });
+}
+
+type TrainMode = 'word' | 'sentence';
+type CharState = 'pending' | 'correct' | 'wrong';
+
+interface CharInfo {
+  char: string;
+  state: CharState;
+  inputChar?: string;
+}
+
+interface SessionStats {
+  totalChars: number;
+  correctChars: number;
+  wrongChars: number;
+  startTime: number;
+  endTime?: number;
+  completedWords: number;
+  skippedWords: number;
+}
+
+export default function TypeTraining() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const deckId = searchParams.get('deck');
+  const theme = getCurrentTheme();
+  const c = theme.colors;
+
+  const [cards, setCards] = useState<Card[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [mode, setMode] = useState<TrainMode>('word');
+  const [charInfos, setCharInfos] = useState<CharInfo[]>([]);
+  const [inputIndex, setInputIndex] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
+  const [shakeWrong, setShakeWrong] = useState(false);
+  const [stats, setStats] = useState<SessionStats>({
+    totalChars: 0, correctChars: 0, wrongChars: 0,
+    startTime: 0, completedWords: 0, skippedWords: 0,
+  });
+  const [wpm, setWpm] = useState(0);
+  const [accuracy, setAccuracy] = useState(100);
+  const [autoPlay, setAutoPlay] = useState(() => getSpeechSettings().autoPlay);
+  const [deckName, setDeckName] = useState<string>('');
+  // Deck picker state (shown when no deckId)
+  const [showDeckPicker, setShowDeckPicker] = useState(!deckId);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [pickerReady, setPickerReady] = useState(false);
+  const [loadError, setLoadError] = useState<string>('');
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Use ref to always access latest stats without adding to dependency lists
+  const statsRef = useRef(stats);
+  useEffect(() => { statsRef.current = stats; }, [stats]);
+
+  const currentCard = cards[currentIndex];
+
+  // Load decks for picker
+  useEffect(() => {
+    if (!deckId) {
+      db.decks.toArray().then(all => {
+        setDecks(all);
+        setPickerReady(true);
+      }).catch(err => {
+        setLoadError('DB error: ' + (err?.message || String(err)));
+        setPickerReady(true);
+      });
+    }
+  }, [deckId]);
+
+  // Build target text
+  const buildTarget = useCallback((card: Card, trainMode: TrainMode): string => {
+    if (trainMode === 'word') {
+      return card.front;
+    }
+    if (card.example && card.example.toLowerCase().includes(card.front.toLowerCase())) {
+      return card.example;
+    }
+    return `${card.back} (${card.front})`;
+  }, []);
+
+  // Check if a position is part of the target word
+  const isTargetChar = useCallback((card: Card, fullText: string, pos: number): boolean => {
+    if (mode !== 'sentence') return true;
+    const word = card.front;
+    const lowerText = fullText.toLowerCase();
+    const lowerWord = word.toLowerCase();
+    let idx = lowerText.indexOf(lowerWord);
+    while (idx !== -1) {
+      if (pos >= idx && pos < idx + word.length) return true;
+      idx = lowerText.indexOf(lowerWord, idx + 1);
+    }
+    return false;
+  }, [mode]);
+
+  // Initialize char infos
+  const initCharInfos = useCallback((card: Card, trainMode: TrainMode) => {
+    const target = buildTarget(card, trainMode);
+    const infos: CharInfo[] = target.split('').map((char, i) => ({
+      char,
+      state: isTargetChar(card, target, i) ? 'pending' : 'correct',
+    }));
+    setCharInfos(infos);
+    const firstPending = infos.findIndex(info => info.state === 'pending');
+    setInputIndex(firstPending >= 0 ? firstPending : 0);
+  }, [buildTarget, isTargetChar]);
+
+  // Auto-speak current word
+  const speakCurrent = useCallback(async () => {
+    if (!currentCard) return;
+    try {
+      await stopAllAudio();
+      await speak(currentCard.front);
+    } catch {
+      // ignore
+    }
+  }, [currentCard]);
+
+  // Load cards
+  useEffect(() => {
+    if (!deckId && showDeckPicker) return; // wait for user to pick deck
+    const load = async () => {
+      let loaded: Card[];
+      if (deckId) {
+        loaded = await db.cards.where('deckId').equals(Number(deckId)).toArray();
+        const d = await db.decks.get(Number(deckId));
+        if (d) setDeckName(d.name);
+      } else {
+        loaded = await db.cards.toArray();
+      }
+      loaded = await sortCardsByHistory(loaded);
+      setCards(loaded);
+      if (loaded.length > 0) {
+        initCharInfos(loaded[0], mode);
+        if (autoPlay) {
+          setTimeout(() => speak(loaded[0].front).catch(() => {}), 300);
+        }
+      }
+    };
+    load().catch(err => setLoadError('Load cards error: ' + (err?.message || String(err))));
+    preloadWebSpeechVoices();
+  }, [deckId, mode, showDeckPicker]);
+
+  // Re-init when mode changes
+  useEffect(() => {
+    if (currentCard) {
+      initCharInfos(currentCard, mode);
+    }
+  }, [mode]);
+
+  // Update stats display
+  useEffect(() => {
+    if (!isStarted || stats.startTime === 0) return;
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - stats.startTime) / 1000 / 60;
+      if (elapsed > 0) {
+        setWpm(Math.round(stats.correctChars / 5 / elapsed));
+      }
+      const total = stats.correctChars + stats.wrongChars;
+      if (total > 0) {
+        setAccuracy(Math.round((stats.correctChars / total) * 100));
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isStarted, stats]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => stopAllAudio();
+  }, []);
+
+  // Handle key input
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!isStarted) {
+      setIsStarted(true);
+      setStats(prev => ({ ...prev, startTime: Date.now() }));
+    }
+    if (isComplete || !currentCard) return;
+
+    const target = buildTarget(currentCard, mode);
+
+    // Space: speak the word (unless space is the actual target char)
+    if (e.key === ' ') {
+      const expected = target[inputIndex];
+      if (expected !== ' ') {
+        e.preventDefault();
+        speakCurrent();
+        return;
+      }
+      // fall through: space IS the expected char, handle normally below
+    }
+
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (inputIndex > 0) {
+        let prevIndex = inputIndex - 1;
+        while (prevIndex >= 0 && !isTargetChar(currentCard, target, prevIndex)) {
+          prevIndex--;
+        }
+        if (prevIndex >= 0) {
+          setCharInfos(prev => {
+            const next = [...prev];
+            next[prevIndex] = { ...next[prevIndex], state: 'pending', inputChar: undefined };
+            return next;
+          });
+          setInputIndex(prevIndex);
+        }
+      }
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      goNextCard(true);
+      return;
+    }
+
+    if (e.key.length > 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+
+    const expected = target[inputIndex];
+    const typed = e.key;
+    const isCorrect = typed === expected;
+
+    setCharInfos(prev => {
+      const next = [...prev];
+      next[inputIndex] = { ...next[inputIndex], state: isCorrect ? 'correct' : 'wrong', inputChar: typed };
+      return next;
+    });
+
+    setStats(prev => ({
+      ...prev,
+      totalChars: prev.totalChars + 1,
+      correctChars: prev.correctChars + (isCorrect ? 1 : 0),
+      wrongChars: prev.wrongChars + (isCorrect ? 0 : 1),
+    }));
+
+    if (!isCorrect) {
+      setShakeWrong(true);
+      setTimeout(() => setShakeWrong(false), 300);
+    }
+
+    let nextIdx = inputIndex + 1;
+    while (nextIdx < target.length && !isTargetChar(currentCard, target, nextIdx)) {
+      nextIdx++;
+    }
+
+    if (nextIdx >= target.length) {
+      setStats(prev => ({ ...prev, completedWords: prev.completedWords + 1 }));
+      setTimeout(() => goNextCard(false), 400);
+    } else {
+      setInputIndex(nextIdx);
+    }
+  }, [isStarted, isComplete, currentCard, inputIndex, mode, buildTarget, isTargetChar, goNextCard]);
+
+  // Advance to next card. Records history only when a word is completed (isSkip=false).
+  const goNextCard = useCallback((isSkip: boolean) => {
+    stopAllAudio();
+    const s = statsRef.current;
+    // Record history for completed card (async, fire and forget)
+    if (!isSkip && currentCard?.id != null) {
+      const elapsed = s.startTime ? Date.now() - s.startTime : 0;
+      const total = s.correctChars + s.wrongChars;
+      const acc = total > 0 ? Math.round((s.correctChars / total) * 100) : 100;
+      const minPassed = elapsed / 60000;
+      const curWpm = minPassed > 0 ? Math.round(s.correctChars / 5 / minPassed) : 0;
+      recordHistory(
+        currentCard.id!,
+        currentCard.front,
+        mode,
+        s.correctChars,
+        s.wrongChars,
+        acc,
+        curWpm,
+        elapsed
+      ).catch(console.error);
+    }
+    if (currentIndex < cards.length - 1) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      const nxt = cards[nextIndex];
+      if (nxt) {
+        initCharInfos(nxt, mode);
+        if (autoPlay) {
+          setTimeout(() => speak(nxt.front).catch(() => {}), 200);
+        }
+      }
+      if (isSkip) {
+        setStats(prev => ({ ...prev, skippedWords: prev.skippedWords + 1 }));
+      }
+    } else {
+      setIsComplete(true);
+      setStats(prev => ({ ...prev, endTime: Date.now() }));
+    }
+  }, [currentIndex, cards, currentCard, mode, initCharInfos, autoPlay]);
+
+  const toggleAutoPlay = () => {
+    const next = !autoPlay;
+    setAutoPlay(next);
+    // Persist
+    const s = getSpeechSettings();
+    s.autoPlay = next;
+    localStorage.setItem('speech_settings', JSON.stringify(s));
+    if (next && currentCard) {
+      speak(currentCard.front).catch(() => {});
+    }
+  };
+
+  const handleRestart = async () => {
+    setCurrentIndex(0);
+    setIsComplete(false);
+    setIsStarted(false);
+    setStats({ totalChars: 0, correctChars: 0, wrongChars: 0, startTime: 0, completedWords: 0, skippedWords: 0 });
+    setWpm(0);
+    setAccuracy(100);
+    // Re-sort cards by history so newly practiced cards go to the back
+    const sorted = await sortCardsByHistory(cards);
+    setCards(sorted);
+    if (sorted.length > 0) {
+      initCharInfos(sorted[0], mode);
+      if (autoPlay) {
+        setTimeout(() => speak(sorted[0].front).catch(() => {}), 300);
+      }
+    }
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleGoHome = () => {
+    stopAllAudio();
+    window.location.href = '/';
+  };
+
+  const handleContainerClick = () => {
+    inputRef.current?.focus();
+  };
+
+  // Focus input
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [currentIndex, mode, showDeckPicker]);
+
+  // ---- DECK PICKER SCREEN ----
+  if ((!deckId && showDeckPicker) || (deckId && cards.length === 0 && !pickerReady)) {
+    const thirtyDayDecks = decks.filter(d => d.name === '30天词汇');
+    const otherDecks = decks.filter(d => d.name !== '30天词汇');
+
+    return (
+      <div className="min-h-[100dvh] flex flex-col relative" style={{ backgroundColor: c.studyBg, color: c.studyText }}>
+        {/* Header */}
+        <header className="flex items-center justify-between px-5 pt-5 pb-3">
+          <button
+            onClick={handleGoHome}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition shrink-0"
+            style={{ backgroundColor: `${c.studyText}15` }}
+          >
+            <X size={18} style={{ color: c.studyText }} />
+          </button>
+          <p className="text-sm font-medium" style={{ color: c.studyText }}>
+            {t('type.select.deck')}
+          </p>
+          <div className="w-9" />
+        </header>
+
+        <main className="flex-1 px-5 py-4 overflow-y-auto">
+          <div className="max-w-lg mx-auto space-y-4">
+            {/* All cards */}
+            <button
+              onClick={() => {
+                setShowDeckPicker(false);
+                navigate('/type');
+              }}
+              className="w-full text-left p-4 rounded-2xl transition-all active:scale-[0.99]"
+              style={{ backgroundColor: c.accent }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <Layers size={20} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium text-white">{t('type.all.cards')}</h3>
+                  <p className="text-[11px] text-white/60">{t('type.all.cards.desc')}</p>
+                </div>
+                <ArrowRight size={18} className="text-white/60" />
+              </div>
+            </button>
+
+            {/* 30-day vocab */}
+            {thirtyDayDecks.length > 0 && (
+              <div>
+                <h3 className="text-xs font-medium mb-2 px-1 flex items-center gap-1" style={{ color: c.studyMuted }}>
+                  <CalendarDays size={12} />30天词汇
+                </h3>
+                <div className="space-y-2">
+                  {thirtyDayDecks.map(deck => (
+                    <button
+                      key={deck.id}
+                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
+                      className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
+                      style={{ backgroundColor: `${c.studyText}08` }}
+                    >
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: deck.color || c.accent }} />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium truncate" style={{ color: c.studyText }}>{deck.name}</h4>
+                        <p className="text-[10px]" style={{ color: c.studyMuted }}>{deck.cardCount}{t('word')}</p>
+                      </div>
+                      <ArrowRight size={14} style={{ color: c.studyMuted }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Other decks */}
+            {otherDecks.length > 0 && (
+              <div>
+                <h3 className="text-xs font-medium mb-2 px-1" style={{ color: c.studyMuted }}>{t('decks.title')}</h3>
+                <div className="space-y-2">
+                  {otherDecks.map(deck => (
+                    <button
+                      key={deck.id}
+                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
+                      className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
+                      style={{ backgroundColor: `${c.studyText}08` }}
+                    >
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: deck.color || c.accent }} />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium truncate" style={{ color: c.studyText }}>{deck.name}</h4>
+                        <p className="text-[10px] truncate" style={{ color: c.studyMuted }}>{deck.description || ''}</p>
+                      </div>
+                      <span className="text-[10px] shrink-0" style={{ color: c.studyMuted }}>{deck.cardCount}{t('word')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loadError && (
+              <div className="text-center py-6 px-4 rounded-xl" style={{ backgroundColor: `${c.accent}15` }}>
+                <p className="text-sm" style={{ color: c.accent }}>{loadError}</p>
+              </div>
+            )}
+            {decks.length === 0 && pickerReady && !loadError && (
+              <div className="text-center py-12">
+                <Keyboard size={48} style={{ color: c.studyMuted }} className="mx-auto mb-4" />
+                <p className="font-serif-cn text-xl" style={{ color: c.studyText }}>{t('type.no.decks')}</p>
+                <p className="text-sm mt-2" style={{ color: c.studyMuted }}>{t('type.import.first')}</p>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ---- COMPLETION SCREEN ----
+  if (isComplete) {
+    const totalTime = stats.endTime ? Math.round((stats.endTime - stats.startTime) / 1000) : 0;
+    const finalWpm = totalTime > 0 ? Math.round(stats.correctChars / 5 / (totalTime / 60)) : 0;
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6" style={{ backgroundColor: c.studyBg, color: c.studyText }}>
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <Trophy size={48} style={{ color: c.accent }} className="mx-auto mb-4" />
+            <p className="font-serif-cn text-3xl font-bold mb-2" style={{ color: c.studyText }}>{t('study.complete')}</p>
+            <p className="text-sm" style={{ color: c.studyMuted }}>
+              {deckName ? `「${deckName}」· ` : ''}{mode === 'word' ? t('type.word.mode') : t('type.sentence.mode')}
+            </p>
+          </div>
+          <div className="rounded-2xl p-5 mb-6 space-y-4" style={{ backgroundColor: `${c.studyText}0D` }}>
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div><p className="text-2xl font-bold" style={{ color: c.accent }}>{finalWpm}</p><p className="text-xs" style={{ color: c.studyMuted }}>WPM</p></div>
+              <div><p className="text-2xl font-bold" style={{ color: c.accent }}>{accuracy}%</p><p className="text-xs" style={{ color: c.studyMuted }}>{t('study.accuracy')}</p></div>
+              <div><p className="text-2xl font-bold" style={{ color: c.studyText }}>{stats.completedWords}</p><p className="text-xs" style={{ color: c.studyMuted }}>{t('type.words.completed')}</p></div>
+              <div><p className="text-2xl font-bold" style={{ color: c.studyText }}>{Math.round(totalTime / 60)}:{String(totalTime % 60).padStart(2, '0')}</p><p className="text-xs" style={{ color: c.studyMuted }}>{t('type.time')}</p></div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              <button onClick={handleRestart} className="flex-1 py-3 rounded-full text-sm font-medium transition flex items-center justify-center gap-2" style={{ backgroundColor: `${c.studyText}15`, color: c.studyText }}>
+                <RotateCcw size={16} />{t('study.restart')}
+              </button>
+              <button onClick={handleGoHome} className="flex-1 py-3 rounded-full text-sm font-medium transition" style={{ backgroundColor: c.studyText, color: c.studyBg }}>
+                {t('study.back')}
+              </button>
+            </div>
+            <button
+              onClick={async () => {
+                if (window.confirm(t('type.history.clear.confirm'))) {
+                  await clearHistory();
+                  handleRestart();
+                }
+              }}
+              className="w-full py-2.5 rounded-full text-xs transition flex items-center justify-center gap-1.5"
+              style={{ backgroundColor: 'transparent', color: c.studyMuted }}
+            >
+              <Trash2 size={13} />{t('type.history.clear')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- MAIN TYPING SCREEN ----
+  return (
+    <div
+      className="min-h-[100dvh] flex flex-col relative"
+      style={{ backgroundColor: c.studyBg, color: c.studyText }}
+      onClick={handleContainerClick}
+      ref={containerRef}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        className="absolute opacity-0 w-0 h-0"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        onKeyDown={handleKeyDown}
+      />
+
+      {/* Header */}
+      <header className="flex items-center justify-between px-5 pt-5 pb-3">
+        <button
+          onClick={handleGoHome}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition shrink-0"
+          style={{ backgroundColor: `${c.studyText}15` }}
+        >
+          <X size={18} style={{ color: c.studyText }} />
+        </button>
+
+        <div className="flex-1 flex flex-col items-center mx-2 min-w-0">
+          {deckName && (
+            <span className="text-[10px] mb-0.5 truncate max-w-full" style={{ color: c.studyMuted }}>{deckName}</span>
+          )}
+          <div className="flex items-center gap-2 w-full max-w-[140px]">
+            <div className="h-1 flex-1 rounded-full overflow-hidden" style={{ backgroundColor: `${c.studyText}10` }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((currentIndex + 1) / cards.length) * 100}%`, backgroundColor: c.progressBar }} />
+            </div>
+            <span className="text-[10px] shrink-0" style={{ color: c.studyMuted }}>{currentIndex + 1}/{cards.length}</span>
+          </div>
+          <span className="text-[10px] mt-0.5" style={{ color: c.studyMuted }}>
+            {mode === 'word' ? t('type.word.mode') : t('type.sentence.mode')}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Speak button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); if (currentCard) speak(currentCard.front).catch(() => {}); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition"
+            style={{ backgroundColor: `${c.studyText}15`, color: c.studyMuted }}
+            title={t('study.speak.all')}
+          >
+            <Volume2 size={16} />
+          </button>
+          {/* Auto-play toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleAutoPlay(); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition"
+            style={autoPlay
+              ? { backgroundColor: `${c.accent}20`, color: c.accent }
+              : { backgroundColor: `${c.studyText}15`, color: c.studyMuted }
+            }
+            title={autoPlay ? t('study.auto.play.on') : t('study.auto.play.off')}
+          >
+            {autoPlay ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+          {/* Mode switch */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setMode(mode === 'word' ? 'sentence' : 'word'); }}
+            className="text-[10px] px-2 py-1 rounded-full transition shrink-0"
+            style={{ backgroundColor: `${c.studyText}12`, color: c.studyMuted }}
+          >
+            {mode === 'word' ? <FileText size={12} className="inline mr-0.5" /> : <Zap size={12} className="inline mr-0.5" />}
+            {mode === 'word' ? t('type.switch.sentence') : t('type.switch.word')}
+          </button>
+        </div>
+      </header>
+
+      {/* Stats bar */}
+      <div className="flex items-center justify-center gap-6 py-2">
+        <div className="text-center">
+          <p className="text-lg font-bold" style={{ color: c.studyText }}>{wpm}</p>
+          <p className="text-[10px]" style={{ color: c.studyMuted }}>WPM</p>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-bold" style={{ color: c.studyText }}>{accuracy}%</p>
+          <p className="text-[10px]" style={{ color: c.studyMuted }}>{t('study.accuracy')}</p>
+        </div>
+      </div>
+
+      {/* Main typing area */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-2xl">
+          {!isStarted && (
+            <p className="text-center text-sm mb-6 animate-pulse" style={{ color: c.studyMuted }}>
+              {t('type.press.any.key')}
+            </p>
+          )}
+
+          {/* Word mode: meaning hint */}
+          {mode === 'word' && currentCard && (
+            <p className="text-center text-lg mb-6 font-medium" style={{ color: c.studyMuted }}>
+              {currentCard.back}
+            </p>
+          )}
+
+          {/* Character display */}
+          <div className={`text-center select-none transition-all ${shakeWrong ? 'animate-shake' : ''}`}>
+            <div className="flex flex-wrap items-center justify-center gap-[2px] min-h-[80px]">
+              {charInfos.map((info, i) => {
+                const isCursor = i === inputIndex;
+                const isPreFilled = mode === 'sentence' && info.state === 'correct' && !info.inputChar;
+                return (
+                  <span
+                    key={i}
+                    className={`
+                      inline-flex items-center justify-center rounded-md transition-all duration-150 relative
+                      ${isPreFilled ? 'text-sm px-1' : 'text-3xl md:text-4xl font-mono w-10 h-14 md:w-12 md:h-16'}
+                      ${isCursor ? 'ring-2 ring-[var(--accent)]' : ''}
+                    `}
+                    style={{
+                      backgroundColor: isPreFilled ? 'transparent' : info.state === 'pending'
+                        ? `${c.studyText}08`
+                        : info.state === 'correct'
+                          ? `${c.studyText === '#FFFFFF' ? '#2B5A3B' : '#4ade80'}20`
+                          : `${c.accent}20`,
+                      color: isPreFilled ? c.studyMuted : info.state === 'pending'
+                        ? c.studyText
+                        : info.state === 'correct'
+                          ? (c.studyText === '#FFFFFF' ? '#4ade80' : '#2B5A3B')
+                          : c.accent,
+                      borderBottom: isCursor ? `3px solid ${c.accent}` : '3px solid transparent',
+                    }}
+                  >
+                    {isPreFilled ? info.char : (
+                      info.state === 'pending' ? (isCursor ? '' : '\u00A0') : (info.inputChar || info.char)
+                    )}
+                    {isCursor && (
+                      <span className="absolute w-8 h-0.5 rounded-full animate-pulse" style={{ backgroundColor: c.accent, bottom: '2px' }} />
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sentence mode: target word hint */}
+          {mode === 'sentence' && currentCard && (
+            <div className="text-center mt-6">
+              <p className="text-sm mb-1" style={{ color: c.studyMuted }}>{t('type.target.word')}</p>
+              <p className="text-2xl font-mono font-bold" style={{ color: c.accent }}>{currentCard.front}</p>
+              {currentCard.pronunciation && (
+                <p className="text-xs mt-1" style={{ color: c.studyMuted }}>{currentCard.pronunciation}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="px-5 pb-8 pt-4 text-center">
+        <div className="flex items-center justify-center gap-4 text-[11px]" style={{ color: c.studyMuted }}>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: `${c.studyText}12` }}>Space</kbd>{t('type.speak')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: `${c.studyText}12` }}>Enter</kbd>{t('type.skip')}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: `${c.studyText}12` }}>Backspace</kbd>{t('type.delete')}
+          </span>
+        </div>
+        {currentCard?.example && mode === 'word' && (
+          <div className="mt-3 space-y-1">
+            {splitExample(currentCard.example).map((seg, i) => (
+              <div key={i} className="flex items-start justify-center gap-2">
+                <p
+                  className={`text-xs flex-1 text-left leading-relaxed ${seg.lang === 'en' ? 'italic' : ''}`}
+                  style={{ color: c.studyMuted, opacity: seg.lang === 'zh' ? 0.8 : 1 }}
+                >
+                  {seg.text}
+                </p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); speak(seg.text).catch(() => {}); }}
+                  className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition"
+                  style={{ backgroundColor: `${c.studyText}12`, color: c.studyMuted }}
+                >
+                  <Volume2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </footer>
+    </div>
+  );
+}
