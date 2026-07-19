@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>墨言 - Web 词库</title>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/web.css">
+</head>
+<body>
+  <main class="web-shell">
+    <nav class="top-nav" aria-label="主导航"><a class="brand display" href="index.html">墨言</a><div class="route-links"><a href="index.html">今日</a><a class="is-active" href="decks.html" aria-current="page">词库</a><a href="stats.html">统计</a><a href="settings.html">设置</a></div><button class="web-avatar" type="button" data-toast-action="个人资料将在正式版开放" aria-label="个人资料">若</button></nav>
+    <header class="page-head"><div><p class="eyebrow">Deck Library</p><h1 class="display">词库</h1><p>搜索、筛选、排序，并预览每个词库的学习状态。</p></div><button class="primary-button" type="button" data-open-modal="add-deck">新建 / 导入</button></header>
+    <section><div class="controls"><input class="search-input" type="search" data-search placeholder="搜索词库或 ID" aria-label="搜索词库"><div class="filter-row" aria-label="词库筛选"><button class="is-active" type="button" data-filter="all">全部</button><button type="button" data-filter="due">待复习</button><button type="button" data-filter="custom">自建</button></div><select class="sort-select" data-sort aria-label="排序"><option value="progress">按进度</option><option value="due">按待复习</option><option value="name">默认顺序</option></select></div><div class="deck-grid" data-decks></div><p class="empty-state" data-no-results hidden>没有匹配的词库。换个关键词或筛选条件。</p></section>
+  </main>
+  <div class="toast" data-toast hidden role="status"></div>
+  <div class="modal-backdrop" data-modal="deck-detail" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title"><button class="modal-close" type="button" data-close-modal aria-label="关闭">×</button><h2 class="display" id="detail-title" data-detail-title>词库详情</h2><p data-detail-copy></p><div class="modal-actions"><button class="primary-button" type="button" data-toast-action="已加入今日训练队列">加入今日训练</button></div></section></div>
+  <div class="modal-backdrop" data-modal="add-deck" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><button class="modal-close" type="button" data-close-modal aria-label="关闭">×</button><h2 class="display" id="add-title">新建或导入词库</h2><p>这些入口仅展示交互反馈，不会读取文件或触发上传。</p><div class="modal-actions"><button class="choice-button" type="button" data-toast-action="已创建空白词库"><strong>空白词库</strong><span>从零整理自己的单词</span></button><button class="choice-button" type="button" data-toast-action="Anki 导入将在正式版开放"><strong>导入 Anki</strong><span>迁移已有卡片</span></button><button class="choice-button" type="button" data-toast-action="CSV 导入将在正式版开放"><strong>导入 CSV</strong><span>用表格批量建立词库</span></button></div></section></div>
+  <script type="module">
+    import { filterDecks, sortDecks } from '../assets/mock-data.js'
+    import { showToast } from '../assets/prototype.js'
+    const root = document
+    let query = ''; let filter = 'all'; let sort = 'progress'
+    const openModal = (name) => { root.querySelector(`[data-modal="${name}"]`).hidden = false }
+    const render = () => {
+      const decks = sortDecks(filterDecks(query, filter), sort)
+      root.querySelector('[data-decks]').innerHTML = decks.map((deck) => `<article class="deck-card"><h2>${deck.name}</h2><p>${deck.words} 词 · ${deck.due} 待复习 · 正确率 ${deck.accuracy}%</p><div class="progress"><i style="width:${deck.progress}%"></i></div><div class="deck-meta"><span>${deck.type}</span><b>${deck.progress}%</b></div><button class="card-action" type="button" data-detail="${deck.id}" data-name="${deck.name}" data-copy="${deck.name} 当前掌握 ${deck.progress}%，${deck.due ? `${deck.due} 个词需要复习` : '今天没有到期词'}。">查看详情</button></article>`).join('')
+      root.querySelector('[data-no-results]').hidden = decks.length !== 0
+      root.querySelectorAll('[data-detail]').forEach((button) => button.addEventListener('click', () => { root.querySelector('[data-detail-title]').textContent = button.dataset.name; root.querySelector('[data-detail-copy]').textContent = button.dataset.copy; openModal('deck-detail') }))
+    }
+    root.querySelector('[data-search]').addEventListener('input', (event) => { query = event.target.value; render() })
+    root.querySelector('[data-sort]').addEventListener('change', (event) => { sort = event.target.value; render() })
+    root.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => { filter = button.dataset.filter; root.querySelectorAll('[data-filter]').forEach((node) => node.classList.toggle('is-active', node === button)); render() }))
+    root.querySelectorAll('[data-open-modal]').forEach((button) => button.addEventListener('click', () => openModal(button.dataset.openModal)))
+    root.querySelectorAll('[data-close-modal]').forEach((button) => button.addEventListener('click', () => { button.closest('[data-modal]').hidden = true }))
+    root.querySelectorAll('[data-toast-action]').forEach((button) => button.addEventListener('click', () => showToast(root, button.dataset.toastAction)))
+    render()
+  </script>
+</body>
+</html>

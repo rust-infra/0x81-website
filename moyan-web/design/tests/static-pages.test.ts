@@ -19,3 +19,9 @@ it.each(['index', 'decks', 'stats', 'settings'])('has mobile %s page', (name) =>
   expect(html).toContain('data-toast')
   expect(html).toContain('bottom-nav')
 })
+
+it.each(['index', 'decks', 'stats', 'settings'])('has web %s page', (name) => {
+  const html = readFileSync(`design/web/${name}.html`, 'utf8')
+  expect(html).toContain('top-nav')
+  expect(html).toContain('data-toast')
+})
