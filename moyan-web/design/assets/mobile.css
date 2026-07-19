@@ -1,0 +1,2 @@
+.mobile-shell { min-height:100dvh; max-width:390px; margin:auto; padding:26px 18px 96px; box-sizing:border-box; }
+.bottom-nav { position:fixed; inset:auto 16px 17px; height:60px; border-radius:999px; }
