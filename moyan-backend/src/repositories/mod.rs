@@ -9,7 +9,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use thiserror::Error;
 
-use crate::models::{SyncData, SyncStatusResponse, User, UserIdentity, UserStats};
+use crate::models::{
+    Card, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest,
+    Deck, ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest,
+    UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+};
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
     let database_url =
@@ -76,11 +80,108 @@ pub trait LearningRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait SettingsRepository: Send + Sync {
+    async fn get_settings(&self, user_id: &str) -> Result<UserSettings, RepositoryError>;
+    async fn save_settings(
+        &self,
+        user_id: &str,
+        settings: &UserSettings,
+    ) -> Result<UserSettings, RepositoryError>;
+}
+
+#[async_trait]
+pub trait VocabularyRepository: Send + Sync {
+    async fn list_decks_for_user(&self, user_id: &str) -> Result<Vec<Deck>, RepositoryError>;
+    async fn get_deck(&self, deck_id: &str) -> Result<Option<Deck>, RepositoryError>;
+    async fn create_user_deck(
+        &self,
+        user_id: &str,
+        req: &CreateDeckRequest,
+    ) -> Result<Deck, RepositoryError>;
+    async fn update_user_deck(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+        req: &UpdateDeckRequest,
+    ) -> Result<Option<Deck>, RepositoryError>;
+    async fn delete_user_deck(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<bool, RepositoryError>;
+
+    async fn list_cards(&self, deck_id: &str) -> Result<Vec<Card>, RepositoryError>;
+    async fn get_card(&self, card_id: &str) -> Result<Option<Card>, RepositoryError>;
+    async fn create_card(
+        &self,
+        deck_id: &str,
+        req: &CreateCardRequest,
+        examples: Vec<CardExample>,
+    ) -> Result<Card, RepositoryError>;
+    async fn update_card(
+        &self,
+        card_id: &str,
+        req: &UpdateCardRequest,
+        examples: Option<Vec<CardExample>>,
+    ) -> Result<Option<Card>, RepositoryError>;
+    async fn delete_card(&self, card_id: &str) -> Result<bool, RepositoryError>;
+
+    async fn list_study_cards(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<Vec<StudyCard>, RepositoryError>;
+    async fn upsert_card_progress(
+        &self,
+        user_id: &str,
+        card_id: &str,
+        req: &UpsertCardProgressRequest,
+    ) -> Result<CardProgress, RepositoryError>;
+    async fn create_review_log(
+        &self,
+        user_id: &str,
+        req: &CreateReviewLogRequest,
+    ) -> Result<ReviewLog, RepositoryError>;
+
+    async fn count_system_decks(&self) -> Result<i64, RepositoryError>;
+    async fn insert_system_deck(&self, deck: &Deck) -> Result<(), RepositoryError>;
+    async fn insert_system_card(&self, card: &Card) -> Result<(), RepositoryError>;
+    async fn mark_system_decks_initialized(
+        &self,
+        user_id: &str,
+        at: DateTime<Utc>,
+    ) -> Result<(), RepositoryError>;
+    async fn get_system_decks_initialized_at(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<DateTime<Utc>>, RepositoryError>;
+    async fn touch_last_login(
+        &self,
+        user_id: &str,
+        at: DateTime<Utc>,
+    ) -> Result<(), RepositoryError>;
+}
+
+#[async_trait]
 pub trait HealthRepository: Send + Sync {
     async fn is_healthy(&self) -> bool;
     fn backend_name(&self) -> &'static str;
 }
 
-pub trait Repository: UserRepository + LearningRepository + HealthRepository {}
+pub trait Repository:
+    UserRepository
+    + LearningRepository
+    + SettingsRepository
+    + VocabularyRepository
+    + HealthRepository
+{
+}
 
-impl<T> Repository for T where T: UserRepository + LearningRepository + HealthRepository {}
+impl<T> Repository for T where
+    T: UserRepository
+        + LearningRepository
+        + SettingsRepository
+        + VocabularyRepository
+        + HealthRepository
+{
+}
