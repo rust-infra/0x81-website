@@ -2,9 +2,11 @@
 
 mod learning;
 mod user;
+mod vocabulary;
 
 pub use learning::*;
 pub use user::*;
+pub use vocabulary::*;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -77,4 +79,9 @@ pub struct UploadResponse {
     pub decks_synced: usize,
     pub logs_synced: usize,
     pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSettingsRequest {
+    pub settings: UserSettings,
 }

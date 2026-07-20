@@ -11,10 +11,12 @@ use uuid::Uuid;
 use async_trait::async_trait;
 
 use crate::models::{
-    CardData, DeckData, ReviewLogData, SyncData, SyncStatusResponse, User, UserIdentity, UserStats,
+    CardData, DeckData, ReviewLogData, SyncData, SyncStatusResponse, User, UserIdentity,
+    UserSettings, UserStats,
 };
 use crate::repositories::{
-    HealthRepository, LearningRepository, RepositoryError, SyncCounts, UserRepository,
+    HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
+    UserRepository,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +38,13 @@ struct ReviewLogDocument {
     user_id: String,
     #[serde(flatten)]
     data: ReviewLogData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UserSettingsDocument {
+    user_id: String,
+    #[serde(flatten)]
+    settings: UserSettings,
 }
 
 #[derive(Clone)]
@@ -69,6 +78,9 @@ impl MongoRepositories {
     }
     fn review_logs(&self) -> Collection<ReviewLogDocument> {
         self.database.collection("review_logs")
+    }
+    fn user_settings(&self) -> Collection<UserSettingsDocument> {
+        self.database.collection("user_settings")
     }
 
     async fn ensure_indexes(&self) -> Result<(), RepositoryError> {
@@ -105,6 +117,14 @@ impl MongoRepositories {
                     .build(),
             )
             .await?;
+        self.user_settings()
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! { "user_id": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build(),
+            )
+            .await?;
         Ok(())
     }
 }
@@ -136,6 +156,10 @@ impl UserRepository for MongoRepositories {
                         "provider_id": identity.provider_id,
                         "created_at": now,
                         "last_sync_at": null,
+                        "status": "active",
+                        "role": "user",
+                        "last_login_at": null,
+                        "system_decks_initialized_at": null,
                     }
                 },
             )
@@ -287,6 +311,37 @@ impl LearningRepository for MongoRepositories {
                 "reviews count",
             )?,
         })
+    }
+}
+
+#[async_trait]
+impl SettingsRepository for MongoRepositories {
+    async fn get_settings(&self, user_id: &str) -> Result<UserSettings, RepositoryError> {
+        Ok(self
+            .user_settings()
+            .find_one(doc! { "user_id": user_id })
+            .await?
+            .map(|document| document.settings)
+            .unwrap_or_default())
+    }
+
+    async fn save_settings(
+        &self,
+        user_id: &str,
+        settings: &UserSettings,
+    ) -> Result<UserSettings, RepositoryError> {
+        self.user_settings()
+            .replace_one(
+                doc! { "user_id": user_id },
+                UserSettingsDocument {
+                    user_id: user_id.to_string(),
+                    settings: settings.clone(),
+                },
+            )
+            .upsert(true)
+            .await?;
+
+        Ok(settings.clone())
     }
 }
 

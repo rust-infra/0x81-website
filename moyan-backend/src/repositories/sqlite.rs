@@ -5,10 +5,12 @@ use uuid::Uuid;
 use async_trait::async_trait;
 
 use crate::models::{
-    CardData, DeckData, ReviewLogData, SyncData, SyncStatusResponse, User, UserIdentity, UserStats,
+    CardData, DeckData, ReviewLogData, SyncData, SyncStatusResponse, User, UserIdentity,
+    UserSettings, UserStats,
 };
 use crate::repositories::{
-    HealthRepository, LearningRepository, RepositoryError, SyncCounts, UserRepository,
+    HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
+    UserRepository,
 };
 
 #[derive(Clone)]
@@ -27,6 +29,10 @@ struct UserRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     last_sync_at: Option<DateTime<Utc>>,
+    status: String,
+    role: String,
+    last_login_at: Option<DateTime<Utc>>,
+    system_decks_initialized_at: Option<DateTime<Utc>>,
 }
 
 impl From<UserRow> for User {
@@ -41,6 +47,10 @@ impl From<UserRow> for User {
             created_at: row.created_at,
             updated_at: row.updated_at,
             last_sync_at: row.last_sync_at,
+            status: row.status,
+            role: row.role,
+            last_login_at: row.last_login_at,
+            system_decks_initialized_at: row.system_decks_initialized_at,
         }
     }
 }
@@ -116,6 +126,33 @@ struct ReviewLogRow {
     rating: String,
     reviewed_at: DateTime<Utc>,
     time_ms: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct UserSettingsRow {
+    theme: Option<String>,
+    language: Option<String>,
+    speech_provider: Option<String>,
+    speech_voice: Option<String>,
+    speech_zh_voice: Option<String>,
+    speech_model: Option<String>,
+    speech_speed: Option<f64>,
+    auto_play: Option<bool>,
+}
+
+impl From<UserSettingsRow> for UserSettings {
+    fn from(row: UserSettingsRow) -> Self {
+        Self {
+            theme: row.theme,
+            language: row.language,
+            speech_provider: row.speech_provider,
+            speech_voice: row.speech_voice,
+            speech_zh_voice: row.speech_zh_voice,
+            speech_model: row.speech_model,
+            speech_speed: row.speech_speed,
+            auto_play: row.auto_play,
+        }
+    }
 }
 
 impl From<ReviewLogRow> for ReviewLogData {
@@ -341,6 +378,59 @@ impl LearningRepository for SqliteRepositories {
     }
 }
 
+#[async_trait]
+impl SettingsRepository for SqliteRepositories {
+    async fn get_settings(&self, user_id: &str) -> Result<UserSettings, RepositoryError> {
+        Ok(sqlx::query_as::<_, UserSettingsRow>(
+            "SELECT theme, language, speech_provider, speech_voice, speech_zh_voice,
+             speech_model, speech_speed, auto_play
+             FROM user_settings WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(Into::into)
+        .unwrap_or_default())
+    }
+
+    async fn save_settings(
+        &self,
+        user_id: &str,
+        settings: &UserSettings,
+    ) -> Result<UserSettings, RepositoryError> {
+        sqlx::query(
+            "INSERT INTO user_settings (
+                user_id, theme, language, speech_provider, speech_voice, speech_zh_voice,
+                speech_model, speech_speed, auto_play, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+                theme = excluded.theme,
+                language = excluded.language,
+                speech_provider = excluded.speech_provider,
+                speech_voice = excluded.speech_voice,
+                speech_zh_voice = excluded.speech_zh_voice,
+                speech_model = excluded.speech_model,
+                speech_speed = excluded.speech_speed,
+                auto_play = excluded.auto_play,
+                updated_at = excluded.updated_at",
+        )
+        .bind(user_id)
+        .bind(&settings.theme)
+        .bind(&settings.language)
+        .bind(&settings.speech_provider)
+        .bind(&settings.speech_voice)
+        .bind(&settings.speech_zh_voice)
+        .bind(&settings.speech_model)
+        .bind(settings.speech_speed)
+        .bind(settings.auto_play)
+        .bind(Utc::now())
+        .execute(&self.pool)
+        .await?;
+
+        self.get_settings(user_id).await
+    }
+}
+
 async fn count(pool: &SqlitePool, table: &str, user_id: &str) -> Result<i64, RepositoryError> {
     let query = match table {
         "user_cards" => "SELECT COUNT(*) FROM user_cards WHERE user_id = ?",
@@ -440,6 +530,54 @@ mod tests {
         assert_eq!(repository.download(&user.id).await?.cards.len(), 1);
         assert_eq!(repository.stats(&user.id).await?.reviews_count, 1);
         assert!(repository.status(&user.id).await?.has_data);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn persists_settings_per_user() -> Result<(), RepositoryError> {
+        let repository = SqliteRepositories::connect("sqlite::memory:").await?;
+        let first_user = repository
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "provider-settings-1",
+                name: "Settings One",
+                email: "settings-one@example.com",
+                avatar: None,
+            })
+            .await?;
+        let second_user = repository
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "provider-settings-2",
+                name: "Settings Two",
+                email: "settings-two@example.com",
+                avatar: None,
+            })
+            .await?;
+
+        let saved = repository
+            .save_settings(
+                &first_user.id,
+                &UserSettings {
+                    theme: Some("zhuqing".to_string()),
+                    language: Some("en".to_string()),
+                    speech_provider: Some("google".to_string()),
+                    speech_voice: Some("en-US-Neural2-F".to_string()),
+                    speech_zh_voice: Some("cmn-CN-Neural2-A".to_string()),
+                    speech_model: Some("neural2".to_string()),
+                    speech_speed: Some(1.1),
+                    auto_play: Some(true),
+                },
+            )
+            .await?;
+
+        assert_eq!(saved.theme.as_deref(), Some("zhuqing"));
+        assert_eq!(
+            repository.get_settings(&first_user.id).await?.speech_provider,
+            Some("google".to_string())
+        );
+        assert_eq!(repository.get_settings(&second_user.id).await?, UserSettings::default());
+
         Ok(())
     }
 }
