@@ -3,6 +3,7 @@
 mod mongodb;
 mod sqlite;
 
+#[cfg(test)]
 pub use sqlite::SqliteRepositories;
 
 use std::sync::Arc;
