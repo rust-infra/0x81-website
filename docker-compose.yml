@@ -17,11 +17,40 @@ services:
       - "4322:4322"
     restart: unless-stopped
 
+  moyan-backend:
+    build: ./moyan-backend
+    ports:
+      - "4323:4323"
+    environment:
+      - PORT=4323
+      - DATABASE_BACKEND=${MOYAN_DATABASE_BACKEND:-sqlite}
+      - DATABASE_URL=${MOYAN_DATABASE_URL:-sqlite:/data/moyan.db}
+      - MONGODB_DATABASE=${MOYAN_MONGODB_DATABASE:-moyan}
+      - JWT_SECRET=${MOYAN_JWT_SECRET:-change-me-in-production}
+      - GOOGLE_CLIENT_ID=${MOYAN_GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      - ./moyan-backend/data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4323/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  moyan-web:
+    build: ./moyan-web
+    ports:
+      - "5000:5000"
+    depends_on:
+      - moyan-backend
+    restart: unless-stopped
+
   website-rs:
-    build:
-      context: ./website-rs
-      args:
-        REGISTRY: docker.m.daocloud.io/library/
+    build: ./website-rs
     ports:
       - "80:80"
       - "443:443"
@@ -30,6 +59,7 @@ services:
       - PROXY_UPSTREAM_HOST_TACT=website
       - PROXY_UPSTREAM_HOST_INDEX=0xindex
       - PROXY_UPSTREAM_HOST_CRAB=crab-web
+      - PROXY_UPSTREAM_HOST_MOYAN=moyan-web
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
@@ -38,6 +68,7 @@ services:
       - website
       - 0xindex
       - crab-web
+      - moyan-web
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

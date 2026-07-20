@@ -1,8 +1,9 @@
-# 如需使用国内 Docker Hub 镜像，可传入例如 docker.mirrors.ustc.edu.cn/library/
-ARG REGISTRY=
+# Defaults use Huawei SWR Docker Hub mirror (avoids docker.io / daocloud timeouts).
+ARG RUST_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/rust:latest
+ARG DEBIAN_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/debian:bookworm-slim
 
 # Build stage
-FROM ${REGISTRY}rust:1-bookworm AS builder
+FROM ${RUST_IMAGE} AS builder
 
 WORKDIR /app
 
@@ -10,11 +11,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY src ./src
 
-RUN cargo build --release
+RUN CARGO_HTTP_TIMEOUT=600 \
+    CARGO_HTTP_LOW_SPEED_LIMIT=1 \
+    CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_NET_RETRY=10 \
+    cargo build --release --locked
 
 # Runtime stage
-ARG REGISTRY
-FROM ${REGISTRY}debian:bookworm-slim
+FROM ${DEBIAN_IMAGE}
 
 WORKDIR /app
 

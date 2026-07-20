@@ -1,4 +1,7 @@
 .superpowers/
+.claude
+.cursor
+.tact
 .worktrees/
 .DS_Store
 **/.DS_Store
