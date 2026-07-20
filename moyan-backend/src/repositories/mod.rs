@@ -3,6 +3,8 @@
 mod mongodb;
 mod sqlite;
 
+pub use sqlite::SqliteRepositories;
+
 use std::sync::Arc;
 
 use async_trait::async_trait;

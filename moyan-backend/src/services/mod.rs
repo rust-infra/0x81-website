@@ -4,6 +4,7 @@ mod auth;
 mod health;
 mod settings;
 mod sync;
+mod system_decks;
 mod vocabulary;
 
 use std::sync::Arc;
@@ -14,6 +15,7 @@ pub use auth::AuthService;
 pub use health::HealthService;
 pub use settings::SettingsService;
 pub use sync::SyncService;
+pub use system_decks::SystemDecksService;
 pub use vocabulary::VocabularyService;
 
 #[derive(Clone)]
@@ -23,6 +25,7 @@ pub struct Services {
     pub settings: SettingsService,
     pub sync: SyncService,
     pub vocabulary: VocabularyService,
+    pub system_decks: SystemDecksService,
 }
 
 impl Services {
@@ -32,7 +35,8 @@ impl Services {
             health: HealthService::new(Arc::clone(&repository)),
             settings: SettingsService::new(Arc::clone(&repository)),
             sync: SyncService::new(Arc::clone(&repository)),
-            vocabulary: VocabularyService::new(repository),
+            vocabulary: VocabularyService::new(Arc::clone(&repository)),
+            system_decks: SystemDecksService::new(repository),
         }
     }
 }

@@ -44,17 +44,25 @@ async fn find_or_create_user(
     email: &str,
     avatar: Option<&str>,
 ) -> Result<User, AppError> {
-    Ok(state
-        .services
-        .auth
-        .find_or_create_user(UserIdentity {
-            provider,
-            provider_id,
-            name,
-            email,
-            avatar,
-        })
-        .await?)
+    Ok({
+        let user = state
+            .services
+            .auth
+            .find_or_create_user(UserIdentity {
+                provider,
+                provider_id,
+                name,
+                email,
+                avatar,
+            })
+            .await?;
+        state
+            .services
+            .system_decks
+            .ensure_available(&user.id)
+            .await?;
+        user
+    })
 }
 
 // ==================== Google OAuth ====================
