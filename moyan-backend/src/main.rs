@@ -1,4 +1,5 @@
 use axum::{
+    Extension,
     Router,
     http::Method,
     http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderName, HeaderValue},
@@ -18,18 +19,41 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{auth, health, sync};
+use crate::routes::{auth, health, settings, sync, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
     let origins = std::env::var("ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:4323,http://localhost:5000".to_string());
+        .unwrap_or_else(|_| {
+            "http://localhost:4323,http://localhost:5000,http://localhost:5173,http://127.0.0.1:5173"
+                .to_string()
+        });
     origins
         .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(|s| HeaderValue::from_str(s).expect("Invalid allowed origin in ALLOWED_ORIGINS"))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_allowed_origins;
+
+    #[test]
+    fn default_allowed_origins_include_local_frontend_hosts() {
+        unsafe {
+            std::env::remove_var("ALLOWED_ORIGINS");
+        }
+
+        let origins = parse_allowed_origins()
+            .into_iter()
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(origins.contains(&"http://localhost:5173".to_string()));
+        assert!(origins.contains(&"http://127.0.0.1:5173".to_string()));
+    }
 }
 
 #[tokio::main]
@@ -92,9 +116,12 @@ async fn main() -> anyhow::Result<()> {
     // Build router
     let app = Router::new()
         .nest("/api/auth", auth::routes())
+        .nest("/api/settings", settings::routes())
         .nest("/api/sync", sync::routes())
+        .nest("/api", vocabulary::routes())
         .nest("/api/health", health::routes())
         .route("/", get(root_handler))
+        .layer(Extension(state.clone()))
         .layer(CompressionLayer::new())
         .layer(cors)
         .layer(TraceLayer::new_for_http())
