@@ -7,13 +7,18 @@ import { UserMenu } from '../components/UserMenu';
 import { db, getDueCards, getStudyStats } from '../db';
 import { initVocabularyDecks } from '../services/vocabularyLoader';
 import { getCurrentUser, onAuthChange, type User } from '../services/authService';
-import type { Deck } from '../db';
+import { hasVocabularyBackend, listDecks } from '../services/vocabularyApi';
+import type { Deck as ApiDeck } from '@/types/vocabulary';
+import type { Deck as LocalDeck } from '../db';
 import { t, getLanguage } from '../i18n/translations';
 
-
-function getGreeting() {
-  return '你好';
-}
+type UiDeck = {
+  id: string;
+  name: string;
+  description: string;
+  color?: string | null;
+  cardCount: number;
+};
 
 function formatDate() {
   const d = new Date();
@@ -22,8 +27,29 @@ function formatDate() {
   });
 }
 
+function mapApiDeck(deck: ApiDeck): UiDeck {
+  return {
+    id: deck.id,
+    name: deck.name,
+    description: deck.description,
+    color: deck.color,
+    cardCount: deck.card_count,
+  };
+}
+
+function mapLocalDeck(deck: LocalDeck): UiDeck {
+  return {
+    id: String(deck.id),
+    name: deck.name,
+    description: deck.description,
+    color: deck.color,
+    cardCount: deck.cardCount,
+  };
+}
+
 export default function Home() {
   const navigate = useNavigate();
+  const backend = hasVocabularyBackend();
   const [dueCount, setDueCount] = useState(0);
   const [totalCards, setTotalCards] = useState(0);
   const [todayReviewed, setTodayReviewed] = useState(0);
@@ -33,7 +59,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   // 词库选择面板
   const [showDeckPicker, setShowDeckPicker] = useState(false);
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const [decks, setDecks] = useState<UiDeck[]>([]);
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -42,7 +68,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    initVocabularyDecks().then(loadData);
+    void loadData();
     // 切换展示单词
     const wordInterval = setInterval(() => {
       setCurrentWordIndex(prev => (prev + 1) % dailyWords.length);
@@ -51,18 +77,43 @@ export default function Home() {
   }, []);
 
   const loadData = async () => {
-    const due = await getDueCards();
-    setDueCount(due.length);
-    const allCards = await db.cards.count();
-    setTotalCards(allCards);
-    const stats = await getStudyStats();
-    setTodayReviewed(stats.todayReviewed);
-    // 计算进度（基于已复习卡片占总卡片比例）
-    const reviewedCards = await db.cards.filter(c => c.srs.status !== 'new').count();
-    setProgress(allCards > 0 ? reviewedCards / allCards : 0);
-    // 加载牌组列表
-    const allDecks = await db.decks.toArray();
-    setDecks(allDecks);
+    try {
+      if (backend) {
+        if (!getCurrentUser()) {
+          // Keep home browsable; deck study requires login (same as Decks)
+          setDecks([]);
+          setDueCount(0);
+          setTotalCards(0);
+          setTodayReviewed(0);
+          setProgress(0);
+          return;
+        }
+        const remote = await listDecks();
+        const mapped = remote.map(mapApiDeck);
+        setDecks(mapped);
+        const total = mapped.reduce((sum, d) => sum + d.cardCount, 0);
+        setTotalCards(total);
+        // Due/progress from server study-cards is expensive across all decks;
+        // show card totals for now and keep due at 0 until per-deck study.
+        setDueCount(0);
+        setTodayReviewed(0);
+        setProgress(0);
+      } else {
+        await initVocabularyDecks();
+        const due = await getDueCards();
+        setDueCount(due.length);
+        const allCards = await db.cards.count();
+        setTotalCards(allCards);
+        const stats = await getStudyStats();
+        setTodayReviewed(stats.todayReviewed);
+        const reviewedCards = await db.cards.filter(c => c.srs.status !== 'new').count();
+        setProgress(allCards > 0 ? reviewedCards / allCards : 0);
+        const allDecks = await db.decks.toArray();
+        setDecks(allDecks.map(mapLocalDeck));
+      }
+    } catch (err) {
+      console.error('[Home] loadData failed:', err);
+    }
   };
 
   const thirtyDayDecks = decks.filter(d => d.name === '30天词汇');
@@ -229,6 +280,10 @@ export default function Home() {
               <button
                 onClick={() => {
                   setShowDeckPicker(false);
+                  if (backend && !getCurrentUser()) {
+                    navigate('/login');
+                    return;
+                  }
                   navigate('/study');
                 }}
                 className="w-full text-left p-4 rounded-2xl hover:shadow-md transition-all active:scale-[0.99]"
@@ -257,6 +312,11 @@ export default function Home() {
                       <button
                         key={deck.id}
                         onClick={() => {
+                          if (backend && !getCurrentUser()) {
+                            setShowDeckPicker(false);
+                            navigate('/login');
+                            return;
+                          }
                           setShowDeckPicker(false);
                           navigate(`/study?deck=${deck.id}`);
                         }}
@@ -287,6 +347,11 @@ export default function Home() {
                       <button
                         key={deck.id}
                         onClick={() => {
+                          if (backend && !getCurrentUser()) {
+                            setShowDeckPicker(false);
+                            navigate('/login');
+                            return;
+                          }
                           setShowDeckPicker(false);
                           navigate(`/study?deck=${deck.id}`);
                         }}

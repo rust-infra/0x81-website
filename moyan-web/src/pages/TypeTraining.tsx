@@ -5,7 +5,7 @@ import {
   Volume2, VolumeX, Layers, CalendarDays, ArrowRight,
   Trash2,
 } from 'lucide-react';
-import { db, type TypeHistory } from '../db';
+import { db } from '../db';
 import type { Card, Deck } from '../db';
 import { t } from '../i18n/translations';
 import { getCurrentTheme } from '../theme';
@@ -15,7 +15,12 @@ import {
   preloadWebSpeechVoices,
   getSpeechSettings,
 } from '../services/speechService';
-
+import {
+  hasVocabularyBackend,
+  listCards,
+  listDecks,
+} from '../services/vocabularyApi';
+import { getCurrentUser } from '../services/authService';
 // ---- Progress Persistence ----
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
 
@@ -207,15 +212,37 @@ export default function TypeTraining() {
   // Load decks for picker
   useEffect(() => {
     if (!deckId) {
-      db.decks.toArray().then(all => {
-        setDecks(all);
-        setPickerReady(true);
-      }).catch(err => {
-        setLoadError('DB error: ' + (err?.message || String(err)));
-        setPickerReady(true);
-      });
+      const loadPicker = async () => {
+        try {
+          if (hasVocabularyBackend()) {
+            if (!getCurrentUser()) {
+              navigate('/login');
+              return;
+            }
+            const remote = await listDecks();
+            setDecks(
+              remote.map((d, index) => ({
+                id: index + 1,
+                name: d.name,
+                description: d.id, // stash API deck id for navigation
+                color: d.color || undefined,
+                cardCount: d.card_count,
+                createdAt: new Date(d.created_at),
+                updatedAt: new Date(d.updated_at),
+              }))
+            );
+          } else {
+            setDecks(await db.decks.toArray());
+          }
+          setPickerReady(true);
+        } catch (err: any) {
+          setLoadError('DB error: ' + (err?.message || String(err)));
+          setPickerReady(true);
+        }
+      };
+      void loadPicker();
     }
-  }, [deckId]);
+  }, [deckId, navigate]);
 
   // Build target text
   const buildTarget = (card: Card, trainMode: TrainMode): string => {
@@ -282,14 +309,43 @@ export default function TypeTraining() {
     const load = async () => {
       try {
         let loaded: Card[];
-        if (deckId) {
+        if (hasVocabularyBackend()) {
+          if (!getCurrentUser()) {
+            navigate('/login');
+            return;
+          }
+          if (!deckId) {
+            navigate('/decks');
+            return;
+          }
+          const remote = await listCards(deckId);
+          const decks = await listDecks();
+          const deck = decks.find((d) => d.id === deckId);
+          if (deck) setDeckName(deck.name);
+          loaded = remote.map((card, index) => ({
+            id: index + 1,
+            deckId: 0,
+            front: card.front,
+            back: card.back,
+            pronunciation: card.pronunciation || undefined,
+            example: card.examples?.[0]?.sentence_en,
+            tags: card.tags || [],
+            srs: {
+              interval: 0,
+              repetitions: 0,
+              easeFactor: 2.5,
+              dueDate: new Date(),
+              status: 'new' as const,
+            },
+            createdAt: new Date(card.created_at),
+            updatedAt: new Date(card.updated_at),
+          }));
+        } else if (deckId) {
           loaded = await db.cards.where('deckId').equals(Number(deckId)).toArray();
-          console.log(`[Type] Deck ${deckId}: ${loaded.length} cards`);
           const d = await db.decks.get(Number(deckId));
           if (d) setDeckName(d.name);
         } else {
           loaded = await db.cards.toArray();
-          console.log(`[Type] All: ${loaded.length} cards`);
         }
         loaded = await sortCardsSmart(loaded);
         console.log(`[Type] After sort: ${loaded.length}`);
@@ -563,7 +619,13 @@ export default function TypeTraining() {
                   {thirtyDayDecks.map(deck => (
                     <button
                       key={deck.id}
-                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
+                      onClick={() => {
+                        setShowDeckPicker(false);
+                        const id = hasVocabularyBackend()
+                          ? deck.description || String(deck.id)
+                          : String(deck.id);
+                        navigate(`/type?deck=${id}`);
+                      }}
                       className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
                       style={{ backgroundColor: `${c.studyText}08` }}
                     >
@@ -587,7 +649,13 @@ export default function TypeTraining() {
                   {otherDecks.map(deck => (
                     <button
                       key={deck.id}
-                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
+                      onClick={() => {
+                        setShowDeckPicker(false);
+                        const id = hasVocabularyBackend()
+                          ? deck.description || String(deck.id)
+                          : String(deck.id);
+                        navigate(`/type?deck=${id}`);
+                      }}
                       className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
                       style={{ backgroundColor: `${c.studyText}08` }}
                     >
