@@ -1,5 +1,6 @@
 import { db } from '../db';
 import type { Card } from '../db';
+import { hasVocabularyBackend } from './vocabularyApi';
 
 interface VocabularyData {
   decks: {
@@ -37,6 +38,11 @@ export async function loadVocabularyData(): Promise<VocabularyData> {
 }
 
 export async function initVocabularyDecks(): Promise<void> {
+  // Server-authoritative mode: system decks come from the API after login.
+  if (hasVocabularyBackend()) {
+    return;
+  }
+
   const data = await loadVocabularyData();
   if (data.decks.length === 0) return;
 
