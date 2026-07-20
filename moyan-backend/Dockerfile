@@ -17,9 +17,10 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g; s/security.debian.org/mirrors
 COPY Cargo.toml ./
 COPY .cargo ./.cargo
 
-# Copy source code
+# Copy source code and compile-time assets
 COPY src ./src
 COPY migrations ./migrations
+COPY data ./data
 
 # Build release binary
 RUN cargo build --release
