@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Volume2, VolumeX, RotateCcw, ExternalLink, AlertCircle, Check, Zap, Cloud, CloudCog, Trash2 } from 'lucide-react';
 import {
   getSpeechSettings,
@@ -17,7 +16,6 @@ import {
 import { t } from '../i18n/translations';
 
 export default function SpeechSettingsPanel() {
-  const navigate = useNavigate();
   const [settings, setSettings] = useState(getSpeechSettings());
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
 

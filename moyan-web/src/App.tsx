@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router';
 import { ThemeProvider } from './components/ThemeProvider';
 import { SyncProvider } from './components/SyncProvider';
+import { UserSettingsProvider } from './components/UserSettingsProvider';
 import Home from './pages/Home';
 import Study from './pages/Study';
 import Decks from './pages/Decks';
@@ -26,21 +27,23 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <SyncProvider>
-        <div key={lang}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/study" element={<Study />} />
-            <Route path="/decks" element={<Decks />} />
-            <Route path="/decks/:id" element={<DeckDetail />} />
-            <Route path="/stats" element={<Stats />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/type" element={<TypeTraining />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-      </SyncProvider>
+      <UserSettingsProvider>
+        <SyncProvider>
+          <div key={lang}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/study" element={<Study />} />
+              <Route path="/decks" element={<Decks />} />
+              <Route path="/decks/:id" element={<DeckDetail />} />
+              <Route path="/stats" element={<Stats />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/type" element={<TypeTraining />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
+        </SyncProvider>
+      </UserSettingsProvider>
     </ThemeProvider>
   );
 }

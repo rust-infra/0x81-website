@@ -233,6 +233,7 @@ export function getCurrentTheme(): Theme {
 export function setTheme(name: ThemeName): void {
   localStorage.setItem(THEME_KEY, name);
   applyTheme(name);
+  window.dispatchEvent(new CustomEvent('moyan:theme-change', { detail: name }));
 }
 
 export function applyTheme(name: ThemeName): void {

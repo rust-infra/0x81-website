@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, FileText, Mic, Palette, LogIn, LogOut, User, Cloud, Globe } from 'lucide-react';
+import { Download, Upload, Trash2, FileText, Mic, Palette, LogIn, LogOut, User, Cloud, Globe, Check } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import BottomNav from '../components/BottomNav';
 import ThemePanel from '../components/ThemePanel';
@@ -9,6 +9,13 @@ import { exportAnkiPackage } from '../services/anki';
 import { clearAudioCache } from '../services/speechService';
 import { getCurrentUser, onAuthChange, logout, type User as UserType } from '../services/authService';
 import { t, setLanguage, getLanguage, type Language } from '../i18n/translations';
+import {
+  formatSettingsSyncTimestamp,
+  getSettingsSyncEventName,
+  getLatestSettingsSavedTimestamp,
+  getLatestSettingsSyncState,
+  type SettingsSyncState,
+} from '../services/userSettingsService';
 
 type Tab = 'general' | 'voice' | 'theme';
 
@@ -19,11 +26,34 @@ export default function Settings() {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [user, setUser] = useState<UserType | null>(null);
+  const [settingsSyncState, setSettingsSyncState] = useState<SettingsSyncState | null>(
+    () => getLatestSettingsSyncState()
+  );
+  const [lastSavedSettingsAt, setLastSavedSettingsAt] = useState<number | null>(
+    () => getLatestSettingsSavedTimestamp()
+  );
 
   useEffect(() => {
     setUser(getCurrentUser());
     const unsub = onAuthChange((u) => setUser(u));
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    setSettingsSyncState(getLatestSettingsSyncState());
+    setLastSavedSettingsAt(getLatestSettingsSavedTimestamp());
+
+    const handleSettingsSync = (event: Event) => {
+      const detail = (event as CustomEvent<SettingsSyncState>).detail;
+      setSettingsSyncState(detail);
+      if (detail.phase === 'save' && detail.status === 'success') {
+        setLastSavedSettingsAt(detail.timestamp);
+      }
+    };
+
+    window.addEventListener(getSettingsSyncEventName(), handleSettingsSync);
+    return () =>
+      window.removeEventListener(getSettingsSyncEventName(), handleSettingsSync);
   }, []);
 
   const showMsg = (msg: string) => {
@@ -105,6 +135,60 @@ export default function Settings() {
     { key: 'voice', label: t('settings.tab.voice'), icon: Mic },
     { key: 'theme', label: t('settings.tab.theme'), icon: Palette },
   ];
+
+  const getSettingsSyncLabel = () => {
+    if (!settingsSyncState) return t('settings.sync.status.idle');
+    if (settingsSyncState.status === 'loading') return t('settings.sync.status.loading');
+    if (settingsSyncState.status === 'saving') return t('settings.sync.status.saving');
+    if (settingsSyncState.status === 'success') {
+      return settingsSyncState.phase === 'fetch'
+        ? t('settings.sync.status.loaded')
+        : t('settings.sync.status.saved');
+    }
+    return t('settings.sync.status.error');
+  };
+
+  const getSettingsSyncTone = () => {
+    if (!settingsSyncState || settingsSyncState.status === 'idle') {
+      return { bg: 'var(--paper)', fg: 'var(--ink-light)' };
+    }
+    if (settingsSyncState.status === 'error') {
+      return { bg: 'var(--accent-light)', fg: 'var(--accent)' };
+    }
+    if (settingsSyncState.status === 'success' && settingsSyncState.phase === 'fetch') {
+      return { bg: 'var(--paper)', fg: 'var(--ink-light)' };
+    }
+    if (settingsSyncState.status === 'success') {
+      return { bg: 'rgba(43, 107, 79, 0.12)', fg: '#2B6B4F' };
+    }
+    return { bg: 'var(--paper)', fg: 'var(--ink)' };
+  };
+
+  const getSettingsSyncDotTone = () => {
+    if (!settingsSyncState || settingsSyncState.status === 'idle') {
+      return 'var(--ink-muted)';
+    }
+    if (settingsSyncState.status === 'error') {
+      return 'var(--accent)';
+    }
+    if (settingsSyncState.status === 'success' && settingsSyncState.phase === 'fetch') {
+      return 'var(--ink-light)';
+    }
+    if (settingsSyncState.status === 'success') {
+      return '#2B6B4F';
+    }
+    return 'var(--ink)';
+  };
+
+  const isSettingsSaved = settingsSyncState?.status === 'success' && settingsSyncState.phase === 'save';
+
+  const getLastSettingsSyncTime = () => {
+    if (!lastSavedSettingsAt) {
+      return t('settings.sync.status.never');
+    }
+
+    return formatSettingsSyncTimestamp(lastSavedSettingsAt, getLanguage());
+  };
 
   return (
     <div className="min-h-[100dvh] paper-texture pb-28">
@@ -199,6 +283,31 @@ export default function Settings() {
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-full capitalize" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
                         {user.provider}
+                      </span>
+                    </div>
+                    <div className="px-4 py-3 flex items-center justify-between gap-3 text-[11px]" style={{ borderBottom: '1px solid var(--divider)' }}>
+                      <div className="min-w-0">
+                        <p className="font-medium" style={{ color: 'var(--ink-muted)' }}>{t('settings.sync.status.title')}</p>
+                        <p style={{ color: 'var(--ink-light)' }} className="mt-1.5">
+                          {t('settings.sync.status.last')} · {getLastSettingsSyncTime()}
+                        </p>
+                      </div>
+                      <span
+                        className="px-2.5 py-1 rounded-full shrink-0 inline-flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: getSettingsSyncTone().bg,
+                          color: getSettingsSyncTone().fg,
+                        }}
+                      >
+                        {isSettingsSaved ? (
+                          <Check size={12} strokeWidth={2.4} className="shrink-0" />
+                        ) : (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: getSettingsSyncDotTone() }}
+                          />
+                        )}
+                        {getSettingsSyncLabel()}
                       </span>
                     </div>
                     {/* Cloud sync buttons */}

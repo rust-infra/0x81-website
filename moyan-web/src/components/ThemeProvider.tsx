@@ -27,6 +27,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(themeName);
   }, [themeName]);
 
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const nextTheme = (event as CustomEvent<ThemeName>).detail;
+      if (nextTheme) {
+        setThemeName(nextTheme);
+      }
+    };
+
+    window.addEventListener('moyan:theme-change', handleThemeChange);
+    return () => window.removeEventListener('moyan:theme-change', handleThemeChange);
+  }, []);
+
   const handleSetTheme = useCallback((name: ThemeName) => {
     setTheme(name);
     setThemeName(name);

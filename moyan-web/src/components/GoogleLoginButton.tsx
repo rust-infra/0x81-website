@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Chrome, AlertCircle } from "lucide-react";
+import { Chrome } from "lucide-react";
 import { loginWithGoogle } from "@/services/authService";
 import { t } from "@/i18n/translations";
 
