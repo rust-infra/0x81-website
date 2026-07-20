@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { LogOut, Cloud, CloudDownload, User } from "lucide-react";
-import { useNavigate } from "react-router";
 import { getCurrentUser, logout, onAuthChange, type User as AuthUser } from "@/services/authService";
 import { t } from "@/i18n/translations";
 
 export function UserMenu() {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const ref = useRef<HTMLDivElement>(null);

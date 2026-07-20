@@ -6,7 +6,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { db } from '../db';
-import type { Card, Deck } from '../db';
+import type { Card as LocalCard, Deck as LocalDeck } from '../db';
 import { t } from '../i18n/translations';
 import { getCurrentTheme } from '../theme';
 import {
@@ -20,12 +20,74 @@ import {
   listCards,
   listDecks,
 } from '../services/vocabularyApi';
+import type { Card as ApiCard, Deck as ApiDeck } from '@/types/vocabulary';
 import { getCurrentUser } from '../services/authService';
+
+/** Unified card shape for typing practice (API or local) */
+interface TypeCard {
+  id: string;
+  front: string;
+  back: string;
+  pronunciation?: string | null;
+  /** Sentence example text for typing mode */
+  exampleText?: string;
+  localNumericId?: number;
+}
+
+interface UiDeck {
+  id: string;
+  name: string;
+  description: string;
+  color?: string | null;
+  cardCount: number;
+}
+
+function mapApiTypeCard(card: ApiCard): TypeCard {
+  return {
+    id: card.id,
+    front: card.front,
+    back: card.back,
+    pronunciation: card.pronunciation,
+    exampleText: card.examples?.[0]?.sentence_en || undefined,
+  };
+}
+
+function mapLocalTypeCard(card: LocalCard): TypeCard {
+  return {
+    id: String(card.id),
+    front: card.front,
+    back: card.back,
+    pronunciation: card.pronunciation,
+    exampleText: card.example,
+    localNumericId: card.id,
+  };
+}
+
+function mapApiDeck(deck: ApiDeck): UiDeck {
+  return {
+    id: deck.id,
+    name: deck.name,
+    description: deck.description,
+    color: deck.color,
+    cardCount: deck.card_count,
+  };
+}
+
+function mapLocalDeck(deck: LocalDeck): UiDeck {
+  return {
+    id: String(deck.id),
+    name: deck.name,
+    description: deck.description,
+    color: deck.color,
+    cardCount: deck.cardCount,
+  };
+}
+
 // ---- Progress Persistence ----
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
 
 interface TypeProgress {
-  [deckId: string]: { currentIndex: number; lastCardId: number; timestamp: number };
+  [deckId: string]: { currentIndex: number; lastCardId: string; timestamp: number };
 }
 
 function loadTypeProgress(): TypeProgress {
@@ -36,18 +98,18 @@ function loadTypeProgress(): TypeProgress {
   }
 }
 
-function saveTypeProgressEntry(deckId: string | null, currentIndex: number, cardId: number) {
+function saveTypeProgressEntry(deckId: string | null, currentIndex: number, cardId: string) {
   const key = deckId || 'all';
   const all = loadTypeProgress();
   all[key] = { currentIndex, lastCardId: cardId, timestamp: Date.now() };
   localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
 }
 
-function getTypeSavedIndex(deckId: string | null, cards: Card[]): number {
+function getTypeSavedIndex(deckId: string | null, cards: TypeCard[]): number {
   const key = deckId || 'all';
   const saved = loadTypeProgress()[key];
   if (!saved) return 0;
-  const idx = cards.findIndex(c => c.id === saved.lastCardId);
+  const idx = cards.findIndex(c => c.id === String(saved.lastCardId));
   if (idx >= 0) return idx;
   return Math.min(saved.currentIndex, cards.length - 1);
 }
@@ -74,29 +136,6 @@ function splitExample(text: string): ExampleSegment[] {
   if (enPart) segs.push({ text: enPart, lang: 'en' });
   if (zhPart || trailing) segs.push({ text: zhPart + (trailing ? ` ${trailing}` : ''), lang: 'zh' });
   return segs;
-}
-
-// ---- IndexedDB-based History tracking ----
-
-async function getHistoryCounts(): Promise<Record<number, number>> {
-  const all = await db.typeHistory.toArray();
-  const counts: Record<number, number> = {};
-  for (const h of all) {
-    counts[h.cardId] = (counts[h.cardId] || 0) + 1;
-  }
-  return counts;
-}
-
-async function getLastTimes(): Promise<Record<number, Date>> {
-  const all = await db.typeHistory.toArray();
-  const last: Record<number, Date> = {};
-  for (const h of all) {
-    const existing = last[h.cardId];
-    if (!existing || h.createdAt > existing) {
-      last[h.cardId] = h.createdAt;
-    }
-  }
-  return last;
 }
 
 async function recordHistory(
@@ -126,11 +165,11 @@ async function clearHistory() {
   await db.typeHistory.clear();
 }
 
-/** 
+/**
  * Deterministic weighted sort for typing practice.
  * Cards needing more practice come first (higher weight = earlier).
  */
-async function sortCardsSmart(cards: Card[]): Promise<Card[]> {
+async function sortCardsSmart(cards: TypeCard[]): Promise<TypeCard[]> {
   const all = await db.typeHistory.toArray();
   const map: Record<number, { count: number; last: number }> = {};
   for (const h of all) {
@@ -140,18 +179,18 @@ async function sortCardsSmart(cards: Card[]): Promise<Card[]> {
     if (t > e.last) e.last = t;
     map[h.cardId] = e;
   }
-  const getWeight = (card: Card): number => {
-    const s = map[card.id!];
-    if (!s) return 1000; // new card: highest priority
+  const getWeight = (card: TypeCard): number => {
+    if (card.localNumericId == null) return 1000;
+    const s = map[card.localNumericId];
+    if (!s) return 1000;
     const daysSince = Math.min((Date.now() - s.last) / 86400000, 60);
-    // More practices -> lower weight, longer ago -> higher weight
     return -s.count * 30 + daysSince * 5;
   };
   return [...cards].sort((a, b) => {
     const wa = getWeight(a);
     const wb = getWeight(b);
     if (wa !== wb) return wb - wa;
-    return (a.id || 0) - (b.id || 0);
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -178,10 +217,11 @@ export default function TypeTraining() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deckId = searchParams.get('deck');
+  const backend = hasVocabularyBackend();
   const theme = getCurrentTheme();
   const c = theme.colors;
 
-  const [cards, setCards] = useState<Card[]>([]);
+  const [cards, setCards] = useState<TypeCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mode, setMode] = useState<TrainMode>('word');
   const [charInfos, setCharInfos] = useState<CharInfo[]>([]);
@@ -198,9 +238,8 @@ export default function TypeTraining() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [autoPlay, setAutoPlay] = useState(() => getSpeechSettings().autoPlay);
   const [deckName, setDeckName] = useState<string>('');
-  // Deck picker state (shown when no deckId)
   const [showDeckPicker, setShowDeckPicker] = useState(!deckId);
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const [decks, setDecks] = useState<UiDeck[]>([]);
   const [pickerReady, setPickerReady] = useState(false);
   const [loadError, setLoadError] = useState<string>('');
 
@@ -209,54 +248,43 @@ export default function TypeTraining() {
 
   const currentCard = cards[currentIndex];
 
-  // Load decks for picker
   useEffect(() => {
     if (!deckId) {
-      const loadPicker = async () => {
+      const load = async () => {
         try {
-          if (hasVocabularyBackend()) {
+          if (backend) {
             if (!getCurrentUser()) {
               navigate('/login');
               return;
             }
             const remote = await listDecks();
-            setDecks(
-              remote.map((d, index) => ({
-                id: index + 1,
-                name: d.name,
-                description: d.id, // stash API deck id for navigation
-                color: d.color || undefined,
-                cardCount: d.card_count,
-                createdAt: new Date(d.created_at),
-                updatedAt: new Date(d.updated_at),
-              }))
-            );
+            setDecks(remote.map(mapApiDeck));
           } else {
-            setDecks(await db.decks.toArray());
+            const all = await db.decks.toArray();
+            setDecks(all.map(mapLocalDeck));
           }
-          setPickerReady(true);
-        } catch (err: any) {
-          setLoadError('DB error: ' + (err?.message || String(err)));
+        } catch (err: unknown) {
+          setLoadError('DB error: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
           setPickerReady(true);
         }
       };
-      void loadPicker();
+      void load();
     }
-  }, [deckId, navigate]);
+  }, [deckId, backend]);
 
-  // Build target text
-  const buildTarget = (card: Card, trainMode: TrainMode): string => {
+  const buildTarget = (card: TypeCard, trainMode: TrainMode): string => {
     if (trainMode === 'word') {
       return card.front;
     }
-    if (card.example && card.example.toLowerCase().includes(card.front.toLowerCase())) {
-      return card.example;
+    const example = card.exampleText;
+    if (example && example.toLowerCase().includes(card.front.toLowerCase())) {
+      return example;
     }
     return `${card.back} (${card.front})`;
   };
 
-  // Check if a position is part of the target word
-  const isTargetChar = (card: Card, fullText: string, pos: number): boolean => {
+  const isTargetChar = (card: TypeCard, fullText: string, pos: number): boolean => {
     if (mode !== 'sentence') return true;
     const word = card.front;
     const lowerText = fullText.toLowerCase();
@@ -269,8 +297,7 @@ export default function TypeTraining() {
     return false;
   };
 
-  // Initialize char infos
-  const initCharInfos = (card: Card, trainMode: TrainMode) => {
+  const initCharInfos = (card: TypeCard, trainMode: TrainMode) => {
     const target = buildTarget(card, trainMode);
     const infos: CharInfo[] = target.split('').map((char, i) => ({
       char,
@@ -281,7 +308,6 @@ export default function TypeTraining() {
     setInputIndex(firstPending >= 0 ? firstPending : 0);
   };
 
-  // Auto-speak current word
   const speakCurrent = async () => {
     if (!currentCard) return;
     try {
@@ -292,63 +318,51 @@ export default function TypeTraining() {
     }
   };
 
-  // Save progress when page closes
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (currentCard && !isComplete) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id!);
+        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentCard, currentIndex, deckId, isComplete]);
 
-  // Load cards
   useEffect(() => {
-    if (!deckId && showDeckPicker) return; // wait for user to pick deck
+    if (!deckId && showDeckPicker) return;
     const load = async () => {
       try {
-        let loaded: Card[];
-        if (hasVocabularyBackend()) {
+        let loaded: TypeCard[];
+        if (backend) {
           if (!getCurrentUser()) {
             navigate('/login');
             return;
           }
-          if (!deckId) {
-            navigate('/decks');
-            return;
+          if (deckId) {
+            const remoteCards = await listCards(deckId);
+            loaded = remoteCards.map(mapApiTypeCard);
+            const decksList = await listDecks();
+            const d = decksList.find(x => x.id === deckId);
+            if (d) setDeckName(d.name);
+          } else {
+            const decksList = await listDecks();
+            const allCards: TypeCard[] = [];
+            for (const d of decksList) {
+              const remoteCards = await listCards(d.id);
+              allCards.push(...remoteCards.map(mapApiTypeCard));
+            }
+            loaded = allCards;
           }
-          const remote = await listCards(deckId);
-          const decks = await listDecks();
-          const deck = decks.find((d) => d.id === deckId);
-          if (deck) setDeckName(deck.name);
-          loaded = remote.map((card, index) => ({
-            id: index + 1,
-            deckId: 0,
-            front: card.front,
-            back: card.back,
-            pronunciation: card.pronunciation || undefined,
-            example: card.examples?.[0]?.sentence_en,
-            tags: card.tags || [],
-            srs: {
-              interval: 0,
-              repetitions: 0,
-              easeFactor: 2.5,
-              dueDate: new Date(),
-              status: 'new' as const,
-            },
-            createdAt: new Date(card.created_at),
-            updatedAt: new Date(card.updated_at),
-          }));
         } else if (deckId) {
-          loaded = await db.cards.where('deckId').equals(Number(deckId)).toArray();
+          const localCards = await db.cards.where('deckId').equals(Number(deckId)).toArray();
+          loaded = localCards.map(mapLocalTypeCard);
           const d = await db.decks.get(Number(deckId));
           if (d) setDeckName(d.name);
         } else {
-          loaded = await db.cards.toArray();
+          const localCards = await db.cards.toArray();
+          loaded = localCards.map(mapLocalTypeCard);
         }
         loaded = await sortCardsSmart(loaded);
-        console.log(`[Type] After sort: ${loaded.length}`);
         setCards(loaded);
         if (loaded.length > 0) {
           const savedIdx = getTypeSavedIndex(deckId, loaded);
@@ -363,18 +377,16 @@ export default function TypeTraining() {
         setLoadError('Load error: ' + (err instanceof Error ? err.message : String(err)));
       }
     };
-    load();
+    void load();
     preloadWebSpeechVoices();
-  }, [deckId, mode, showDeckPicker]);
+  }, [deckId, mode, showDeckPicker, backend]);
 
-  // Re-init when mode changes
   useEffect(() => {
     if (currentCard) {
       initCharInfos(currentCard, mode);
     }
   }, [mode]);
 
-  // Update stats display
   useEffect(() => {
     if (!isStarted || stats.startTime === 0) return;
     const interval = setInterval(() => {
@@ -392,12 +404,10 @@ export default function TypeTraining() {
     return () => clearInterval(interval);
   }, [isStarted, stats]);
 
-  // Cleanup audio on unmount
   useEffect(() => {
     return () => stopAllAudio();
   }, []);
 
-  // Handle key input (plain function, not useCallback - avoids closure staleness)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isStarted) {
       setIsStarted(true);
@@ -407,7 +417,6 @@ export default function TypeTraining() {
 
     const target = buildTarget(currentCard, mode);
 
-    // Space: speak the word (unless space is the actual target char)
     if (e.key === ' ') {
       const expected = target[inputIndex];
       if (expected !== ' ') {
@@ -480,13 +489,11 @@ export default function TypeTraining() {
     }
   };
 
-  // Advance to next card. Records history only when a word is completed (isSkip=false).
   const goNextCard = (isSkip: boolean) => {
     stopAllAudio();
-    // Record history for completed card (async, fire and forget)
-    if (!isSkip && currentCard?.id != null) {
+    if (!isSkip && currentCard?.localNumericId != null) {
       recordHistory(
-        currentCard.id!,
+        currentCard.localNumericId,
         currentCard.front,
         mode,
         0, 0, 0, 0, 0
@@ -495,9 +502,8 @@ export default function TypeTraining() {
     if (currentIndex < cards.length - 1) {
       const nextIndex = currentIndex + 1;
       const nxt = cards[nextIndex];
-      // Save progress: where we are now
       if (currentCard) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id!);
+        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
       }
       setCurrentIndex(nextIndex);
       if (nxt) {
@@ -510,7 +516,6 @@ export default function TypeTraining() {
         setStats(prev => ({ ...prev, skippedWords: prev.skippedWords + 1 }));
       }
     } else {
-      // Finished all cards - clear progress
       clearTypeProgress(deckId);
       setIsComplete(true);
       setStats(prev => ({ ...prev, endTime: Date.now() }));
@@ -520,7 +525,6 @@ export default function TypeTraining() {
   const toggleAutoPlay = () => {
     const next = !autoPlay;
     setAutoPlay(next);
-    // Persist
     const s = getSpeechSettings();
     s.autoPlay = next;
     localStorage.setItem('speech_settings', JSON.stringify(s));
@@ -538,7 +542,6 @@ export default function TypeTraining() {
     setWpm(0);
     setAccuracy(100);
     setElapsedSec(0);
-    // Re-sort cards by history so newly practiced cards go to the back
     const sorted = await sortCardsSmart(cards);
     setCards(sorted);
     if (sorted.length > 0) {
@@ -559,19 +562,16 @@ export default function TypeTraining() {
     inputRef.current?.focus();
   };
 
-  // Focus input
   useEffect(() => {
     inputRef.current?.focus();
   }, [currentIndex, mode, showDeckPicker]);
 
-  // ---- DECK PICKER SCREEN ----
-  if ((!deckId && showDeckPicker) || (deckId && cards.length === 0 && !pickerReady)) {
+  if (!deckId && showDeckPicker) {
     const thirtyDayDecks = decks.filter(d => d.name === '30天词汇');
     const otherDecks = decks.filter(d => d.name !== '30天词汇');
 
     return (
       <div className="min-h-[100dvh] flex flex-col relative" style={{ backgroundColor: c.studyBg, color: c.studyText }}>
-        {/* Header */}
         <header className="flex items-center justify-between px-5 pt-5 pb-3">
           <button
             onClick={handleGoHome}
@@ -588,7 +588,6 @@ export default function TypeTraining() {
 
         <main className="flex-1 px-5 py-4 overflow-y-auto">
           <div className="max-w-lg mx-auto space-y-4">
-            {/* All cards */}
             <button
               onClick={() => {
                 setShowDeckPicker(false);
@@ -609,7 +608,6 @@ export default function TypeTraining() {
               </div>
             </button>
 
-            {/* 30-day vocab */}
             {thirtyDayDecks.length > 0 && (
               <div>
                 <h3 className="text-xs font-medium mb-2 px-1 flex items-center gap-1" style={{ color: c.studyMuted }}>
@@ -619,13 +617,7 @@ export default function TypeTraining() {
                   {thirtyDayDecks.map(deck => (
                     <button
                       key={deck.id}
-                      onClick={() => {
-                        setShowDeckPicker(false);
-                        const id = hasVocabularyBackend()
-                          ? deck.description || String(deck.id)
-                          : String(deck.id);
-                        navigate(`/type?deck=${id}`);
-                      }}
+                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
                       className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
                       style={{ backgroundColor: `${c.studyText}08` }}
                     >
@@ -641,7 +633,6 @@ export default function TypeTraining() {
               </div>
             )}
 
-            {/* Other decks */}
             {otherDecks.length > 0 && (
               <div>
                 <h3 className="text-xs font-medium mb-2 px-1" style={{ color: c.studyMuted }}>{t('decks.title')}</h3>
@@ -649,13 +640,7 @@ export default function TypeTraining() {
                   {otherDecks.map(deck => (
                     <button
                       key={deck.id}
-                      onClick={() => {
-                        setShowDeckPicker(false);
-                        const id = hasVocabularyBackend()
-                          ? deck.description || String(deck.id)
-                          : String(deck.id);
-                        navigate(`/type?deck=${id}`);
-                      }}
+                      onClick={() => { setShowDeckPicker(false); navigate(`/type?deck=${deck.id}`); }}
                       className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.99]"
                       style={{ backgroundColor: `${c.studyText}08` }}
                     >
@@ -689,7 +674,6 @@ export default function TypeTraining() {
     );
   }
 
-  // ---- COMPLETION SCREEN ----
   if (isComplete) {
     const totalTime = stats.endTime ? Math.round((stats.endTime - stats.startTime) / 1000) : 0;
     const finalWpm = totalTime > 0 ? Math.round(stats.correctChars / 5 / (totalTime / 60)) : 0;
@@ -738,12 +722,10 @@ export default function TypeTraining() {
     );
   }
 
-  // ---- MAIN TYPING SCREEN ----
   const nextCard = cards[currentIndex + 1];
   const wordProgress = charInfos.length > 0
-    ? Math.round((charInfos.filter(c => c.state !== 'pending' || (mode === 'sentence' && c.state === 'correct' && !c.inputChar)).length / charInfos.length) * 100)
+    ? Math.round((charInfos.filter(ch => ch.state !== 'pending' || (mode === 'sentence' && ch.state === 'correct' && !ch.inputChar)).length / charInfos.length) * 100)
     : 0;
-  // Progress based on typed target chars only
   const targetPendingTotal = charInfos.filter((info, i) => {
     if (!currentCard) return false;
     return isTargetChar(currentCard, buildTarget(currentCard, mode), i);
@@ -778,7 +760,6 @@ export default function TypeTraining() {
         onKeyDown={handleKeyDown}
       />
 
-      {/* Floating toolbar */}
       <header className="px-4 pt-4 pb-2">
         <div
           className="max-w-3xl mx-auto flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-2xl shadow-lg backdrop-blur-sm"
@@ -843,9 +824,7 @@ export default function TypeTraining() {
         </div>
       </header>
 
-      {/* Main typing area */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 relative">
-        {/* Next word preview */}
         {nextCard && (
           <div
             className="absolute top-2 right-6 max-w-[40%] text-right pointer-events-none opacity-30"
@@ -864,7 +843,6 @@ export default function TypeTraining() {
             </p>
           )}
 
-          {/* Continuous monospace word */}
           <div className={`text-center select-none ${shakeWrong ? 'animate-shake' : ''}`}>
             <div className="inline-flex flex-wrap items-baseline justify-center font-mono text-4xl md:text-5xl tracking-wide leading-tight min-h-[3.5rem]">
               {charInfos.map((info, i) => {
@@ -899,7 +877,6 @@ export default function TypeTraining() {
             </div>
           </div>
 
-          {/* Phonetic + definition (Qwerty hierarchy) */}
           {currentCard && (
             <div className="mt-6 text-center space-y-1.5">
               {currentCard.pronunciation && (
@@ -918,7 +895,6 @@ export default function TypeTraining() {
             </div>
           )}
 
-          {/* Thin progress under word */}
           <div className="mt-8 mx-auto max-w-xs">
             <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: `${c.studyText}12` }}>
               <div
@@ -928,10 +904,9 @@ export default function TypeTraining() {
             </div>
           </div>
 
-          {/* Example (muted) */}
-          {currentCard?.example && mode === 'word' && (
+          {currentCard?.exampleText && mode === 'word' && (
             <div className="mt-6 max-w-lg mx-auto space-y-1 opacity-60">
-              {splitExample(currentCard.example).map((seg, i) => (
+              {splitExample(currentCard.exampleText).map((seg, i) => (
                 <div key={i} className="flex items-start justify-center gap-2">
                   <p
                     className={`text-xs flex-1 text-center leading-relaxed ${seg.lang === 'en' ? 'italic' : ''}`}
@@ -953,7 +928,6 @@ export default function TypeTraining() {
         </div>
       </main>
 
-      {/* Floating stats card */}
       <footer className="px-4 pb-6 pt-2">
         <div
           className="max-w-3xl mx-auto rounded-2xl shadow-lg px-2 py-4 backdrop-blur-sm"

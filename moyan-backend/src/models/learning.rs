@@ -48,13 +48,16 @@ pub struct ReviewLogData {
     pub time_ms: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct UserSettings {
     pub theme: Option<String>,
-    pub daily_goal: i32,
+    pub language: Option<String>,
     pub speech_provider: Option<String>,
     pub speech_voice: Option<String>,
-    pub speech_speed: f64,
+    pub speech_zh_voice: Option<String>,
+    pub speech_model: Option<String>,
+    pub speech_speed: Option<f64>,
+    pub auto_play: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

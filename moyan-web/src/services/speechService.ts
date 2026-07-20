@@ -153,12 +153,15 @@ export function getSpeechSettings(): SpeechSettings {
 
 export function saveSpeechSettings(settings: SpeechSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  window.dispatchEvent(new CustomEvent('moyan:speech-settings-change', { detail: settings }));
 }
 
 export function resetSpeechSettings(): SpeechSettings {
   localStorage.removeItem(SETTINGS_KEY);
   audioCache.clear();
-  return { ...DEFAULT_SETTINGS };
+  const settings = { ...DEFAULT_SETTINGS };
+  window.dispatchEvent(new CustomEvent('moyan:speech-settings-change', { detail: settings }));
+  return settings;
 }
 
 // ==================== Web Speech API ====================
@@ -515,7 +518,7 @@ async function speakWithGoogleZh(text: string, settings: SpeechSettings): Promis
 
   // Don't stop audio here - we're playing a sequence
   const cacheKey = `google_${googleZhVoice}_${text.slice(0, 50)}`;
-  let audio = cacheEnabled ? audioCache.get(cacheKey) : undefined;
+  let audio = settings.cacheEnabled ? audioCache.get(cacheKey) : undefined;
 
   if (!audio) {
     try {
