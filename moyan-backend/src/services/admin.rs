@@ -5,9 +5,10 @@ use uuid::Uuid;
 
 use crate::middleware::error::AppError;
 use crate::models::{
-    AdminCreateDeckRequest, AdminUpdateDeckRequest, AdminVocabularyImportCard,
-    AdminVocabularyImportDeck, Card, CardExample, CardExampleInput, CreateCardRequest, Deck,
-    ImportMode, ImportResult, PageQuery, PageResponse, UpdateCardRequest, SYSTEM_OWNER_ID,
+    AdminCreateDeckRequest, AdminDeckSummary, AdminSyncSummary, AdminUpdateDeckRequest,
+    AdminUserDetail, AdminUserListItem, AdminVocabularyImportCard, AdminVocabularyImportDeck,
+    Card, CardExample, CardExampleInput, CreateCardRequest, Deck, ImportMode, ImportResult,
+    PageQuery, PageResponse, PatchAdminUserRequest, UpdateCardRequest, User, SYSTEM_OWNER_ID,
 };
 use crate::repositories::Repository;
 use crate::services::admin_excel::{
@@ -243,6 +244,89 @@ impl AdminService {
         Ok(VocabularyExport { decks, cards })
     }
 
+    pub async fn list_users(
+        &self,
+        query: PageQuery,
+    ) -> Result<PageResponse<AdminUserListItem>, AppError> {
+        let page = query.page();
+        let page_size = query.page_size();
+        let offset = query.offset();
+        let limit = page_size as i64;
+        let q = query.q.as_deref().filter(|value| !value.trim().is_empty());
+        let status = query
+            .status
+            .as_deref()
+            .filter(|value| !value.trim().is_empty());
+        let role = query
+            .role
+            .as_deref()
+            .filter(|value| !value.trim().is_empty());
+
+        let (users, total) = self
+            .repository
+            .admin_list_users(q, status, role, offset, limit)
+            .await?;
+
+        Ok(PageResponse {
+            items: users
+                .into_iter()
+                .map(admin_user_list_item_from_user)
+                .collect(),
+            page,
+            page_size,
+            total,
+        })
+    }
+
+    pub async fn get_user(&self, user_id: &str) -> Result<AdminUserDetail, AppError> {
+        let user = self
+            .repository
+            .find_by_id(user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+        let deck_summaries = self
+            .repository
+            .admin_user_deck_summaries(user_id)
+            .await?
+            .into_iter()
+            .map(|(deck, card_count)| AdminDeckSummary {
+                id: deck.id,
+                name: deck.name,
+                card_count,
+                is_system: deck.owner_user_id == SYSTEM_OWNER_ID,
+            })
+            .collect();
+
+        let recent_sync_count = self.repository.admin_recent_sync_count(user_id).await?;
+        let sync_summary = AdminSyncSummary {
+            last_sync_at: user.last_sync_at,
+            recent_sync_count,
+        };
+
+        Ok(AdminUserDetail {
+            user: admin_user_list_item_from_user(user),
+            deck_summaries,
+            sync_summary,
+        })
+    }
+
+    pub async fn patch_user(
+        &self,
+        user_id: &str,
+        req: PatchAdminUserRequest,
+    ) -> Result<AdminUserListItem, AppError> {
+        validate_admin_user_patch(&req)?;
+
+        let updated = self
+            .repository
+            .admin_update_user(user_id, req.status.as_deref(), req.role.as_deref())
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+        Ok(admin_user_list_item_from_user(updated))
+    }
+
     pub async fn import_vocabulary(
         &self,
         data: &[u8],
@@ -342,6 +426,34 @@ impl AdminService {
     }
 }
 
+fn admin_user_list_item_from_user(user: User) -> AdminUserListItem {
+    AdminUserListItem {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        provider: user.provider,
+        status: user.status,
+        role: user.role,
+        created_at: user.created_at,
+        last_login_at: user.last_login_at,
+        last_sync_at: user.last_sync_at,
+    }
+}
+
+fn validate_admin_user_patch(req: &PatchAdminUserRequest) -> Result<(), AppError> {
+    if let Some(ref status) = req.status {
+        if status != "active" && status != "disabled" {
+            return Err(AppError::BadRequest(format!("Invalid status '{status}'")));
+        }
+    }
+    if let Some(ref role) = req.role {
+        if role != "user" && role != "admin" {
+            return Err(AppError::BadRequest(format!("Invalid role '{role}'")));
+        }
+    }
+    Ok(())
+}
+
 fn slugify(name: &str) -> String {
     let mut slug = String::new();
     let mut last_hyphen = false;
@@ -383,7 +495,7 @@ fn normalize_examples(inputs: Vec<CardExampleInput>) -> Result<Vec<CardExample>,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CreateCardRequest, Deck, ImportMode};
+    use crate::models::{CreateCardRequest, Deck, ImportMode, PatchAdminUserRequest, UserIdentity};
     use crate::repositories::{Repository, SqliteRepositories};
     use chrono::Utc;
     use std::sync::Arc;
@@ -469,6 +581,97 @@ mod tests {
             .collect();
         build_export_xlsx(std::slice::from_ref(deck), &export_cards)
             .expect("test xlsx should build")
+    }
+
+    #[test]
+    fn validate_admin_user_patch_rejects_invalid_status() {
+        let err = validate_admin_user_patch(&PatchAdminUserRequest {
+            status: Some("banned".into()),
+            role: None,
+        })
+        .expect_err("invalid status should fail");
+        assert!(matches!(err, AppError::BadRequest(message) if message.contains("Invalid status")));
+    }
+
+    #[test]
+    fn validate_admin_user_patch_rejects_invalid_role() {
+        let err = validate_admin_user_patch(&PatchAdminUserRequest {
+            status: None,
+            role: Some("superadmin".into()),
+        })
+        .expect_err("invalid role should fail");
+        assert!(matches!(err, AppError::BadRequest(message) if message.contains("Invalid role")));
+    }
+
+    async fn seeded_user_repo() -> (Arc<dyn Repository>, String) {
+        let repo = Arc::new(
+            SqliteRepositories::connect("sqlite::memory:")
+                .await
+                .expect("sqlite memory db"),
+        ) as Arc<dyn Repository>;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "google",
+                provider_id: "patch-test",
+                name: "Patch Test",
+                email: "patch@test.example",
+                avatar: None,
+            })
+            .await
+            .expect("seed user");
+        (repo, user.id)
+    }
+
+    #[tokio::test]
+    async fn patch_user_rejects_invalid_status_before_update() {
+        let (repo, user_id) = seeded_user_repo().await;
+        let service = AdminService::new(repo.clone());
+
+        let err = service
+            .patch_user(
+                &user_id,
+                PatchAdminUserRequest {
+                    status: Some("banned".into()),
+                    role: None,
+                },
+            )
+            .await
+            .expect_err("invalid status should fail");
+
+        assert!(matches!(err, AppError::BadRequest(_)));
+
+        let unchanged = repo
+            .find_by_id(&user_id)
+            .await
+            .expect("lookup user")
+            .expect("user should exist");
+        assert_eq!(unchanged.status, "active");
+    }
+
+    #[tokio::test]
+    async fn patch_user_rejects_invalid_role_before_update() {
+        let (repo, user_id) = seeded_user_repo().await;
+        let service = AdminService::new(repo.clone());
+
+        let err = service
+            .patch_user(
+                &user_id,
+                PatchAdminUserRequest {
+                    status: None,
+                    role: Some("superadmin".into()),
+                },
+            )
+            .await
+            .expect_err("invalid role should fail");
+
+        assert!(matches!(err, AppError::BadRequest(_)));
+
+        let unchanged = repo
+            .find_by_id(&user_id)
+            .await
+            .expect("lookup user")
+            .expect("user should exist");
+        assert_eq!(unchanged.role, "user");
     }
 
     #[tokio::test]

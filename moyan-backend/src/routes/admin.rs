@@ -31,5 +31,10 @@ pub fn routes() -> Router<AppState> {
         .route("/vocabulary/export.xlsx", get(admin::export_vocabulary_xlsx))
         .route("/vocabulary/export.json", get(admin::export_vocabulary_json))
         .route("/vocabulary/import", axum::routing::post(admin::import_vocabulary))
+        .route("/users", get(admin::list_users))
+        .route(
+            "/users/{user_id}",
+            get(admin::get_user).patch(admin::patch_user),
+        )
         .layer(middleware::from_fn(admin_token_middleware))
 }

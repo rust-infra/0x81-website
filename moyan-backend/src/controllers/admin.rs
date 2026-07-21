@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::middleware::error::{success, AppError, AppState};
 use crate::models::{
     AdminCreateDeckRequest, AdminUpdateDeckRequest, CreateCardRequest, ImportMode, PageQuery,
-    UpdateCardRequest,
+    PatchAdminUserRequest, UpdateCardRequest,
 };
 
 #[derive(Debug, Deserialize)]
@@ -88,6 +88,31 @@ pub async fn delete_card(
 ) -> Result<Json<serde_json::Value>, AppError> {
     state.services.admin.delete_card(&card_id).await?;
     Ok(success(json!(null)))
+}
+
+pub async fn list_users(
+    State(state): State<AppState>,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let page = state.services.admin.list_users(query).await?;
+    Ok(success(page))
+}
+
+pub async fn get_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let detail = state.services.admin.get_user(&user_id).await?;
+    Ok(success(detail))
+}
+
+pub async fn patch_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+    axum::Json(req): axum::Json<PatchAdminUserRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = state.services.admin.patch_user(&user_id, req).await?;
+    Ok(success(user))
 }
 
 pub async fn download_vocabulary_template(
