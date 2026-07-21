@@ -19,7 +19,7 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{auth, health, settings, sync, vocabulary};
+use crate::routes::{admin, auth, health, settings, sync, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
@@ -125,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api/sync", sync::routes())
         .nest("/api", vocabulary::routes())
         .nest("/api/health", health::routes())
+        .nest("/api/admin", admin::routes())
         .route("/", get(root_handler))
         .layer(Extension(state.clone()))
         .layer(CompressionLayer::new())
