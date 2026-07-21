@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Serialize, de::DeserializeOwned};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use uuid::Uuid;
@@ -393,6 +393,16 @@ const DECK_SELECT_WITH_COUNT: &str = "SELECT d.id, d.owner_user_id, d.source_key
     d.created_at, d.updated_at
  FROM decks d";
 
+const ADMIN_DECK_FILTER: &str = "d.owner_user_id = ?
+    AND (? IS NULL OR d.name LIKE ? OR d.description LIKE ? OR d.source_key LIKE ?)";
+
+const ADMIN_CARD_FILTER: &str = "c.deck_id = ?
+    AND (? IS NULL OR c.front LIKE ? OR c.back LIKE ? OR c.tags LIKE ?)";
+
+const ADMIN_USER_FILTER: &str = "(? IS NULL OR u.email LIKE ? OR u.name LIKE ? OR u.id LIKE ?)
+    AND (? IS NULL OR u.status = ?)
+    AND (? IS NULL OR u.role = ?)";
+
 impl SqliteRepositories {
     pub async fn connect(database_url: &str) -> Result<Self, RepositoryError> {
         let mut options = database_url
@@ -478,6 +488,104 @@ impl UserRepository for SqliteRepositories {
                 .await?
                 .map(Into::into),
         )
+    }
+
+    async fn admin_list_users(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        role: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<User>, i64), RepositoryError> {
+        let pattern = q.map(|value| format!("%{value}%"));
+        let rows = sqlx::query_as::<_, UserRow>(&format!(
+            "SELECT u.* FROM users u WHERE {ADMIN_USER_FILTER}
+             ORDER BY u.created_at DESC, u.id LIMIT ? OFFSET ?"
+        ))
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(status)
+        .bind(status)
+        .bind(role)
+        .bind(role)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total: i64 = sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM users u WHERE {ADMIN_USER_FILTER}"
+        ))
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(status)
+        .bind(status)
+        .bind(role)
+        .bind(role)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok((rows.into_iter().map(Into::into).collect(), total))
+    }
+
+    async fn admin_update_user(
+        &self,
+        user_id: &str,
+        status: Option<&str>,
+        role: Option<&str>,
+    ) -> Result<Option<User>, RepositoryError> {
+        let Some(existing) = self.find_by_id(user_id).await? else {
+            return Ok(None);
+        };
+        let status = status.unwrap_or(&existing.status);
+        let role = role.unwrap_or(&existing.role);
+
+        sqlx::query("UPDATE users SET status = ?, role = ?, updated_at = ? WHERE id = ?")
+            .bind(status)
+            .bind(role)
+            .bind(Utc::now())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        self.find_by_id(user_id).await
+    }
+
+    async fn admin_user_deck_summaries(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<(Deck, i64)>, RepositoryError> {
+        let rows = sqlx::query_as::<_, VocabDeckRow>(&format!(
+            "{DECK_SELECT_WITH_COUNT} WHERE d.owner_user_id = ? ORDER BY d.created_at, d.id"
+        ))
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let deck: Deck = row.into();
+                let card_count = deck.card_count;
+                (deck, card_count)
+            })
+            .collect())
+    }
+
+    async fn admin_recent_sync_count(&self, user_id: &str) -> Result<i64, RepositoryError> {
+        let since = Utc::now() - Duration::days(30);
+        Ok(sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sync_history WHERE user_id = ? AND created_at >= ?",
+        )
+        .bind(user_id)
+        .bind(since)
+        .fetch_one(&self.pool)
+        .await?)
     }
 }
 
@@ -1067,6 +1175,170 @@ impl VocabularyRepository for SqliteRepositories {
             .await?;
         Ok(())
     }
+
+    async fn admin_list_system_decks(
+        &self,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Deck>, i64), RepositoryError> {
+        let pattern = q.map(|value| format!("%{value}%"));
+        let rows = sqlx::query_as::<_, VocabDeckRow>(&format!(
+            "{DECK_SELECT_WITH_COUNT} WHERE {ADMIN_DECK_FILTER}
+             ORDER BY d.sort_order, d.name LIMIT ? OFFSET ?"
+        ))
+        .bind(SYSTEM_OWNER_ID)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total: i64 = sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM decks d WHERE {ADMIN_DECK_FILTER}"
+        ))
+        .bind(SYSTEM_OWNER_ID)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok((rows.into_iter().map(Into::into).collect(), total))
+    }
+
+    async fn admin_list_cards(
+        &self,
+        deck_id: &str,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Card>, i64), RepositoryError> {
+        let pattern = q.map(|value| format!("%{value}%"));
+        let rows = sqlx::query_as::<_, VocabCardRow>(&format!(
+            "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
+                    c.created_at, c.updated_at
+             FROM cards c WHERE {ADMIN_CARD_FILTER}
+             ORDER BY c.created_at, c.id LIMIT ? OFFSET ?"
+        ))
+        .bind(deck_id)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total: i64 = sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM cards c WHERE {ADMIN_CARD_FILTER}"
+        ))
+        .bind(deck_id)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let cards = rows
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<Card>, RepositoryError>>()?;
+        Ok((cards, total))
+    }
+
+    async fn admin_find_system_deck_by_source_key(
+        &self,
+        source_key: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        Ok(sqlx::query_as::<_, VocabDeckRow>(&format!(
+            "{DECK_SELECT_WITH_COUNT} WHERE d.owner_user_id = ? AND d.source_key = ?"
+        ))
+        .bind(SYSTEM_OWNER_ID)
+        .bind(source_key)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(Into::into))
+    }
+
+    async fn admin_find_system_deck_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        Ok(sqlx::query_as::<_, VocabDeckRow>(&format!(
+            "{DECK_SELECT_WITH_COUNT} WHERE d.owner_user_id = ? AND d.name = ?"
+        ))
+        .bind(SYSTEM_OWNER_ID)
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(Into::into))
+    }
+
+    async fn admin_upsert_system_deck(&self, deck: &Deck) -> Result<Deck, RepositoryError> {
+        sqlx::query(
+            "INSERT INTO decks (
+                id, owner_user_id, source_key, name, description, color,
+                version, sort_order, is_active, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                source_key = excluded.source_key,
+                name = excluded.name,
+                description = excluded.description,
+                color = excluded.color,
+                version = excluded.version,
+                sort_order = excluded.sort_order,
+                is_active = excluded.is_active,
+                updated_at = excluded.updated_at",
+        )
+        .bind(&deck.id)
+        .bind(&deck.owner_user_id)
+        .bind(&deck.source_key)
+        .bind(&deck.name)
+        .bind(&deck.description)
+        .bind(&deck.color)
+        .bind(deck.version)
+        .bind(deck.sort_order)
+        .bind(if deck.is_active { 1 } else { 0 })
+        .bind(deck.created_at)
+        .bind(deck.updated_at)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_deck(&deck.id)
+            .await?
+            .ok_or_else(|| RepositoryError::Persistence("upserted deck missing".to_string()))
+    }
+
+    async fn admin_delete_cards_in_deck(&self, deck_id: &str) -> Result<u64, RepositoryError> {
+        let result = sqlx::query("DELETE FROM cards WHERE deck_id = ?")
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
+
+    async fn admin_find_card_by_front(
+        &self,
+        deck_id: &str,
+        front: &str,
+    ) -> Result<Option<Card>, RepositoryError> {
+        let row = sqlx::query_as::<_, VocabCardRow>(
+            "SELECT id, deck_id, front, back, pronunciation, tags, examples, created_at, updated_at
+             FROM cards WHERE deck_id = ? AND front = ?",
+        )
+        .bind(deck_id)
+        .bind(front)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(TryInto::try_into).transpose()
+    }
 }
 
 async fn count(pool: &SqlitePool, table: &str, user_id: &str) -> Result<i64, RepositoryError> {
@@ -1436,6 +1708,279 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].tags.len(), 2);
         assert_eq!(listed[0].examples.len(), 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn admin_list_system_decks_filters_by_q() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "admin-decks-1",
+                name: "Admin Decks User",
+                email: "admin-decks@example.com",
+                avatar: None,
+            })
+            .await?;
+
+        let now = Utc::now();
+        repo.insert_system_deck(&Deck {
+            id: "deck_admin_a".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("core-vocab".to_string()),
+            name: "Core Vocabulary".to_string(),
+            description: "Everyday words".to_string(),
+            color: None,
+            version: 1,
+            sort_order: 1,
+            is_active: true,
+            card_count: 0,
+            created_at: now,
+            updated_at: now,
+        })
+        .await?;
+        repo.insert_system_deck(&Deck {
+            id: "deck_admin_b".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("business".to_string()),
+            name: "Business English".to_string(),
+            description: "Work related terms".to_string(),
+            color: None,
+            version: 1,
+            sort_order: 2,
+            is_active: true,
+            card_count: 0,
+            created_at: now,
+            updated_at: now,
+        })
+        .await?;
+        // A user-owned deck matching the query text must never leak into system results.
+        repo.create_user_deck(
+            &user.id,
+            &CreateDeckRequest {
+                name: "My Core List".to_string(),
+                description: None,
+                color: None,
+            },
+        )
+        .await?;
+
+        let (all, total_all) = repo.admin_list_system_decks(None, 0, 10).await?;
+        assert_eq!(total_all, 2);
+        assert_eq!(all.len(), 2);
+
+        let (filtered, total_filtered) = repo.admin_list_system_decks(Some("core"), 0, 10).await?;
+        assert_eq!(total_filtered, 1);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, "deck_admin_a");
+
+        let (paged, total_paged) = repo.admin_list_system_decks(None, 1, 1).await?;
+        assert_eq!(total_paged, 2);
+        assert_eq!(paged.len(), 1);
+        assert_eq!(paged[0].id, "deck_admin_b");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn admin_list_users_paginates() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        for index in 0..3 {
+            repo.find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: &format!("admin-users-{index}"),
+                name: &format!("Admin User {index}"),
+                email: &format!("admin-user-{index}@example.com"),
+                avatar: None,
+            })
+            .await?;
+        }
+
+        let (first_page, total) = repo.admin_list_users(None, None, None, 0, 2).await?;
+        assert_eq!(total, 3);
+        assert_eq!(first_page.len(), 2);
+
+        let (second_page, total) = repo.admin_list_users(None, None, None, 2, 2).await?;
+        assert_eq!(total, 3);
+        assert_eq!(second_page.len(), 1);
+
+        let (filtered, filtered_total) = repo
+            .admin_list_users(Some("admin-user-1"), None, None, 0, 10)
+            .await?;
+        assert_eq!(filtered_total, 1);
+        assert_eq!(filtered[0].email, "admin-user-1@example.com");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn admin_update_user_status_and_role() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "admin-update-1",
+                name: "Update Me",
+                email: "admin-update@example.com",
+                avatar: None,
+            })
+            .await?;
+        assert_eq!(user.status, "active");
+        assert_eq!(user.role, "user");
+
+        let updated = repo
+            .admin_update_user(&user.id, Some("disabled"), Some("admin"))
+            .await?
+            .expect("user should exist");
+        assert_eq!(updated.status, "disabled");
+        assert_eq!(updated.role, "admin");
+
+        let role_only = repo
+            .admin_update_user(&user.id, None, Some("user"))
+            .await?
+            .expect("user should exist");
+        assert_eq!(role_only.status, "disabled");
+        assert_eq!(role_only.role, "user");
+
+        let missing = repo
+            .admin_update_user("nonexistent", Some("active"), None)
+            .await?;
+        assert!(missing.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn admin_system_deck_and_card_helpers_round_trip() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let now = Utc::now();
+        let deck = Deck {
+            id: "deck_admin_helper".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("helper-key".to_string()),
+            name: "Helper Deck".to_string(),
+            description: "For helper tests".to_string(),
+            color: None,
+            version: 1,
+            sort_order: 0,
+            is_active: true,
+            card_count: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        let upserted = repo.admin_upsert_system_deck(&deck).await?;
+        assert_eq!(upserted.id, deck.id);
+
+        let by_source_key = repo
+            .admin_find_system_deck_by_source_key("helper-key")
+            .await?
+            .expect("deck should be found by source_key");
+        assert_eq!(by_source_key.id, deck.id);
+
+        let by_name = repo
+            .admin_find_system_deck_by_name("Helper Deck")
+            .await?
+            .expect("deck should be found by name");
+        assert_eq!(by_name.id, deck.id);
+
+        let mut renamed = deck.clone();
+        renamed.name = "Helper Deck Renamed".to_string();
+        let upserted_again = repo.admin_upsert_system_deck(&renamed).await?;
+        assert_eq!(upserted_again.name, "Helper Deck Renamed");
+        assert!(
+            repo.admin_find_system_deck_by_name("Helper Deck")
+                .await?
+                .is_none()
+        );
+
+        repo.insert_system_card(&Card {
+            id: "card_admin_helper".to_string(),
+            deck_id: deck.id.clone(),
+            front: "hello".to_string(),
+            back: "你好".to_string(),
+            pronunciation: None,
+            tags: vec![],
+            examples: vec![],
+            created_at: now,
+            updated_at: now,
+        })
+        .await?;
+
+        let found_card = repo
+            .admin_find_card_by_front(&deck.id, "hello")
+            .await?
+            .expect("card should be found by front");
+        assert_eq!(found_card.id, "card_admin_helper");
+
+        let (cards, total) = repo.admin_list_cards(&deck.id, None, 0, 10).await?;
+        assert_eq!(total, 1);
+        assert_eq!(cards.len(), 1);
+
+        let (filtered_cards, filtered_total) = repo
+            .admin_list_cards(&deck.id, Some("nomatch"), 0, 10)
+            .await?;
+        assert_eq!(filtered_total, 0);
+        assert!(filtered_cards.is_empty());
+
+        let deleted = repo.admin_delete_cards_in_deck(&deck.id).await?;
+        assert_eq!(deleted, 1);
+        assert!(
+            repo.admin_find_card_by_front(&deck.id, "hello")
+                .await?
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn admin_user_deck_summaries_and_recent_sync_count() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "admin-summary-1",
+                name: "Summary User",
+                email: "admin-summary@example.com",
+                avatar: None,
+            })
+            .await?;
+
+        let empty = repo.admin_user_deck_summaries(&user.id).await?;
+        assert!(empty.is_empty());
+
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Summary Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        repo.create_card(
+            &deck.id,
+            &CreateCardRequest {
+                front: "word".to_string(),
+                back: "词".to_string(),
+                pronunciation: None,
+                tags: None,
+                examples: None,
+            },
+            vec![],
+        )
+        .await?;
+
+        let summaries = repo.admin_user_deck_summaries(&user.id).await?;
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].0.id, deck.id);
+        assert_eq!(summaries[0].1, 1);
+
+        let recent_sync_count = repo.admin_recent_sync_count(&user.id).await?;
+        assert_eq!(recent_sync_count, 0);
 
         Ok(())
     }

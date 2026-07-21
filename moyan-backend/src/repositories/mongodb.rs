@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use mongodb::{
     Client, Collection, Database, IndexModel,
-    bson::doc,
+    bson::{Document, doc},
     options::{IndexOptions, ReturnDocument},
 };
 use serde::{Deserialize, Serialize};
@@ -337,6 +337,99 @@ impl UserRepository for MongoRepositories {
 
     async fn find_by_id(&self, user_id: &str) -> Result<Option<User>, RepositoryError> {
         Ok(self.users().find_one(doc! { "id": user_id }).await?)
+    }
+
+    async fn admin_list_users(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        role: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<User>, i64), RepositoryError> {
+        let mut filter = Document::new();
+        if let Some(q) = q {
+            filter.insert(
+                "$or",
+                vec![
+                    doc! { "email": { "$regex": q, "$options": "i" } },
+                    doc! { "name": { "$regex": q, "$options": "i" } },
+                    doc! { "id": { "$regex": q, "$options": "i" } },
+                ],
+            );
+        }
+        if let Some(status) = status {
+            filter.insert("status", status);
+        }
+        if let Some(role) = role {
+            filter.insert("role", role);
+        }
+
+        let total = to_i64(
+            self.users().count_documents(filter.clone()).await?,
+            "admin users total",
+        )?;
+        let users = self
+            .users()
+            .find(filter)
+            .sort(doc! { "created_at": -1, "id": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok((users, total))
+    }
+
+    async fn admin_update_user(
+        &self,
+        user_id: &str,
+        status: Option<&str>,
+        role: Option<&str>,
+    ) -> Result<Option<User>, RepositoryError> {
+        let Some(existing) = self.find_by_id(user_id).await? else {
+            return Ok(None);
+        };
+        let status = status.unwrap_or(&existing.status);
+        let role = role.unwrap_or(&existing.role);
+
+        self.users()
+            .update_one(
+                doc! { "id": user_id },
+                doc! {
+                    "$set": {
+                        "status": status,
+                        "role": role,
+                        "updated_at": Utc::now(),
+                    }
+                },
+            )
+            .await?;
+        self.find_by_id(user_id).await
+    }
+
+    async fn admin_user_deck_summaries(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<(Deck, i64)>, RepositoryError> {
+        let documents = self
+            .vocab_decks()
+            .find(doc! { "owner_user_id": user_id })
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut summaries = Vec::with_capacity(documents.len());
+        for document in documents {
+            let deck = self.deck_from_document(document).await?;
+            let card_count = deck.card_count;
+            summaries.push((deck, card_count));
+        }
+        Ok(summaries)
+    }
+
+    async fn admin_recent_sync_count(&self, _user_id: &str) -> Result<i64, RepositoryError> {
+        Ok(0)
     }
 }
 
@@ -889,6 +982,141 @@ impl VocabularyRepository for MongoRepositories {
             .await?;
         Ok(())
     }
+
+    async fn admin_list_system_decks(
+        &self,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Deck>, i64), RepositoryError> {
+        let filter = admin_deck_filter(q);
+        let total = to_i64(
+            self.vocab_decks().count_documents(filter.clone()).await?,
+            "admin system decks total",
+        )?;
+        let documents = self
+            .vocab_decks()
+            .find(filter)
+            .sort(doc! { "sort_order": 1, "name": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut decks = Vec::with_capacity(documents.len());
+        for document in documents {
+            decks.push(self.deck_from_document(document).await?);
+        }
+        Ok((decks, total))
+    }
+
+    async fn admin_list_cards(
+        &self,
+        deck_id: &str,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Card>, i64), RepositoryError> {
+        let mut filter = doc! { "deck_id": deck_id };
+        if let Some(q) = q {
+            filter.insert(
+                "$or",
+                vec![
+                    doc! { "front": { "$regex": q, "$options": "i" } },
+                    doc! { "back": { "$regex": q, "$options": "i" } },
+                    doc! { "tags": { "$regex": q, "$options": "i" } },
+                ],
+            );
+        }
+
+        let total = to_i64(
+            self.vocab_cards().count_documents(filter.clone()).await?,
+            "admin cards total",
+        )?;
+        let cards = self
+            .vocab_cards()
+            .find(filter)
+            .sort(doc! { "created_at": 1, "id": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok((cards, total))
+    }
+
+    async fn admin_find_system_deck_by_source_key(
+        &self,
+        source_key: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        let Some(document) = self
+            .vocab_decks()
+            .find_one(doc! { "owner_user_id": SYSTEM_OWNER_ID, "source_key": source_key })
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.deck_from_document(document).await?))
+    }
+
+    async fn admin_find_system_deck_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        let Some(document) = self
+            .vocab_decks()
+            .find_one(doc! { "owner_user_id": SYSTEM_OWNER_ID, "name": name })
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.deck_from_document(document).await?))
+    }
+
+    async fn admin_upsert_system_deck(&self, deck: &Deck) -> Result<Deck, RepositoryError> {
+        self.vocab_decks()
+            .replace_one(doc! { "id": &deck.id }, VocabDeckDocument::from(deck))
+            .upsert(true)
+            .await?;
+        self.get_deck(&deck.id)
+            .await?
+            .ok_or_else(|| RepositoryError::Persistence("upserted deck missing".to_string()))
+    }
+
+    async fn admin_delete_cards_in_deck(&self, deck_id: &str) -> Result<u64, RepositoryError> {
+        let result = self
+            .vocab_cards()
+            .delete_many(doc! { "deck_id": deck_id })
+            .await?;
+        Ok(result.deleted_count)
+    }
+
+    async fn admin_find_card_by_front(
+        &self,
+        deck_id: &str,
+        front: &str,
+    ) -> Result<Option<Card>, RepositoryError> {
+        Ok(self
+            .vocab_cards()
+            .find_one(doc! { "deck_id": deck_id, "front": front })
+            .await?)
+    }
+}
+
+fn admin_deck_filter(q: Option<&str>) -> Document {
+    let mut filter = doc! { "owner_user_id": SYSTEM_OWNER_ID };
+    if let Some(q) = q {
+        filter.insert(
+            "$or",
+            vec![
+                doc! { "name": { "$regex": q, "$options": "i" } },
+                doc! { "description": { "$regex": q, "$options": "i" } },
+                doc! { "source_key": { "$regex": q, "$options": "i" } },
+            ],
+        );
+    }
+    filter
 }
 
 fn to_i64(value: u64, field: &'static str) -> Result<i64, RepositoryError> {

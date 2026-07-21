@@ -67,6 +67,26 @@ pub struct SyncCounts {
 pub trait UserRepository: Send + Sync {
     async fn find_or_create(&self, identity: UserIdentity<'_>) -> Result<User, RepositoryError>;
     async fn find_by_id(&self, user_id: &str) -> Result<Option<User>, RepositoryError>;
+
+    async fn admin_list_users(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        role: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<User>, i64), RepositoryError>;
+    async fn admin_update_user(
+        &self,
+        user_id: &str,
+        status: Option<&str>,
+        role: Option<&str>,
+    ) -> Result<Option<User>, RepositoryError>;
+    async fn admin_user_deck_summaries(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<(Deck, i64)>, RepositoryError>;
+    async fn admin_recent_sync_count(&self, user_id: &str) -> Result<i64, RepositoryError>;
 }
 
 #[async_trait]
@@ -163,6 +183,35 @@ pub trait VocabularyRepository: Send + Sync {
         user_id: &str,
         at: DateTime<Utc>,
     ) -> Result<(), RepositoryError>;
+
+    async fn admin_list_system_decks(
+        &self,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Deck>, i64), RepositoryError>;
+    async fn admin_list_cards(
+        &self,
+        deck_id: &str,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Card>, i64), RepositoryError>;
+    async fn admin_find_system_deck_by_source_key(
+        &self,
+        source_key: &str,
+    ) -> Result<Option<Deck>, RepositoryError>;
+    async fn admin_find_system_deck_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<Deck>, RepositoryError>;
+    async fn admin_upsert_system_deck(&self, deck: &Deck) -> Result<Deck, RepositoryError>;
+    async fn admin_delete_cards_in_deck(&self, deck_id: &str) -> Result<u64, RepositoryError>;
+    async fn admin_find_card_by_front(
+        &self,
+        deck_id: &str,
+        front: &str,
+    ) -> Result<Option<Card>, RepositoryError>;
 }
 
 #[async_trait]
