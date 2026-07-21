@@ -239,6 +239,46 @@ export class ImportValidationError extends Error {
   }
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  provider: string;
+  status: "active" | "disabled";
+  role: "user" | "admin";
+  created_at: string;
+  last_login_at: string | null;
+  last_sync_at: string | null;
+}
+
+export interface AdminDeckSummary {
+  id: string;
+  name: string;
+  card_count: number;
+  is_system: boolean;
+}
+
+export interface AdminSyncSummary {
+  last_sync_at: string | null;
+  recent_sync_count: number;
+}
+
+export interface AdminUserDetail {
+  user: AdminUser;
+  deck_summaries: AdminDeckSummary[];
+  sync_summary: AdminSyncSummary;
+}
+
+export interface UserListQuery extends ListQuery {
+  status?: AdminUser["status"];
+  role?: AdminUser["role"];
+}
+
+export interface PatchUserInput {
+  status?: AdminUser["status"];
+  role?: AdminUser["role"];
+}
+
 function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -309,4 +349,36 @@ export async function importVocabulary(
   }
 
   return parseEnvelope<ImportResult>(res);
+}
+
+export async function listUsers(
+  query: UserListQuery = {},
+): Promise<PageResult<AdminUser>> {
+  const res = await adminFetch(
+    `/api/admin/users${buildQuery({
+      q: query.q,
+      page: query.page,
+      page_size: query.page_size,
+      status: query.status,
+      role: query.role,
+    })}`,
+  );
+  return parseEnvelope<PageResult<AdminUser>>(res);
+}
+
+export async function getUser(userId: string): Promise<AdminUserDetail> {
+  const res = await adminFetch(`/api/admin/users/${userId}`);
+  return parseEnvelope<AdminUserDetail>(res);
+}
+
+export async function patchUser(
+  userId: string,
+  input: PatchUserInput,
+): Promise<AdminUser> {
+  const res = await adminFetch(`/api/admin/users/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<AdminUser>(res);
 }

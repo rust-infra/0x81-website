@@ -4,6 +4,7 @@ import DeckCardsPage from "@/pages/DeckCardsPage";
 import DecksPage from "@/pages/DecksPage";
 import ImportExportPage from "@/pages/ImportExportPage";
 import LoginPage from "@/pages/LoginPage";
+import UserDetailPage from "@/pages/UserDetailPage";
 import UsersPage from "@/pages/UsersPage";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/decks/:deckId/cards" element={<DeckCardsPage />} />
             <Route path="/import" element={<ImportExportPage />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/users/:id" element={<UserDetailPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
