@@ -236,7 +236,7 @@ export default function ImportExportPage() {
         okButtonProps={{ danger: true }}
       >
         <Typography.Paragraph>
-          replace_deck 模式会删除 Excel 中未包含的系统卡组及其卡片，此操作不可撤销。
+          replace_deck 会对 Excel 中出现的卡组：更新元数据后清空该卡组全部卡片，再按文件全量写入；未出现在文件中的卡组不会改动。此操作不可撤销。
         </Typography.Paragraph>
         <Typography.Paragraph type="secondary">
           请确认已备份当前词库后再继续。
