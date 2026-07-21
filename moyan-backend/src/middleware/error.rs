@@ -17,6 +17,7 @@ pub struct AppState {
     pub google_client_id: String,
     pub google_client_secret: String,
     pub google_redirect_url: String,
+    pub admin_token: String,
 }
 
 /// Application-wide error type
@@ -26,6 +27,7 @@ pub enum AppError {
     BadRequest(String),
     NotFound(String),
     Internal(String),
+    ServiceUnavailable(String),
     Repository(RepositoryError),
 }
 
@@ -35,6 +37,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
             AppError::Internal(msg) => {
                 error!("Internal error: {}", msg);
                 (
