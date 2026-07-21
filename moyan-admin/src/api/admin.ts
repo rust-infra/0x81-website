@@ -212,3 +212,101 @@ export async function deleteCard(cardId: string): Promise<void> {
   });
   await parseEnvelope<null>(res);
 }
+
+export interface ImportErrorItem {
+  sheet: string;
+  row: number;
+  field: string;
+  message: string;
+}
+
+export interface ImportResult {
+  created_decks: number;
+  updated_decks: number;
+  created_cards: number;
+  updated_cards: number;
+}
+
+export type ImportMode = "merge" | "replace_deck";
+
+export class ImportValidationError extends Error {
+  errors: ImportErrorItem[];
+
+  constructor(errors: ImportErrorItem[]) {
+    super("导入校验失败");
+    this.name = "ImportValidationError";
+    this.errors = errors;
+  }
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadAdminBlob(path: string, filename: string): Promise<void> {
+  const res = await adminFetch(path);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `下载失败 (${res.status})`);
+  }
+  const blob = await res.blob();
+  triggerBlobDownload(blob, filename);
+}
+
+export async function downloadVocabularyTemplate(): Promise<void> {
+  await downloadAdminBlob(
+    "/api/admin/vocabulary/template.xlsx",
+    "vocabulary-template.xlsx",
+  );
+}
+
+export async function exportVocabularyExcel(): Promise<void> {
+  await downloadAdminBlob(
+    "/api/admin/vocabulary/export.xlsx",
+    "vocabulary-export.xlsx",
+  );
+}
+
+export async function exportVocabularyJson(): Promise<void> {
+  const res = await adminFetch("/api/admin/vocabulary/export.json");
+  const data = await parseEnvelope<unknown>(res);
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  triggerBlobDownload(blob, "vocabulary-export.json");
+}
+
+export async function importVocabulary(
+  file: File,
+  mode: ImportMode,
+): Promise<ImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("mode", mode);
+
+  const res = await adminFetch(`/api/admin/vocabulary/import?mode=${mode}`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const body = (await res.json()) as {
+      success?: boolean;
+      errors?: ImportErrorItem[];
+      error?: { message?: string };
+    };
+    if (body.errors?.length) {
+      throw new ImportValidationError(body.errors);
+    }
+    throw new Error(body.error?.message ?? `导入失败 (${res.status})`);
+  }
+
+  return parseEnvelope<ImportResult>(res);
+}

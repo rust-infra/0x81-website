@@ -1,6 +1,7 @@
 import { useAdminAuth } from "@/auth/AdminAuthContext";
 import {
   BookOutlined,
+  ImportOutlined,
   LockOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -16,11 +17,29 @@ const menuItems = [
     label: "系统卡组",
   },
   {
+    key: "/import",
+    icon: <ImportOutlined />,
+    label: "导入导出",
+  },
+  {
     key: "/users",
     icon: <UserOutlined />,
     label: "用户管理",
   },
 ];
+
+function selectedMenuKey(pathname: string): string {
+  if (pathname.startsWith("/decks")) {
+    return "/decks";
+  }
+  if (pathname.startsWith("/import")) {
+    return "/import";
+  }
+  if (pathname.startsWith("/users")) {
+    return "/users";
+  }
+  return pathname;
+}
 
 export default function AdminLayout() {
   const { token, logout } = useAdminAuth();
@@ -54,9 +73,7 @@ export default function AdminLayout() {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[
-            location.pathname.startsWith("/decks") ? "/decks" : location.pathname,
-          ]}
+          selectedKeys={[selectedMenuKey(location.pathname)]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
