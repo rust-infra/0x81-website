@@ -13,10 +13,11 @@ use uuid::Uuid;
 use async_trait::async_trait;
 
 use crate::models::{
-    Card, CardData, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest,
-    CreateReviewLogRequest, Deck, DeckData, ReviewLog, ReviewLogData, StudyCard, SyncData,
-    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
+    CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData, ImportMode,
+    ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1110,6 +1111,134 @@ impl VocabularyRepository for MongoRepositories {
             .find_one(doc! { "deck_id": deck_id, "front": front })
             .await?)
     }
+
+    /// MongoDB import apply is best-effort sequential (no multi-document transaction in phase 1).
+    async fn admin_apply_vocabulary_import(
+        &self,
+        mode: ImportMode,
+        decks: &[AdminVocabularyImportDeck],
+        cards: &[AdminVocabularyImportCard],
+    ) -> Result<ImportResult, RepositoryError> {
+        let mut result = ImportResult {
+            created_decks: 0,
+            updated_decks: 0,
+            created_cards: 0,
+            updated_cards: 0,
+        };
+
+        let mut deck_id_by_name = std::collections::HashMap::new();
+        for row in decks {
+            let existing = if let Some(source_key) = row.source_key.as_deref() {
+                self.admin_find_system_deck_by_source_key(source_key).await?
+            } else {
+                self.admin_find_system_deck_by_name(&row.name).await?
+            };
+
+            let now = chrono::Utc::now();
+            let (deck, created) = if let Some(mut deck) = existing {
+                deck.name = row.name.clone();
+                deck.description = row.description.clone();
+                deck.color = row.color.clone();
+                if row.source_key.is_some() {
+                    deck.source_key = row.source_key.clone();
+                } else if deck.source_key.is_none() {
+                    deck.source_key = Some(mongo_import_slugify(&row.name));
+                }
+                deck.version += 1;
+                deck.updated_at = now;
+                (deck, false)
+            } else {
+                let source_key = row
+                    .source_key
+                    .clone()
+                    .or_else(|| Some(mongo_import_slugify(&row.name)));
+                (
+                    Deck {
+                        id: format!("deck_{}", uuid::Uuid::new_v4().simple()),
+                        owner_user_id: SYSTEM_OWNER_ID.to_string(),
+                        source_key,
+                        name: row.name.clone(),
+                        description: row.description.clone(),
+                        color: row.color.clone(),
+                        version: 1,
+                        sort_order: 0,
+                        is_active: true,
+                        card_count: 0,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                    true,
+                )
+            };
+
+            let saved = self.admin_upsert_system_deck(&deck).await?;
+            deck_id_by_name.insert(saved.name.clone(), saved.id.clone());
+            if created {
+                result.created_decks += 1;
+            } else {
+                result.updated_decks += 1;
+            }
+        }
+
+        if mode == ImportMode::ReplaceDeck {
+            for deck_id in deck_id_by_name.values() {
+                self.admin_delete_cards_in_deck(deck_id).await?;
+            }
+        }
+
+        for card in cards {
+            let deck_id = deck_id_by_name.get(&card.deck_name).ok_or_else(|| {
+                RepositoryError::Persistence("validated deck_name missing during import".into())
+            })?;
+
+            if mode == ImportMode::Merge {
+                if let Some(existing) = self.admin_find_card_by_front(deck_id, &card.front).await? {
+                    let update = UpdateCardRequest {
+                        front: None,
+                        back: Some(card.back.clone()),
+                        pronunciation: card.pronunciation.clone(),
+                        tags: Some(card.tags.clone()),
+                        examples: None,
+                    };
+                    self.update_card(&existing.id, &update, Some(card.examples.clone()))
+                        .await?
+                        .ok_or_else(|| {
+                            RepositoryError::Persistence("updated card missing during import".into())
+                        })?;
+                    result.updated_cards += 1;
+                    continue;
+                }
+            }
+
+            let create = CreateCardRequest {
+                front: card.front.clone(),
+                back: card.back.clone(),
+                pronunciation: card.pronunciation.clone(),
+                tags: Some(card.tags.clone()),
+                examples: None,
+            };
+            self.create_card(deck_id, &create, card.examples.clone())
+                .await?;
+            result.created_cards += 1;
+        }
+
+        Ok(result)
+    }
+}
+
+fn mongo_import_slugify(name: &str) -> String {
+    let mut slug = String::new();
+    let mut last_hyphen = false;
+    for ch in name.trim().to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_hyphen = false;
+        } else if !last_hyphen && !slug.is_empty() {
+            slug.push('-');
+            last_hyphen = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
 }
 
 fn admin_deck_filter(q: Option<&str>) -> Document {

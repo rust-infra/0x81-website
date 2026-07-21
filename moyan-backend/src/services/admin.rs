@@ -5,13 +5,14 @@ use uuid::Uuid;
 
 use crate::middleware::error::AppError;
 use crate::models::{
-    AdminCreateDeckRequest, AdminUpdateDeckRequest, Card, CardExample, CardExampleInput, CreateCardRequest,
-    Deck, ImportMode, ImportResult, PageQuery, PageResponse, UpdateCardRequest, SYSTEM_OWNER_ID,
+    AdminCreateDeckRequest, AdminUpdateDeckRequest, AdminVocabularyImportCard,
+    AdminVocabularyImportDeck, Card, CardExample, CardExampleInput, CreateCardRequest, Deck,
+    ImportMode, ImportResult, PageQuery, PageResponse, UpdateCardRequest, SYSTEM_OWNER_ID,
 };
 use crate::repositories::Repository;
 use crate::services::admin_excel::{
     build_export_xlsx, build_template_xlsx, example_from_import_text, parse_import_xlsx,
-    validate_import_rows, ParsedCardRow, ParsedDeckRow, VocabularyExport,
+    validate_import_rows, VocabularyExport,
 };
 
 #[derive(Clone)]
@@ -253,7 +254,36 @@ impl AdminService {
             return Err(AppError::ImportFailed(errors));
         }
 
-        self.apply_import(decks, cards, mode).await
+        let import_decks: Vec<AdminVocabularyImportDeck> = decks
+            .into_iter()
+            .map(|row| AdminVocabularyImportDeck {
+                name: row.name,
+                description: row.description,
+                color: row.color,
+                source_key: row.source_key,
+            })
+            .collect();
+        let import_cards: Vec<AdminVocabularyImportCard> = cards
+            .into_iter()
+            .map(|row| AdminVocabularyImportCard {
+                deck_name: row.deck_name,
+                front: row.front,
+                back: row.back,
+                pronunciation: row.pronunciation,
+                tags: row.tags,
+                examples: row
+                    .example
+                    .as_deref()
+                    .and_then(example_from_import_text)
+                    .into_iter()
+                    .collect(),
+            })
+            .collect();
+
+        Ok(self
+            .repository
+            .admin_apply_vocabulary_import(mode, &import_decks, &import_cards)
+            .await?)
     }
 
     async fn fetch_all_system_vocabulary(&self) -> Result<(Vec<Deck>, Vec<Card>), AppError> {
@@ -290,139 +320,6 @@ impl AdminService {
         }
 
         Ok((decks, cards))
-    }
-
-    async fn apply_import(
-        &self,
-        decks: Vec<ParsedDeckRow>,
-        cards: Vec<ParsedCardRow>,
-        mode: ImportMode,
-    ) -> Result<ImportResult, AppError> {
-        let mut result = ImportResult {
-            created_decks: 0,
-            updated_decks: 0,
-            created_cards: 0,
-            updated_cards: 0,
-        };
-
-        let mut deck_id_by_name = std::collections::HashMap::new();
-        for row in decks {
-            let (deck, created) = self.upsert_deck_from_import(row).await?;
-            deck_id_by_name.insert(deck.name.clone(), deck.id.clone());
-            if created {
-                result.created_decks += 1;
-            } else {
-                result.updated_decks += 1;
-            }
-        }
-
-        if mode == ImportMode::ReplaceDeck {
-            for deck_name in deck_id_by_name.keys() {
-                let deck_id = deck_id_by_name
-                    .get(deck_name)
-                    .expect("deck id should exist for imported deck name");
-                self.repository.admin_delete_cards_in_deck(deck_id).await?;
-            }
-        }
-
-        for row in cards {
-            let deck_id = deck_id_by_name
-                .get(&row.deck_name)
-                .ok_or_else(|| AppError::Internal("validated deck_name missing".into()))?;
-
-            let examples = row
-                .example
-                .as_deref()
-                .and_then(example_from_import_text)
-                .into_iter()
-                .collect::<Vec<_>>();
-
-            if mode == ImportMode::Merge {
-                if let Some(existing) = self
-                    .repository
-                    .admin_find_card_by_front(deck_id, &row.front)
-                    .await?
-                {
-                    let update = UpdateCardRequest {
-                        front: None,
-                        back: Some(row.back.clone()),
-                        pronunciation: row.pronunciation.clone(),
-                        tags: Some(row.tags.clone()),
-                        examples: None,
-                    };
-                    self.repository
-                        .update_card(&existing.id, &update, Some(examples))
-                        .await?
-                        .ok_or_else(|| AppError::Internal("updated card missing".into()))?;
-                    result.updated_cards += 1;
-                    continue;
-                }
-            }
-
-            let create = CreateCardRequest {
-                front: row.front.clone(),
-                back: row.back.clone(),
-                pronunciation: row.pronunciation.clone(),
-                tags: Some(row.tags.clone()),
-                examples: None,
-            };
-            self.repository
-                .create_card(deck_id, &create, examples)
-                .await?;
-            result.created_cards += 1;
-        }
-
-        Ok(result)
-    }
-
-    async fn upsert_deck_from_import(
-        &self,
-        row: ParsedDeckRow,
-    ) -> Result<(Deck, bool), AppError> {
-        let existing = if let Some(source_key) = row.source_key.as_deref() {
-            self.repository
-                .admin_find_system_deck_by_source_key(source_key)
-                .await?
-        } else {
-            self.repository
-                .admin_find_system_deck_by_name(&row.name)
-                .await?
-        };
-
-        let now = Utc::now();
-        if let Some(mut deck) = existing {
-            deck.name = row.name.clone();
-            deck.description = row.description.clone();
-            deck.color = row.color.clone();
-            if row.source_key.is_some() {
-                deck.source_key = row.source_key.clone();
-            } else if deck.source_key.is_none() {
-                deck.source_key = Some(slugify(&row.name));
-            }
-            deck.version += 1;
-            deck.updated_at = now;
-            Ok((self.repository.admin_upsert_system_deck(&deck).await?, false))
-        } else {
-            let source_key = row
-                .source_key
-                .clone()
-                .or_else(|| Some(slugify(&row.name)));
-            let deck = Deck {
-                id: format!("deck_{}", Uuid::new_v4().simple()),
-                owner_user_id: SYSTEM_OWNER_ID.to_string(),
-                source_key,
-                name: row.name.clone(),
-                description: row.description.clone(),
-                color: row.color.clone(),
-                version: 1,
-                sort_order: 0,
-                is_active: true,
-                card_count: 0,
-                created_at: now,
-                updated_at: now,
-            };
-            Ok((self.repository.admin_upsert_system_deck(&deck).await?, true))
-        }
     }
 
     async fn require_system_deck(&self, deck_id: &str) -> Result<Deck, AppError> {
@@ -584,7 +481,7 @@ mod tests {
         let result = service
             .import_vocabulary(&xlsx, ImportMode::Merge)
             .await
-            .expect("merge import should succeed");
+            .expect("merge import uses sqlite transaction and should succeed");
         assert_eq!(result.updated_cards, 1);
         assert_eq!(result.created_cards, 0);
 

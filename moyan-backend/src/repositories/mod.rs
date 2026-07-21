@@ -14,7 +14,8 @@ use thiserror::Error;
 
 use crate::models::{
     Card, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest,
-    Deck, ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest,
+    AdminVocabularyImportCard, AdminVocabularyImportDeck, Deck, ImportMode, ImportResult,
+    ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest,
     UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
 };
 
@@ -213,6 +214,12 @@ pub trait VocabularyRepository: Send + Sync {
         deck_id: &str,
         front: &str,
     ) -> Result<Option<Card>, RepositoryError>;
+    async fn admin_apply_vocabulary_import(
+        &self,
+        mode: ImportMode,
+        decks: &[AdminVocabularyImportDeck],
+        cards: &[AdminVocabularyImportCard],
+    ) -> Result<ImportResult, RepositoryError>;
 }
 
 #[async_trait]

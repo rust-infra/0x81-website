@@ -6,10 +6,11 @@ use uuid::Uuid;
 use async_trait::async_trait;
 
 use crate::models::{
-    Card, CardData, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest,
-    CreateReviewLogRequest, Deck, DeckData, ReviewLog, ReviewLogData, StudyCard, SyncData,
-    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
+    CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData, ImportMode,
+    ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -379,7 +380,7 @@ fn parse_json_vec<T: DeserializeOwned>(raw: &str) -> Result<Vec<T>, RepositoryEr
     serde_json::from_str(raw).map_err(|error| RepositoryError::Persistence(error.to_string()))
 }
 
-fn to_json_string<T: Serialize>(value: &T) -> Result<String, RepositoryError> {
+fn to_json_string<T: Serialize + ?Sized>(value: &T) -> Result<String, RepositoryError> {
     serde_json::to_string(value).map_err(|error| RepositoryError::Persistence(error.to_string()))
 }
 
@@ -1348,6 +1349,326 @@ impl VocabularyRepository for SqliteRepositories {
         .await?;
         row.map(TryInto::try_into).transpose()
     }
+
+    /// Applies validated vocabulary import inside a single SQLite transaction.
+    /// All deck upserts, replace_deck deletes, and card writes commit together or roll back.
+    async fn admin_apply_vocabulary_import(
+        &self,
+        mode: ImportMode,
+        decks: &[AdminVocabularyImportDeck],
+        cards: &[AdminVocabularyImportCard],
+    ) -> Result<ImportResult, RepositoryError> {
+        let mut tx = self.pool.begin().await?;
+        let result = apply_vocabulary_import_in_tx(&mut tx, mode, decks, cards).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+pub(crate) const TEST_FORCE_IMPORT_FAIL_FRONT: &str = "__test_force_import_fail__";
+
+fn import_slugify(name: &str) -> String {
+    let mut slug = String::new();
+    let mut last_hyphen = false;
+    for ch in name.trim().to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_hyphen = false;
+        } else if !last_hyphen && !slug.is_empty() {
+            slug.push('-');
+            last_hyphen = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
+}
+
+async fn apply_vocabulary_import_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    mode: ImportMode,
+    decks: &[AdminVocabularyImportDeck],
+    cards: &[AdminVocabularyImportCard],
+) -> Result<ImportResult, RepositoryError> {
+    let mut result = ImportResult {
+        created_decks: 0,
+        updated_decks: 0,
+        created_cards: 0,
+        updated_cards: 0,
+    };
+
+    let mut deck_id_by_name = std::collections::HashMap::new();
+    for row in decks {
+        let (deck, created) = upsert_import_deck_in_tx(tx, row).await?;
+        deck_id_by_name.insert(deck.name.clone(), deck.id.clone());
+        if created {
+            result.created_decks += 1;
+        } else {
+            result.updated_decks += 1;
+        }
+    }
+
+    if mode == ImportMode::ReplaceDeck {
+        for deck_id in deck_id_by_name.values() {
+            delete_cards_in_deck_in_tx(tx, deck_id).await?;
+        }
+    }
+
+    for card in cards {
+        #[cfg(test)]
+        if card.front == TEST_FORCE_IMPORT_FAIL_FRONT {
+            return Err(RepositoryError::Persistence(
+                "forced import failure for tests".into(),
+            ));
+        }
+
+        let deck_id = deck_id_by_name.get(&card.deck_name).ok_or_else(|| {
+            RepositoryError::Persistence("validated deck_name missing during import".into())
+        })?;
+
+        if mode == ImportMode::Merge {
+            if let Some(existing) =
+                find_card_by_front_in_tx(tx, deck_id, &card.front).await?
+            {
+                update_card_in_tx(
+                    tx,
+                    &existing.id,
+                    None,
+                    Some(&card.back),
+                    card.pronunciation.as_deref(),
+                    Some(&card.tags),
+                    Some(&card.examples),
+                )
+                .await?;
+                result.updated_cards += 1;
+                continue;
+            }
+        }
+
+        insert_card_in_tx(
+            tx,
+            deck_id,
+            &card.front,
+            &card.back,
+            card.pronunciation.as_deref(),
+            &card.tags,
+            &card.examples,
+        )
+        .await?;
+        result.created_cards += 1;
+    }
+
+    Ok(result)
+}
+
+async fn find_system_deck_by_source_key_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_key: &str,
+) -> Result<Option<Deck>, RepositoryError> {
+    Ok(sqlx::query_as::<_, VocabDeckRow>(&format!(
+        "{DECK_SELECT_WITH_COUNT} WHERE d.owner_user_id = ? AND d.source_key = ?"
+    ))
+    .bind(SYSTEM_OWNER_ID)
+    .bind(source_key)
+    .fetch_optional(&mut **tx)
+    .await?
+    .map(Into::into))
+}
+
+async fn find_system_deck_by_name_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    name: &str,
+) -> Result<Option<Deck>, RepositoryError> {
+    Ok(sqlx::query_as::<_, VocabDeckRow>(&format!(
+        "{DECK_SELECT_WITH_COUNT} WHERE d.owner_user_id = ? AND d.name = ?"
+    ))
+    .bind(SYSTEM_OWNER_ID)
+    .bind(name)
+    .fetch_optional(&mut **tx)
+    .await?
+    .map(Into::into))
+}
+
+async fn upsert_import_deck_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    row: &AdminVocabularyImportDeck,
+) -> Result<(Deck, bool), RepositoryError> {
+    let existing = if let Some(source_key) = row.source_key.as_deref() {
+        find_system_deck_by_source_key_in_tx(tx, source_key).await?
+    } else {
+        find_system_deck_by_name_in_tx(tx, &row.name).await?
+    };
+
+    let now = Utc::now();
+    let (deck, created) = if let Some(mut deck) = existing {
+        deck.name = row.name.clone();
+        deck.description = row.description.clone();
+        deck.color = row.color.clone();
+        if row.source_key.is_some() {
+            deck.source_key = row.source_key.clone();
+        } else if deck.source_key.is_none() {
+            deck.source_key = Some(import_slugify(&row.name));
+        }
+        deck.version += 1;
+        deck.updated_at = now;
+        (deck, false)
+    } else {
+        let source_key = row
+            .source_key
+            .clone()
+            .or_else(|| Some(import_slugify(&row.name)));
+        (
+            Deck {
+                id: format!("deck_{}", Uuid::new_v4().simple()),
+                owner_user_id: SYSTEM_OWNER_ID.to_string(),
+                source_key,
+                name: row.name.clone(),
+                description: row.description.clone(),
+                color: row.color.clone(),
+                version: 1,
+                sort_order: 0,
+                is_active: true,
+                card_count: 0,
+                created_at: now,
+                updated_at: now,
+            },
+            true,
+        )
+    };
+
+    sqlx::query(
+        "INSERT INTO decks (
+            id, owner_user_id, source_key, name, description, color,
+            version, sort_order, is_active, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+            source_key = excluded.source_key,
+            name = excluded.name,
+            description = excluded.description,
+            color = excluded.color,
+            version = excluded.version,
+            sort_order = excluded.sort_order,
+            is_active = excluded.is_active,
+            updated_at = excluded.updated_at",
+    )
+    .bind(&deck.id)
+    .bind(&deck.owner_user_id)
+    .bind(&deck.source_key)
+    .bind(&deck.name)
+    .bind(&deck.description)
+    .bind(&deck.color)
+    .bind(deck.version)
+    .bind(deck.sort_order)
+    .bind(if deck.is_active { 1 } else { 0 })
+    .bind(deck.created_at)
+    .bind(deck.updated_at)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok((deck, created))
+}
+
+async fn delete_cards_in_deck_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    deck_id: &str,
+) -> Result<(), RepositoryError> {
+    sqlx::query("DELETE FROM cards WHERE deck_id = ?")
+        .bind(deck_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn find_card_by_front_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    deck_id: &str,
+    front: &str,
+) -> Result<Option<Card>, RepositoryError> {
+    let row = sqlx::query_as::<_, VocabCardRow>(
+        "SELECT id, deck_id, front, back, pronunciation, tags, examples, created_at, updated_at
+         FROM cards WHERE deck_id = ? AND front = ?",
+    )
+    .bind(deck_id)
+    .bind(front)
+    .fetch_optional(&mut **tx)
+    .await?;
+    row.map(TryInto::try_into).transpose()
+}
+
+async fn insert_card_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    deck_id: &str,
+    front: &str,
+    back: &str,
+    pronunciation: Option<&str>,
+    tags: &[String],
+    examples: &[CardExample],
+) -> Result<(), RepositoryError> {
+    let now = Utc::now();
+    let id = new_prefixed_id("card_");
+    let tags_json = to_json_string(&tags)?;
+    let examples_json = to_json_string(examples)?;
+
+    sqlx::query(
+        "INSERT INTO cards (
+            id, deck_id, front, back, pronunciation, tags, examples, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&id)
+    .bind(deck_id)
+    .bind(front)
+    .bind(back)
+    .bind(pronunciation)
+    .bind(tags_json)
+    .bind(examples_json)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn update_card_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    card_id: &str,
+    front: Option<&str>,
+    back: Option<&str>,
+    pronunciation: Option<&str>,
+    tags: Option<&[String]>,
+    examples: Option<&[CardExample]>,
+) -> Result<(), RepositoryError> {
+    let existing = sqlx::query_as::<_, VocabCardRow>(
+        "SELECT id, deck_id, front, back, pronunciation, tags, examples, created_at, updated_at
+         FROM cards WHERE id = ?",
+    )
+    .bind(card_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| RepositoryError::Persistence("card missing during import update".into()))?;
+
+    let existing_card: Card = existing.try_into()?;
+    let now = Utc::now();
+    let front = front.unwrap_or(&existing_card.front);
+    let back = back.unwrap_or(&existing_card.back);
+    let pronunciation = pronunciation.or(existing_card.pronunciation.as_deref());
+    let tags = tags.unwrap_or(&existing_card.tags);
+    let examples = examples.unwrap_or(&existing_card.examples);
+    let tags_json = to_json_string(tags)?;
+    let examples_json = to_json_string(examples)?;
+
+    sqlx::query(
+        "UPDATE cards SET front = ?, back = ?, pronunciation = ?, tags = ?, examples = ?,
+         updated_at = ? WHERE id = ?",
+    )
+    .bind(front)
+    .bind(back)
+    .bind(pronunciation)
+    .bind(tags_json)
+    .bind(examples_json)
+    .bind(now)
+    .bind(card_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn count(pool: &SqlitePool, table: &str, user_id: &str) -> Result<i64, RepositoryError> {
@@ -1990,6 +2311,90 @@ mod tests {
 
         let recent_sync_count = repo.admin_recent_sync_count(&user.id).await?;
         assert_eq!(recent_sync_count, 0);
+
+        Ok(())
+    }
+
+    /// SQLite import apply uses `pool.begin()`/`commit()`; replace_deck delete+insert rolls back together.
+    #[tokio::test]
+    async fn admin_apply_vocabulary_import_replace_deck_rolls_back_on_failure(
+    ) -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let now = Utc::now();
+        repo.insert_system_deck(&Deck {
+            id: "deck_tx_test".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("tx-test".to_string()),
+            name: "Tx Test".to_string(),
+            description: "transaction rollback test".to_string(),
+            color: None,
+            version: 1,
+            sort_order: 0,
+            is_active: true,
+            card_count: 0,
+            created_at: now,
+            updated_at: now,
+        })
+        .await?;
+        repo.create_card(
+            "deck_tx_test",
+            &CreateCardRequest {
+                front: "hello".to_string(),
+                back: "old".to_string(),
+                pronunciation: None,
+                tags: None,
+                examples: None,
+            },
+            vec![],
+        )
+        .await?;
+        repo.create_card(
+            "deck_tx_test",
+            &CreateCardRequest {
+                front: "world".to_string(),
+                back: "世界".to_string(),
+                pronunciation: None,
+                tags: None,
+                examples: None,
+            },
+            vec![],
+        )
+        .await?;
+
+        let decks = vec![AdminVocabularyImportDeck {
+            name: "Tx Test".to_string(),
+            description: "transaction rollback test".to_string(),
+            color: None,
+            source_key: Some("tx-test".to_string()),
+        }];
+        let cards = vec![
+            AdminVocabularyImportCard {
+                deck_name: "Tx Test".to_string(),
+                front: "hello".to_string(),
+                back: "updated".to_string(),
+                pronunciation: None,
+                tags: vec![],
+                examples: vec![],
+            },
+            AdminVocabularyImportCard {
+                deck_name: "Tx Test".to_string(),
+                front: TEST_FORCE_IMPORT_FAIL_FRONT.to_string(),
+                back: "fail".to_string(),
+                pronunciation: None,
+                tags: vec![],
+                examples: vec![],
+            },
+        ];
+
+        let result = repo
+            .admin_apply_vocabulary_import(ImportMode::ReplaceDeck, &decks, &cards)
+            .await;
+        assert!(result.is_err());
+
+        let remaining = repo.list_cards("deck_tx_test").await?;
+        assert_eq!(remaining.len(), 2);
+        assert!(remaining.iter().any(|card| card.front == "hello"));
+        assert!(remaining.iter().any(|card| card.front == "world"));
 
         Ok(())
     }

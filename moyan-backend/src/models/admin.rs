@@ -115,6 +115,24 @@ pub enum ImportMode {
     ReplaceDeck,
 }
 
+#[derive(Debug, Clone)]
+pub struct AdminVocabularyImportDeck {
+    pub name: String,
+    pub description: String,
+    pub color: Option<String>,
+    pub source_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AdminVocabularyImportCard {
+    pub deck_name: String,
+    pub front: String,
+    pub back: String,
+    pub pronunciation: Option<String>,
+    pub tags: Vec<String>,
+    pub examples: Vec<super::CardExample>,
+}
+
 impl ImportMode {
     pub fn parse(raw: Option<&str>) -> Result<Self, String> {
         match raw.unwrap_or("merge") {
