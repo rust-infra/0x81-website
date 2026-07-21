@@ -207,6 +207,7 @@ pub trait VocabularyRepository: Send + Sync {
     ) -> Result<Option<Deck>, RepositoryError>;
     async fn admin_upsert_system_deck(&self, deck: &Deck) -> Result<Deck, RepositoryError>;
     async fn admin_delete_cards_in_deck(&self, deck_id: &str) -> Result<u64, RepositoryError>;
+    async fn admin_delete_system_deck(&self, deck_id: &str) -> Result<bool, RepositoryError>;
     async fn admin_find_card_by_front(
         &self,
         deck_id: &str,

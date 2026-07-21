@@ -1,5 +1,6 @@
 //! Business services that coordinate controllers and repositories.
 
+mod admin;
 mod auth;
 mod health;
 mod settings;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 
 use crate::repositories::Repository;
 
+pub use admin::AdminService;
 pub use auth::AuthService;
 pub use health::HealthService;
 pub use settings::SettingsService;
@@ -26,6 +28,7 @@ pub struct Services {
     pub sync: SyncService,
     pub vocabulary: VocabularyService,
     pub system_decks: SystemDecksService,
+    pub admin: AdminService,
 }
 
 impl Services {
@@ -36,7 +39,8 @@ impl Services {
             settings: SettingsService::new(Arc::clone(&repository)),
             sync: SyncService::new(Arc::clone(&repository)),
             vocabulary: VocabularyService::new(Arc::clone(&repository)),
-            system_decks: SystemDecksService::new(repository),
+            system_decks: SystemDecksService::new(Arc::clone(&repository)),
+            admin: AdminService::new(repository),
         }
     }
 }

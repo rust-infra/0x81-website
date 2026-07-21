@@ -1324,6 +1324,15 @@ impl VocabularyRepository for SqliteRepositories {
         Ok(result.rows_affected())
     }
 
+    async fn admin_delete_system_deck(&self, deck_id: &str) -> Result<bool, RepositoryError> {
+        let result = sqlx::query("DELETE FROM decks WHERE id = ? AND owner_user_id = ?")
+            .bind(deck_id)
+            .bind(SYSTEM_OWNER_ID)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     async fn admin_find_card_by_front(
         &self,
         deck_id: &str,

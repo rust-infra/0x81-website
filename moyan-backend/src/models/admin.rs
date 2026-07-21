@@ -33,6 +33,26 @@ pub struct PageResponse<T> {
     pub total: i64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminCreateDeckRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub source_key: Option<String>,
+    pub is_active: Option<bool>,
+    pub sort_order: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminUpdateDeckRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub source_key: Option<String>,
+    pub is_active: Option<bool>,
+    pub sort_order: Option<i32>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AdminUserListItem {
     pub id: String,

@@ -1092,6 +1092,14 @@ impl VocabularyRepository for MongoRepositories {
         Ok(result.deleted_count)
     }
 
+    async fn admin_delete_system_deck(&self, deck_id: &str) -> Result<bool, RepositoryError> {
+        let result = self
+            .vocab_decks()
+            .delete_one(doc! { "id": deck_id, "owner_user_id": SYSTEM_OWNER_ID })
+            .await?;
+        Ok(result.deleted_count > 0)
+    }
+
     async fn admin_find_card_by_front(
         &self,
         deck_id: &str,
