@@ -8,6 +8,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `tact.0x81.uk` | `website` | tact 产品落地页 |
 | `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
+| `admin.moyan.0x81.uk` | `moyan-admin` | 墨言管理后台 |
 
 ## 架构
 
@@ -20,6 +21,7 @@ website-rs :80/:443     Axum 网关
       ├─ Host: tact.0x81.uk           →  website :4321
       ├─ Host: crab.0x81.uk           →  crab-web :4322
       ├─ Host: moyan.0x81.uk          →  moyan-web :5000（/api → moyan-backend :4323）
+      ├─ Host: admin.moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -37,6 +39,7 @@ website-rs :80/:443     Axum 网关
 ├── website/          # tact 站（Astro → Bun :4321）
 ├── crab-web/         # CrabBridge 站（Astro → Bun :4322）
 ├── moyan-web/        # 墨言前端（Vite → Caddy :5000）
+├── moyan-admin/      # 墨言管理后台（Vite → Caddy :5001）
 ├── moyan-backend/    # 墨言 API（Axum :4323）
 ├── docs/             # 设计稿与实现计划
 └── docker-compose.yml
@@ -55,12 +58,13 @@ Compose 环境变量：
 - `PROXY_UPSTREAM_HOST_TACT=website`
 - `PROXY_UPSTREAM_HOST_CRAB=crab-web`
 - `PROXY_UPSTREAM_HOST_MOYAN=moyan-web`
+- `PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin`
 
 ### 网关横切能力
 
 | 能力 | 说明 |
 |------|------|
-| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000 |
+| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin.moyan` → 5001 |
 | TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
@@ -108,11 +112,13 @@ Dockerfile 默认使用官方镜像名（如 `node:20-alpine`、`caddy:2-alpine`
 - 产品：[rust-infra/crab-bridge-rs](https://github.com/rust-infra/crab-bridge-rs) — Codex ↔ DeepSeek / Kimi Responses 代理
 - 设计说明：`docs/superpowers/specs/2026-07-14-crab-web-design.md`
 
-### `moyan-web` / `moyan-backend`（墨言）
+### `moyan-web` / `moyan-admin` / `moyan-backend`（墨言）
 
-- 前端：Vite 构建 + Caddy，主机映射 `5000:80`，域名 `moyan.0x81.uk`
-- 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`
+- 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin.moyan.0x81.uk`；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）
+- 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
+- CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin.moyan.0x81.uk`）
 
 ## 本地运行
 
@@ -130,8 +136,9 @@ docker compose up -d --build
 | `crab-web` | `4322` | CrabBridge（也可直接访问） |
 | `moyan-backend` | `4323` | 墨言 API |
 | `moyan-web` | `5000` | 墨言前端（Caddy；`/api` 反代到 backend） |
+| `moyan-admin` | `5001` | 墨言管理后台（Caddy；`/api` 反代到 backend） |
 
-本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
+本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` / `admin.moyan.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
 
 单独开发前端：
 
