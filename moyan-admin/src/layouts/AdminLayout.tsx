@@ -13,7 +13,7 @@ const menuItems = [
   {
     key: "/decks",
     icon: <BookOutlined />,
-    label: "词库管理",
+    label: "系统卡组",
   },
   {
     key: "/users",
@@ -54,7 +54,9 @@ export default function AdminLayout() {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[
+            location.pathname.startsWith("/decks") ? "/decks" : location.pathname,
+          ]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
