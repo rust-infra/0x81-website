@@ -6,6 +6,7 @@ use axum::{
 use serde_json::json;
 use tracing::error;
 
+use crate::models::ImportErrorItem;
 use crate::repositories::RepositoryError;
 use crate::services::Services;
 
@@ -28,6 +29,7 @@ pub enum AppError {
     NotFound(String),
     Internal(String),
     ServiceUnavailable(String),
+    ImportFailed(Vec<ImportErrorItem>),
     Repository(RepositoryError),
 }
 
@@ -38,6 +40,13 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
+            AppError::ImportFailed(errors) => {
+                let body = Json(json!({
+                    "success": false,
+                    "errors": errors
+                }));
+                return (StatusCode::BAD_REQUEST, body).into_response();
+            }
             AppError::Internal(msg) => {
                 error!("Internal error: {}", msg);
                 (

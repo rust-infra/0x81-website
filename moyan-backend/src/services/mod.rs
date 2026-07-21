@@ -1,6 +1,7 @@
 //! Business services that coordinate controllers and repositories.
 
 mod admin;
+mod admin_excel;
 mod auth;
 mod health;
 mod settings;

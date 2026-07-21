@@ -24,5 +24,12 @@ pub fn routes() -> Router<AppState> {
             "/cards/{card_id}",
             put(admin::update_card).delete(admin::delete_card),
         )
+        .route(
+            "/vocabulary/template.xlsx",
+            get(admin::download_vocabulary_template),
+        )
+        .route("/vocabulary/export.xlsx", get(admin::export_vocabulary_xlsx))
+        .route("/vocabulary/export.json", get(admin::export_vocabulary_json))
+        .route("/vocabulary/import", axum::routing::post(admin::import_vocabulary))
         .layer(middleware::from_fn(admin_token_middleware))
 }

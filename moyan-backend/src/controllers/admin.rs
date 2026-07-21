@@ -1,14 +1,22 @@
 use axum::{
-    extract::{Path, Query, State},
-    response::{IntoResponse, Json},
+    body::Body,
+    extract::{Multipart, Path, Query, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Json, Response},
 };
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::middleware::error::{success, AppError, AppState};
 use crate::models::{
-    AdminCreateDeckRequest, AdminUpdateDeckRequest, CreateCardRequest, PageQuery,
+    AdminCreateDeckRequest, AdminUpdateDeckRequest, CreateCardRequest, ImportMode, PageQuery,
     UpdateCardRequest,
 };
+
+#[derive(Debug, Deserialize)]
+pub struct ImportQuery {
+    pub mode: Option<String>,
+}
 
 pub async fn ping() -> impl IntoResponse {
     Json(json!({ "success": true, "data": { "ok": true } }))
@@ -80,4 +88,71 @@ pub async fn delete_card(
 ) -> Result<Json<serde_json::Value>, AppError> {
     state.services.admin.delete_card(&card_id).await?;
     Ok(success(json!(null)))
+}
+
+pub async fn download_vocabulary_template(
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let bytes = state.services.admin.build_vocabulary_template_xlsx()?;
+    Ok(spreadsheet_attachment(
+        bytes,
+        "vocabulary-template.xlsx",
+    ))
+}
+
+pub async fn export_vocabulary_xlsx(
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let bytes = state.services.admin.export_vocabulary_xlsx().await?;
+    Ok(spreadsheet_attachment(bytes, "vocabulary-export.xlsx"))
+}
+
+pub async fn export_vocabulary_json(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let export = state.services.admin.export_vocabulary_json().await?;
+    Ok(success(export))
+}
+
+pub async fn import_vocabulary(
+    State(state): State<AppState>,
+    Query(query): Query<ImportQuery>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mode = ImportMode::parse(query.mode.as_deref())
+        .map_err(|message| AppError::BadRequest(message))?;
+
+    let mut file_bytes: Option<Vec<u8>> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|err| AppError::BadRequest(format!("Invalid multipart upload: {err}")))?
+    {
+        if field.name() == Some("file") {
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|err| AppError::BadRequest(format!("Failed to read upload: {err}")))?;
+            file_bytes = Some(bytes.to_vec());
+        }
+    }
+
+    let data = file_bytes.ok_or_else(|| AppError::BadRequest("Missing upload field 'file'".into()))?;
+    let result = state.services.admin.import_vocabulary(&data, mode).await?;
+    Ok(success(result))
+}
+
+fn spreadsheet_attachment(bytes: Vec<u8>, filename: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            header::CONTENT_TYPE,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{filename}\""),
+        )
+        .body(Body::from(bytes))
+        .expect("valid spreadsheet response")
 }

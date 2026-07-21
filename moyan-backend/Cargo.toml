@@ -8,7 +8,9 @@ description = "墨言单词后端 API - Rust + Axum + SQLx"
 
 [dependencies]
 # Web Framework
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
+calamine = "0.26"
+rust_xlsxwriter = "0.79"
 tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "compression-br"] }
 hyper = { version = "1.6", features = ["full"] }
