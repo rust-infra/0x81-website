@@ -217,8 +217,24 @@ LLM 配置以 JSON 存 `key = 'llm'`（value 含 base_url、api_key、model、te
 - 集成：captions（真实视频 [LqG1q5NpOBE](https://www.youtube.com/watch?v=LqG1q5NpOBE)）、extract（需配置 LLM）、import 后 admin 列表可见
 - 页面：Settings 保存 → Collect 全流程 → 卡组卡片页可见
 
-## 9. 风险
+## 10. 异步任务（已升级）
 
-- YouTube / 代理限制导致 yt-dlp 失败：错误信息需可操作
-- LLM 费用与超时：单请求超时建议 120s；字幕截断
-- API Key 明文存库：仅 admin 可读写；文档提醒生产加固
+采集改为异步 Job，避免页面长时间阻塞。
+
+### API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/admin/collect/youtube/jobs` | 创建任务（url + proxy），立即返回 job |
+| GET | `/api/admin/collect/youtube/jobs` | 列表（`q` / `page` / `page_size` / `status`），前端 2s 轮询 |
+| GET | `/api/admin/collect/youtube/jobs/{id}` | 详情（含 draft_cards） |
+| DELETE | `/api/admin/collect/youtube/jobs/{id}` | 删除（运行中先请求取消） |
+| POST | `/api/admin/collect/youtube/jobs/{id}/pause` | 暂停：queued→paused；运行中协作取消后→paused |
+| POST | `/api/admin/collect/youtube/jobs/{id}/copy` | 用相同 url/proxy 创建新任务并启动 |
+| POST | `/api/admin/collect/youtube/import` | 预览确认后导入（同步，不变） |
+
+状态：`queued` → `fetching_captions` → `extracting` → `ready` / `failed` / `paused`
+
+### UI
+
+采集页上方为**任务列表**（实时刷新、搜索、删除/暂停/复制）；下方提交新任务；选中 `ready` 任务进入预览导入。

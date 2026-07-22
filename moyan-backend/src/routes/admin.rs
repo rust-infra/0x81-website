@@ -52,5 +52,21 @@ pub fn routes() -> Router<AppState> {
             "/collect/youtube/import",
             axum::routing::post(admin::collect_youtube_import),
         )
+        .route(
+            "/collect/youtube/jobs",
+            get(admin::list_collect_jobs).post(admin::create_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}",
+            get(admin::get_collect_job).delete(admin::delete_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}/pause",
+            axum::routing::post(admin::pause_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}/copy",
+            axum::routing::post(admin::copy_collect_job),
+        )
         .layer(middleware::from_fn(admin_token_middleware))
 }

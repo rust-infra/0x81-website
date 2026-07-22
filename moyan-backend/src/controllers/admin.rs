@@ -206,6 +206,54 @@ pub async fn collect_youtube_import(
     Ok(success(data))
 }
 
+pub async fn create_collect_job(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::CreateCollectJobRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.create_job(req).await?;
+    Ok(success(data))
+}
+
+pub async fn list_collect_jobs(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<crate::models::CollectJobListQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.list_jobs(query).await?;
+    Ok(success(data))
+}
+
+pub async fn get_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.get_job(&id).await?;
+    Ok(success(data))
+}
+
+pub async fn delete_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    state.services.admin_collect.delete_job(&id).await?;
+    Ok(success(serde_json::json!({ "deleted": true })))
+}
+
+pub async fn pause_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.pause_job(&id).await?;
+    Ok(success(data))
+}
+
+pub async fn copy_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.copy_job(&id).await?;
+    Ok(success(data))
+}
+
 fn spreadsheet_attachment(bytes: Vec<u8>, filename: &str) -> Response {
     Response::builder()
         .status(StatusCode::OK)

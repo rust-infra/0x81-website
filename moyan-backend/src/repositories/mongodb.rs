@@ -14,8 +14,8 @@ use async_trait::async_trait;
 
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
-    CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData, ImportMode,
-    ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
+    ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
     UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
     UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
@@ -1262,6 +1262,42 @@ impl VocabularyRepository for MongoRepositories {
             .upsert(true)
             .await?;
         Ok(())
+    }
+
+    async fn collect_job_insert(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_update(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_get(&self, _id: &str) -> Result<Option<CollectJob>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_delete(&self, _id: &str) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_list(
+        &self,
+        _q: Option<&str>,
+        _status: Option<&str>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
     }
 }
 

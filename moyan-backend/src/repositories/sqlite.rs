@@ -7,10 +7,10 @@ use async_trait::async_trait;
 
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
-    CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData, ImportMode,
-    ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
-    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, SYSTEM_OWNER_ID,
+    CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
+    DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData,
+    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
+    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1385,6 +1385,204 @@ impl VocabularyRepository for SqliteRepositories {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn collect_job_insert(&self, job: &CollectJob) -> Result<(), RepositoryError> {
+        sqlx::query(
+            "INSERT INTO collect_jobs (
+                id, url, proxy, status, step, error, video_id, title, language, source_url,
+                caption_text, draft_cards_json, truncated, cancel_requested,
+                created_at, updated_at, started_at, finished_at,
+                llm_started_at, llm_chunk_done, llm_chunk_total
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&job.id)
+        .bind(&job.url)
+        .bind(&job.proxy)
+        .bind(&job.status)
+        .bind(&job.step)
+        .bind(&job.error)
+        .bind(&job.video_id)
+        .bind(&job.title)
+        .bind(&job.language)
+        .bind(&job.source_url)
+        .bind(&job.caption_text)
+        .bind(serde_json::to_string(&job.draft_cards).unwrap_or_else(|_| "[]".into()))
+        .bind(if job.truncated { 1 } else { 0 })
+        .bind(if job.cancel_requested { 1 } else { 0 })
+        .bind(&job.created_at)
+        .bind(&job.updated_at)
+        .bind(&job.started_at)
+        .bind(&job.finished_at)
+        .bind(&job.llm_started_at)
+        .bind(job.llm_chunk_done as i64)
+        .bind(job.llm_chunk_total as i64)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn collect_job_update(&self, job: &CollectJob) -> Result<(), RepositoryError> {
+        sqlx::query(
+            "UPDATE collect_jobs SET
+                url = ?, proxy = ?, status = ?, step = ?, error = ?, video_id = ?, title = ?,
+                language = ?, source_url = ?, caption_text = ?, draft_cards_json = ?,
+                truncated = ?, cancel_requested = ?, updated_at = ?, started_at = ?, finished_at = ?,
+                llm_started_at = ?, llm_chunk_done = ?, llm_chunk_total = ?
+             WHERE id = ?",
+        )
+        .bind(&job.url)
+        .bind(&job.proxy)
+        .bind(&job.status)
+        .bind(&job.step)
+        .bind(&job.error)
+        .bind(&job.video_id)
+        .bind(&job.title)
+        .bind(&job.language)
+        .bind(&job.source_url)
+        .bind(&job.caption_text)
+        .bind(serde_json::to_string(&job.draft_cards).unwrap_or_else(|_| "[]".into()))
+        .bind(if job.truncated { 1 } else { 0 })
+        .bind(if job.cancel_requested { 1 } else { 0 })
+        .bind(&job.updated_at)
+        .bind(&job.started_at)
+        .bind(&job.finished_at)
+        .bind(&job.llm_started_at)
+        .bind(job.llm_chunk_done as i64)
+        .bind(job.llm_chunk_total as i64)
+        .bind(&job.id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn collect_job_get(&self, id: &str) -> Result<Option<CollectJob>, RepositoryError> {
+        let row = sqlx::query_as::<_, CollectJobRow>(
+            "SELECT id, url, proxy, status, step, error, video_id, title, language, source_url,
+                    caption_text, draft_cards_json, truncated, cancel_requested,
+                    created_at, updated_at, started_at, finished_at,
+                    llm_started_at, llm_chunk_done, llm_chunk_total
+             FROM collect_jobs WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(CollectJob::from))
+    }
+
+    async fn collect_job_delete(&self, id: &str) -> Result<bool, RepositoryError> {
+        let result = sqlx::query("DELETE FROM collect_jobs WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn collect_job_list(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
+        let like = q.map(|value| format!("%{value}%"));
+        let total: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM collect_jobs
+             WHERE (? IS NULL OR status = ?)
+               AND (? IS NULL OR url LIKE ? OR IFNULL(title,'') LIKE ? OR IFNULL(video_id,'') LIKE ? OR id LIKE ?)",
+        )
+        .bind(status)
+        .bind(status)
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .fetch_one(&self.pool)
+        .await?;
+
+        let rows = sqlx::query_as::<_, CollectJobRow>(
+            "SELECT id, url, proxy, status, step, error, video_id, title, language, source_url,
+                    caption_text, draft_cards_json, truncated, cancel_requested,
+                    created_at, updated_at, started_at, finished_at,
+                    llm_started_at, llm_chunk_done, llm_chunk_total
+             FROM collect_jobs
+             WHERE (? IS NULL OR status = ?)
+               AND (? IS NULL OR url LIKE ? OR IFNULL(title,'') LIKE ? OR IFNULL(video_id,'') LIKE ? OR id LIKE ?)
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(status)
+        .bind(status)
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(like.as_deref())
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok((rows.into_iter().map(CollectJob::from).collect(), total.0))
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct CollectJobRow {
+    id: String,
+    url: String,
+    proxy: Option<String>,
+    status: String,
+    step: String,
+    error: Option<String>,
+    video_id: Option<String>,
+    title: Option<String>,
+    language: Option<String>,
+    source_url: Option<String>,
+    caption_text: Option<String>,
+    draft_cards_json: Option<String>,
+    truncated: i64,
+    cancel_requested: i64,
+    created_at: String,
+    updated_at: String,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    llm_started_at: Option<String>,
+    llm_chunk_done: i64,
+    llm_chunk_total: i64,
+}
+
+impl From<CollectJobRow> for CollectJob {
+    fn from(row: CollectJobRow) -> Self {
+        let draft_cards = row
+            .draft_cards_json
+            .as_deref()
+            .and_then(|raw| serde_json::from_str::<Vec<DraftCard>>(raw).ok())
+            .unwrap_or_default();
+        Self {
+            id: row.id,
+            url: row.url,
+            proxy: row.proxy,
+            status: row.status,
+            step: row.step,
+            error: row.error,
+            video_id: row.video_id,
+            title: row.title,
+            language: row.language,
+            source_url: row.source_url,
+            caption_text: row.caption_text,
+            draft_cards,
+            truncated: row.truncated != 0,
+            cancel_requested: row.cancel_requested != 0,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            started_at: row.started_at,
+            finished_at: row.finished_at,
+            llm_started_at: row.llm_started_at,
+            llm_chunk_done: row.llm_chunk_done.max(0) as u32,
+            llm_chunk_total: row.llm_chunk_total.max(0) as u32,
+        }
     }
 }
 

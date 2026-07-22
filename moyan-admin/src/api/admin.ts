@@ -448,6 +448,49 @@ export interface YoutubeImportResult {
   skipped_cards: number;
 }
 
+export type CollectJobStatus =
+  | "queued"
+  | "fetching_captions"
+  | "extracting"
+  | "ready"
+  | "failed"
+  | "paused";
+
+export interface CollectJobListItem {
+  id: string;
+  url: string;
+  proxy?: string | null;
+  status: CollectJobStatus | string;
+  step: string;
+  error?: string | null;
+  video_id?: string | null;
+  title?: string | null;
+  language?: string | null;
+  source_url?: string | null;
+  draft_card_count: number;
+  truncated: boolean;
+  cancel_requested: boolean;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  llm_started_at?: string | null;
+  llm_chunk_done?: number;
+  llm_chunk_total?: number;
+}
+
+export interface CollectJob extends CollectJobListItem {
+  caption_text?: string | null;
+  draft_cards: DraftCard[];
+}
+
+export interface CollectJobListResult {
+  items: CollectJobListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export async function getLlmSettings(): Promise<LlmSettings> {
   const res = await adminFetch("/api/admin/settings/llm");
   return parseEnvelope<LlmSettings>(res);
@@ -506,4 +549,61 @@ export async function collectYoutubeImport(input: {
     body: JSON.stringify(input),
   });
   return parseEnvelope<YoutubeImportResult>(res);
+}
+
+export async function listCollectJobs(params?: {
+  q?: string;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<CollectJobListResult> {
+  const qs = new URLSearchParams();
+  if (params?.q) qs.set("q", params.q);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs${suffix}`);
+  return parseEnvelope<CollectJobListResult>(res);
+}
+
+export async function createCollectJob(input: {
+  url: string;
+  proxy?: string;
+}): Promise<CollectJob> {
+  const res = await adminFetch("/api/admin/collect/youtube/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: input.url,
+      proxy: input.proxy?.trim() ? input.proxy.trim() : undefined,
+    }),
+  });
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function getCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}`);
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function deleteCollectJob(id: string): Promise<void> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}`, {
+    method: "DELETE",
+  });
+  await parseEnvelope<{ deleted: boolean }>(res);
+}
+
+export async function pauseCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}/pause`, {
+    method: "POST",
+  });
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function copyCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}/copy`, {
+    method: "POST",
+  });
+  return parseEnvelope<CollectJob>(res);
 }
