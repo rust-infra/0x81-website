@@ -148,6 +148,9 @@ async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
     } else if host == "moyan.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN");
         proxy_request(req, &upstream, 5000).await
+    } else if host == "admin.moyan.0x81.uk" {
+        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN_ADMIN");
+        proxy_request(req, &upstream, 5001).await
     } else if host == "0x81.uk" || host == "www.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_INDEX");
         proxy_request(req, &upstream, 4320).await

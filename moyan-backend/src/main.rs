@@ -19,13 +19,13 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{auth, health, settings, sync, vocabulary};
+use crate::routes::{admin, auth, health, settings, sync, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
     let origins = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| {
-            "http://localhost:4323,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5173,http://127.0.0.1:5173"
+            "http://localhost:4323,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5001,http://127.0.0.1:5001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
                 .to_string()
         });
     origins
@@ -54,6 +54,8 @@ mod tests {
         assert!(origins.contains(&"http://localhost:5173".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5173".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5000".to_string()));
+        assert!(origins.contains(&"http://localhost:5001".to_string()));
+        assert!(origins.contains(&"http://127.0.0.1:5001".to_string()));
     }
 }
 
@@ -89,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
         google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default(),
         google_redirect_url: std::env::var("GOOGLE_REDIRECT_URL")
             .unwrap_or_else(|_| "http://localhost:4323/api/auth/google/callback".to_string()),
+        admin_token: std::env::var("ADMIN_TOKEN").unwrap_or_default(),
     };
 
     // CORS configuration
@@ -111,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
             ACCEPT,
             HeaderName::from_static("x-requested-with"),
             HeaderName::from_static("x-client-id"),
+            HeaderName::from_static("x-admin-token"),
         ])
         .allow_credentials(true);
 
@@ -121,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api/sync", sync::routes())
         .nest("/api", vocabulary::routes())
         .nest("/api/health", health::routes())
+        .nest("/api/admin", admin::routes())
         .route("/", get(root_handler))
         .layer(Extension(state.clone()))
         .layer(CompressionLayer::new())
