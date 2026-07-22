@@ -103,7 +103,7 @@ pub struct UpdateCardRequest {
     pub examples: Option<Vec<CardExampleInput>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardExampleInput {
     pub id: Option<String>,
     pub sentence_en: String,

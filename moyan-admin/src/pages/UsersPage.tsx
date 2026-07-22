@@ -15,6 +15,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { serialColumn } from "@/utils/tableColumns";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -91,6 +92,7 @@ export default function UsersPage() {
   };
 
   const columns: ColumnsType<AdminUser> = [
+    serialColumn<AdminUser>({ page, pageSize: PAGE_SIZE }),
     {
       title: "邮箱",
       dataIndex: "email",

@@ -74,6 +74,13 @@ export interface CreateCardInput {
   back: string;
   pronunciation?: string;
   tags?: string[];
+  examples?: CardExampleInput[];
+}
+
+export interface CardExampleInput {
+  id?: string;
+  sentence_en: string;
+  translation_zh: string;
 }
 
 export interface UpdateCardInput {
@@ -81,19 +88,24 @@ export interface UpdateCardInput {
   back?: string;
   pronunciation?: string;
   tags?: string[];
+  examples?: CardExampleInput[];
 }
 
 async function parseEnvelope<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  let body: (ApiEnvelope<T> & { error?: { message?: string } }) | null = null;
+  try {
+    body = text ? (JSON.parse(text) as ApiEnvelope<T> & { error?: { message?: string } }) : null;
+  } catch {
+    body = null;
+  }
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `请求失败 (${res.status})`);
+    throw new Error(body?.error?.message || text || `请求失败 (${res.status})`);
   }
-
-  const body = (await res.json()) as ApiEnvelope<T>;
-  if (!body.success) {
-    throw new Error("请求未成功");
+  if (!body?.success) {
+    throw new Error(body?.error?.message || "请求未成功");
   }
-
   return body.data;
 }
 
@@ -381,4 +393,217 @@ export async function patchUser(
     body: JSON.stringify(input),
   });
   return parseEnvelope<AdminUser>(res);
+}
+
+export interface LlmSettings {
+  base_url: string;
+  model: string;
+  temperature: number;
+  api_key_set: boolean;
+  api_key_masked: string | null;
+}
+
+export interface UpdateLlmSettingsInput {
+  base_url?: string;
+  api_key?: string;
+  model?: string;
+  temperature?: number;
+  clear_api_key?: boolean;
+}
+
+export interface YoutubeCaptionsResult {
+  video_id: string;
+  title: string;
+  duration_sec: number | null;
+  language: string;
+  caption_text: string;
+  source_url: string;
+}
+
+export interface DraftCard {
+  front: string;
+  back: string;
+  pronunciation?: string | null;
+  tags?: string[];
+  examples?: CardExampleInput[];
+}
+
+export interface YoutubeExtractResult {
+  draft_cards: DraftCard[];
+  truncated: boolean;
+}
+
+export type CollectImportTarget =
+  | {
+      mode: "create";
+      name: string;
+      description?: string;
+      source_key?: string;
+    }
+  | { mode: "merge"; deck_id: string };
+
+export interface YoutubeImportResult {
+  deck_id: string;
+  created_cards: number;
+  skipped_cards: number;
+}
+
+export type CollectJobStatus =
+  | "queued"
+  | "fetching_captions"
+  | "extracting"
+  | "ready"
+  | "failed"
+  | "paused";
+
+export interface CollectJobListItem {
+  id: string;
+  url: string;
+  proxy?: string | null;
+  status: CollectJobStatus | string;
+  step: string;
+  error?: string | null;
+  video_id?: string | null;
+  title?: string | null;
+  language?: string | null;
+  source_url?: string | null;
+  draft_card_count: number;
+  truncated: boolean;
+  cancel_requested: boolean;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  llm_started_at?: string | null;
+  llm_chunk_done?: number;
+  llm_chunk_total?: number;
+}
+
+export interface CollectJob extends CollectJobListItem {
+  caption_text?: string | null;
+  draft_cards: DraftCard[];
+}
+
+export interface CollectJobListResult {
+  items: CollectJobListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function getLlmSettings(): Promise<LlmSettings> {
+  const res = await adminFetch("/api/admin/settings/llm");
+  return parseEnvelope<LlmSettings>(res);
+}
+
+export async function updateLlmSettings(
+  input: UpdateLlmSettingsInput,
+): Promise<LlmSettings> {
+  const res = await adminFetch("/api/admin/settings/llm", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<LlmSettings>(res);
+}
+
+export async function collectYoutubeCaptions(
+  url: string,
+  proxy?: string,
+): Promise<YoutubeCaptionsResult> {
+  const res = await adminFetch("/api/admin/collect/youtube/captions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url,
+      proxy: proxy?.trim() ? proxy.trim() : undefined,
+    }),
+  });
+  return parseEnvelope<YoutubeCaptionsResult>(res);
+}
+
+export async function collectYoutubeExtract(input: {
+  video_id: string;
+  title: string;
+  caption_text: string;
+  proxy?: string;
+}): Promise<YoutubeExtractResult> {
+  const res = await adminFetch("/api/admin/collect/youtube/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...input,
+      proxy: input.proxy?.trim() ? input.proxy.trim() : undefined,
+    }),
+  });
+  return parseEnvelope<YoutubeExtractResult>(res);
+}
+
+export async function collectYoutubeImport(input: {
+  target: CollectImportTarget;
+  cards: DraftCard[];
+}): Promise<YoutubeImportResult> {
+  const res = await adminFetch("/api/admin/collect/youtube/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<YoutubeImportResult>(res);
+}
+
+export async function listCollectJobs(params?: {
+  q?: string;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<CollectJobListResult> {
+  const qs = new URLSearchParams();
+  if (params?.q) qs.set("q", params.q);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs${suffix}`);
+  return parseEnvelope<CollectJobListResult>(res);
+}
+
+export async function createCollectJob(input: {
+  url: string;
+  proxy?: string;
+}): Promise<CollectJob> {
+  const res = await adminFetch("/api/admin/collect/youtube/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: input.url,
+      proxy: input.proxy?.trim() ? input.proxy.trim() : undefined,
+    }),
+  });
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function getCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}`);
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function deleteCollectJob(id: string): Promise<void> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}`, {
+    method: "DELETE",
+  });
+  await parseEnvelope<{ deleted: boolean }>(res);
+}
+
+export async function pauseCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}/pause`, {
+    method: "POST",
+  });
+  return parseEnvelope<CollectJob>(res);
+}
+
+export async function copyCollectJob(id: string): Promise<CollectJob> {
+  const res = await adminFetch(`/api/admin/collect/youtube/jobs/${id}/copy`, {
+    method: "POST",
+  });
+  return parseEnvelope<CollectJob>(res);
 }

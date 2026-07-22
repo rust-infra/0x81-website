@@ -167,6 +167,93 @@ pub async fn import_vocabulary(
     Ok(success(result))
 }
 
+pub async fn get_llm_settings(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.admin_collect.get_llm_settings().await?;
+    Ok(success(settings))
+}
+
+pub async fn update_llm_settings(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::UpdateLlmSettingsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.admin_collect.update_llm_settings(req).await?;
+    Ok(success(settings))
+}
+
+pub async fn collect_youtube_captions(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeCaptionsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.fetch_captions(req).await?;
+    Ok(success(data))
+}
+
+pub async fn collect_youtube_extract(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeExtractRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.extract_cards(req).await?;
+    Ok(success(data))
+}
+
+pub async fn collect_youtube_import(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeImportRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.import_cards(req).await?;
+    Ok(success(data))
+}
+
+pub async fn create_collect_job(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::CreateCollectJobRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.create_job(req).await?;
+    Ok(success(data))
+}
+
+pub async fn list_collect_jobs(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<crate::models::CollectJobListQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.list_jobs(query).await?;
+    Ok(success(data))
+}
+
+pub async fn get_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.get_job(&id).await?;
+    Ok(success(data))
+}
+
+pub async fn delete_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    state.services.admin_collect.delete_job(&id).await?;
+    Ok(success(serde_json::json!({ "deleted": true })))
+}
+
+pub async fn pause_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.pause_job(&id).await?;
+    Ok(success(data))
+}
+
+pub async fn copy_collect_job(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.copy_job(&id).await?;
+    Ok(success(data))
+}
+
 fn spreadsheet_attachment(bytes: Vec<u8>, filename: &str) -> Response {
     Response::builder()
         .status(StatusCode::OK)

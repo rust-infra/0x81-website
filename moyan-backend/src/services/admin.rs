@@ -406,6 +406,10 @@ impl AdminService {
         Ok((decks, cards))
     }
 
+    pub async fn require_system_deck_id(&self, deck_id: &str) -> Result<Deck, AppError> {
+        self.require_system_deck(deck_id).await
+    }
+
     async fn require_system_deck(&self, deck_id: &str) -> Result<Deck, AppError> {
         let deck = self
             .repository

@@ -26,6 +26,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { serialColumn } from "@/utils/tableColumns";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -155,6 +156,7 @@ export default function DecksPage() {
   };
 
   const columns: ColumnsType<Deck> = [
+    serialColumn<Deck>({ page, pageSize: PAGE_SIZE }),
     {
       title: "名称",
       dataIndex: "name",

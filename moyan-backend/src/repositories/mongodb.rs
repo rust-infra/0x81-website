@@ -14,8 +14,8 @@ use async_trait::async_trait;
 
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
-    CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData, ImportMode,
-    ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
+    ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
     UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
     UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
@@ -1223,6 +1223,81 @@ impl VocabularyRepository for MongoRepositories {
         }
 
         Ok(result)
+    }
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        let doc = self
+            .database
+            .collection::<SettingDoc>("admin_settings")
+            .find_one(doc! { "key": key })
+            .await?;
+        Ok(doc.map(|d| d.value))
+    }
+
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        self.database
+            .collection::<SettingDoc>("admin_settings")
+            .replace_one(
+                doc! { "key": key },
+                SettingDoc {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                    updated_at: Utc::now(),
+                },
+            )
+            .upsert(true)
+            .await?;
+        Ok(())
+    }
+
+    async fn collect_job_insert(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_update(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_get(&self, _id: &str) -> Result<Option<CollectJob>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_delete(&self, _id: &str) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_list(
+        &self,
+        _q: Option<&str>,
+        _status: Option<&str>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
     }
 }
 

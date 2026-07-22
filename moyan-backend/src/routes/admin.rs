@@ -36,5 +36,37 @@ pub fn routes() -> Router<AppState> {
             "/users/{user_id}",
             get(admin::get_user).patch(admin::patch_user),
         )
+        .route(
+            "/settings/llm",
+            get(admin::get_llm_settings).put(admin::update_llm_settings),
+        )
+        .route(
+            "/collect/youtube/captions",
+            axum::routing::post(admin::collect_youtube_captions),
+        )
+        .route(
+            "/collect/youtube/extract",
+            axum::routing::post(admin::collect_youtube_extract),
+        )
+        .route(
+            "/collect/youtube/import",
+            axum::routing::post(admin::collect_youtube_import),
+        )
+        .route(
+            "/collect/youtube/jobs",
+            get(admin::list_collect_jobs).post(admin::create_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}",
+            get(admin::get_collect_job).delete(admin::delete_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}/pause",
+            axum::routing::post(admin::pause_collect_job),
+        )
+        .route(
+            "/collect/youtube/jobs/{id}/copy",
+            axum::routing::post(admin::copy_collect_job),
+        )
         .layer(middleware::from_fn(admin_token_middleware))
 }

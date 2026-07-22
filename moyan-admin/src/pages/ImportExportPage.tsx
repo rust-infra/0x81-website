@@ -26,11 +26,13 @@ import {
   Upload,
   message,
 } from "antd";
+import { serialColumn } from "@/utils/tableColumns";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useState } from "react";
 
 const errorColumns: ColumnsType<ImportErrorItem> = [
+  serialColumn(),
   { title: "工作表", dataIndex: "sheet", key: "sheet", width: 120 },
   { title: "行", dataIndex: "row", key: "row", width: 70 },
   { title: "字段", dataIndex: "field", key: "field", width: 120 },

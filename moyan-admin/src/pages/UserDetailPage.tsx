@@ -10,6 +10,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { serialColumn } from "@/utils/tableColumns";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useState } from "react";
@@ -46,6 +47,7 @@ export default function UserDetailPage() {
   }, [loadDetail]);
 
   const deckColumns: ColumnsType<AdminUserDetail["deck_summaries"][number]> = [
+    serialColumn(),
     { title: "卡组名称", dataIndex: "name", key: "name" },
     {
       title: "卡片数",

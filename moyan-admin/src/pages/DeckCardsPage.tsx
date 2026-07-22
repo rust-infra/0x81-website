@@ -4,6 +4,7 @@ import {
   listCards,
   updateCard,
   type Card,
+  type CardExampleInput,
 } from "@/api/admin";
 import {
   ArrowLeftOutlined,
@@ -24,6 +25,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { serialColumn } from "@/utils/tableColumns";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -33,9 +35,25 @@ interface CardFormValues {
   back: string;
   pronunciation?: string;
   tags?: string[];
+  examples?: CardExampleInput[];
 }
 
 const PAGE_SIZE = 20;
+
+function formatExamples(examples: Card["examples"] | undefined): string {
+  if (!examples?.length) {
+    return "—";
+  }
+  return examples
+    .map((ex) => {
+      const en = ex.sentence_en?.trim() ?? "";
+      const zh = ex.translation_zh?.trim() ?? "";
+      if (en && zh) return `${en} / ${zh}`;
+      return en || zh;
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
 
 export default function DeckCardsPage() {
   const { deckId } = useParams<{ deckId: string }>();
@@ -96,6 +114,7 @@ export default function DeckCardsPage() {
       back: "",
       pronunciation: "",
       tags: [],
+      examples: [{ sentence_en: "", translation_zh: "" }],
     });
     setModalOpen(true);
   };
@@ -107,6 +126,13 @@ export default function DeckCardsPage() {
       back: card.back,
       pronunciation: card.pronunciation ?? "",
       tags: card.tags,
+      examples: card.examples?.length
+        ? card.examples.map((ex) => ({
+            id: ex.id,
+            sentence_en: ex.sentence_en,
+            translation_zh: ex.translation_zh,
+          }))
+        : [{ sentence_en: "", translation_zh: "" }],
     });
     setModalOpen(true);
   };
@@ -120,11 +146,20 @@ export default function DeckCardsPage() {
       const values = await form.validateFields();
       setSubmitting(true);
 
+      const examples = (values.examples ?? [])
+        .map((ex) => ({
+          id: ex.id,
+          sentence_en: ex.sentence_en?.trim() ?? "",
+          translation_zh: ex.translation_zh?.trim() ?? "",
+        }))
+        .filter((ex) => ex.sentence_en || ex.translation_zh);
+
       const payload = {
         front: values.front,
         back: values.back,
         pronunciation: values.pronunciation || undefined,
         tags: values.tags,
+        examples,
       };
 
       if (editingCard) {
@@ -157,15 +192,19 @@ export default function DeckCardsPage() {
   };
 
   const columns: ColumnsType<Card> = [
+    serialColumn<Card>({ page, pageSize: PAGE_SIZE }),
     {
       title: "正面",
       dataIndex: "front",
       key: "front",
+      width: 160,
     },
     {
       title: "背面",
       dataIndex: "back",
       key: "back",
+      width: 180,
+      ellipsis: true,
     },
     {
       title: "发音",
@@ -175,9 +214,16 @@ export default function DeckCardsPage() {
       render: (value: string | null) => value ?? "—",
     },
     {
+      title: "例句",
+      key: "examples",
+      ellipsis: true,
+      render: (_: unknown, record) => formatExamples(record.examples),
+    },
+    {
       title: "标签",
       dataIndex: "tags",
       key: "tags",
+      width: 160,
       render: (tags: string[]) =>
         tags.length > 0 ? (
           <Space size={[0, 4]} wrap>
@@ -281,6 +327,7 @@ export default function DeckCardsPage() {
         onOk={() => void handleSubmit()}
         confirmLoading={submitting}
         destroyOnHidden
+        width={640}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
@@ -298,11 +345,60 @@ export default function DeckCardsPage() {
             <Input.TextArea rows={3} />
           </Form.Item>
           <Form.Item name="pronunciation" label="发音">
-            <Input />
+            <Input placeholder="/ˈæp.əl/" />
           </Form.Item>
           <Form.Item name="tags" label="标签">
             <Select mode="tags" placeholder="输入后回车添加标签" />
           </Form.Item>
+          <Form.List name="examples">
+            {(fields, { add, remove }) => (
+              <div>
+                <Space
+                  style={{
+                    width: "100%",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Typography.Text>例句</Typography.Text>
+                  <Button type="dashed" size="small" onClick={() => add()}>
+                    添加例句
+                  </Button>
+                </Space>
+                {fields.map((field) => (
+                  <Space
+                    key={field.key}
+                    align="start"
+                    style={{ display: "flex", marginBottom: 8 }}
+                  >
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "sentence_en"]}
+                      style={{ marginBottom: 0, width: 240 }}
+                    >
+                      <Input placeholder="英文例句" />
+                    </Form.Item>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "translation_zh"]}
+                      style={{ marginBottom: 0, width: 240 }}
+                    >
+                      <Input placeholder="中文翻译" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, "id"]} hidden>
+                      <Input />
+                    </Form.Item>
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => remove(field.name)}
+                    />
+                  </Space>
+                ))}
+              </div>
+            )}
+          </Form.List>
         </Form>
       </Modal>
     </div>

@@ -13,10 +13,10 @@ use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 use crate::models::{
-    Card, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest,
-    AdminVocabularyImportCard, AdminVocabularyImportDeck, Deck, ImportMode, ImportResult,
-    ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest,
-    UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
+    CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
+    ImportResult, ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest,
+    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -220,6 +220,21 @@ pub trait VocabularyRepository: Send + Sync {
         decks: &[AdminVocabularyImportDeck],
         cards: &[AdminVocabularyImportCard],
     ) -> Result<ImportResult, RepositoryError>;
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError>;
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError>;
+
+    async fn collect_job_insert(&self, job: &CollectJob) -> Result<(), RepositoryError>;
+    async fn collect_job_update(&self, job: &CollectJob) -> Result<(), RepositoryError>;
+    async fn collect_job_get(&self, id: &str) -> Result<Option<CollectJob>, RepositoryError>;
+    async fn collect_job_delete(&self, id: &str) -> Result<bool, RepositoryError>;
+    async fn collect_job_list(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<CollectJob>, i64), RepositoryError>;
 }
 
 #[async_trait]
