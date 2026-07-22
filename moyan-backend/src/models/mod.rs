@@ -1,9 +1,13 @@
 //! Application entities and HTTP request/response data transfer objects.
 
+mod admin;
+mod admin_collect;
 mod learning;
 mod user;
 mod vocabulary;
 
+pub use admin::*;
+pub use admin_collect::*;
 pub use learning::*;
 pub use user::*;
 pub use vocabulary::*;

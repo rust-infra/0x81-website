@@ -30,6 +30,8 @@ services:
       - GOOGLE_CLIENT_ID=${MOYAN_GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
+      - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
+      - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
     volumes:
       - ./moyan-backend/data:/data
@@ -49,6 +51,14 @@ services:
       - moyan-backend
     restart: unless-stopped
 
+  moyan-admin:
+    build: ./moyan-admin
+    ports:
+      - "5001:5001"
+    depends_on:
+      - moyan-backend
+    restart: unless-stopped
+
   website-rs:
     build: ./website-rs
     ports:
@@ -60,6 +70,7 @@ services:
       - PROXY_UPSTREAM_HOST_INDEX=0xindex
       - PROXY_UPSTREAM_HOST_CRAB=crab-web
       - PROXY_UPSTREAM_HOST_MOYAN=moyan-web
+      - PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
@@ -69,6 +80,7 @@ services:
       - 0xindex
       - crab-web
       - moyan-web
+      - moyan-admin
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

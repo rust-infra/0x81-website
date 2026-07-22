@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use mongodb::{
     Client, Collection, Database, IndexModel,
-    bson::doc,
+    bson::{Document, doc},
     options::{IndexOptions, ReturnDocument},
 };
 use serde::{Deserialize, Serialize};
@@ -13,10 +13,11 @@ use uuid::Uuid;
 use async_trait::async_trait;
 
 use crate::models::{
-    Card, CardData, CardExample, CardProgress, CreateCardRequest, CreateDeckRequest,
-    CreateReviewLogRequest, Deck, DeckData, ReviewLog, ReviewLogData, StudyCard, SyncData,
-    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
+    CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
+    ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -337,6 +338,99 @@ impl UserRepository for MongoRepositories {
 
     async fn find_by_id(&self, user_id: &str) -> Result<Option<User>, RepositoryError> {
         Ok(self.users().find_one(doc! { "id": user_id }).await?)
+    }
+
+    async fn admin_list_users(
+        &self,
+        q: Option<&str>,
+        status: Option<&str>,
+        role: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<User>, i64), RepositoryError> {
+        let mut filter = Document::new();
+        if let Some(q) = q {
+            filter.insert(
+                "$or",
+                vec![
+                    doc! { "email": { "$regex": q, "$options": "i" } },
+                    doc! { "name": { "$regex": q, "$options": "i" } },
+                    doc! { "id": { "$regex": q, "$options": "i" } },
+                ],
+            );
+        }
+        if let Some(status) = status {
+            filter.insert("status", status);
+        }
+        if let Some(role) = role {
+            filter.insert("role", role);
+        }
+
+        let total = to_i64(
+            self.users().count_documents(filter.clone()).await?,
+            "admin users total",
+        )?;
+        let users = self
+            .users()
+            .find(filter)
+            .sort(doc! { "created_at": -1, "id": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok((users, total))
+    }
+
+    async fn admin_update_user(
+        &self,
+        user_id: &str,
+        status: Option<&str>,
+        role: Option<&str>,
+    ) -> Result<Option<User>, RepositoryError> {
+        let Some(existing) = self.find_by_id(user_id).await? else {
+            return Ok(None);
+        };
+        let status = status.unwrap_or(&existing.status);
+        let role = role.unwrap_or(&existing.role);
+
+        self.users()
+            .update_one(
+                doc! { "id": user_id },
+                doc! {
+                    "$set": {
+                        "status": status,
+                        "role": role,
+                        "updated_at": Utc::now(),
+                    }
+                },
+            )
+            .await?;
+        self.find_by_id(user_id).await
+    }
+
+    async fn admin_user_deck_summaries(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<(Deck, i64)>, RepositoryError> {
+        let documents = self
+            .vocab_decks()
+            .find(doc! { "owner_user_id": user_id })
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut summaries = Vec::with_capacity(documents.len());
+        for document in documents {
+            let deck = self.deck_from_document(document).await?;
+            let card_count = deck.card_count;
+            summaries.push((deck, card_count));
+        }
+        Ok(summaries)
+    }
+
+    async fn admin_recent_sync_count(&self, _user_id: &str) -> Result<i64, RepositoryError> {
+        Ok(0)
     }
 }
 
@@ -889,6 +983,352 @@ impl VocabularyRepository for MongoRepositories {
             .await?;
         Ok(())
     }
+
+    async fn admin_list_system_decks(
+        &self,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Deck>, i64), RepositoryError> {
+        let filter = admin_deck_filter(q);
+        let total = to_i64(
+            self.vocab_decks().count_documents(filter.clone()).await?,
+            "admin system decks total",
+        )?;
+        let documents = self
+            .vocab_decks()
+            .find(filter)
+            .sort(doc! { "sort_order": 1, "name": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let mut decks = Vec::with_capacity(documents.len());
+        for document in documents {
+            decks.push(self.deck_from_document(document).await?);
+        }
+        Ok((decks, total))
+    }
+
+    async fn admin_list_cards(
+        &self,
+        deck_id: &str,
+        q: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<Card>, i64), RepositoryError> {
+        let mut filter = doc! { "deck_id": deck_id };
+        if let Some(q) = q {
+            filter.insert(
+                "$or",
+                vec![
+                    doc! { "front": { "$regex": q, "$options": "i" } },
+                    doc! { "back": { "$regex": q, "$options": "i" } },
+                    doc! { "tags": { "$regex": q, "$options": "i" } },
+                ],
+            );
+        }
+
+        let total = to_i64(
+            self.vocab_cards().count_documents(filter.clone()).await?,
+            "admin cards total",
+        )?;
+        let cards = self
+            .vocab_cards()
+            .find(filter)
+            .sort(doc! { "created_at": 1, "id": 1 })
+            .skip(offset.max(0) as u64)
+            .limit(limit)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok((cards, total))
+    }
+
+    async fn admin_find_system_deck_by_source_key(
+        &self,
+        source_key: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        let Some(document) = self
+            .vocab_decks()
+            .find_one(doc! { "owner_user_id": SYSTEM_OWNER_ID, "source_key": source_key })
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.deck_from_document(document).await?))
+    }
+
+    async fn admin_find_system_deck_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<Deck>, RepositoryError> {
+        let Some(document) = self
+            .vocab_decks()
+            .find_one(doc! { "owner_user_id": SYSTEM_OWNER_ID, "name": name })
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.deck_from_document(document).await?))
+    }
+
+    async fn admin_upsert_system_deck(&self, deck: &Deck) -> Result<Deck, RepositoryError> {
+        self.vocab_decks()
+            .replace_one(doc! { "id": &deck.id }, VocabDeckDocument::from(deck))
+            .upsert(true)
+            .await?;
+        self.get_deck(&deck.id)
+            .await?
+            .ok_or_else(|| RepositoryError::Persistence("upserted deck missing".to_string()))
+    }
+
+    async fn admin_delete_cards_in_deck(&self, deck_id: &str) -> Result<u64, RepositoryError> {
+        let result = self
+            .vocab_cards()
+            .delete_many(doc! { "deck_id": deck_id })
+            .await?;
+        Ok(result.deleted_count)
+    }
+
+    async fn admin_delete_system_deck(&self, deck_id: &str) -> Result<bool, RepositoryError> {
+        let result = self
+            .vocab_decks()
+            .delete_one(doc! { "id": deck_id, "owner_user_id": SYSTEM_OWNER_ID })
+            .await?;
+        Ok(result.deleted_count > 0)
+    }
+
+    async fn admin_find_card_by_front(
+        &self,
+        deck_id: &str,
+        front: &str,
+    ) -> Result<Option<Card>, RepositoryError> {
+        Ok(self
+            .vocab_cards()
+            .find_one(doc! { "deck_id": deck_id, "front": front })
+            .await?)
+    }
+
+    /// MongoDB import apply is best-effort sequential (no multi-document transaction in phase 1).
+    async fn admin_apply_vocabulary_import(
+        &self,
+        mode: ImportMode,
+        decks: &[AdminVocabularyImportDeck],
+        cards: &[AdminVocabularyImportCard],
+    ) -> Result<ImportResult, RepositoryError> {
+        let mut result = ImportResult {
+            created_decks: 0,
+            updated_decks: 0,
+            created_cards: 0,
+            updated_cards: 0,
+        };
+
+        let mut deck_id_by_name = std::collections::HashMap::new();
+        for row in decks {
+            let existing = if let Some(source_key) = row.source_key.as_deref() {
+                self.admin_find_system_deck_by_source_key(source_key).await?
+            } else {
+                self.admin_find_system_deck_by_name(&row.name).await?
+            };
+
+            let now = chrono::Utc::now();
+            let (deck, created) = if let Some(mut deck) = existing {
+                deck.name = row.name.clone();
+                deck.description = row.description.clone();
+                deck.color = row.color.clone();
+                if row.source_key.is_some() {
+                    deck.source_key = row.source_key.clone();
+                } else if deck.source_key.is_none() {
+                    deck.source_key = Some(mongo_import_slugify(&row.name));
+                }
+                deck.version += 1;
+                deck.updated_at = now;
+                (deck, false)
+            } else {
+                let source_key = row
+                    .source_key
+                    .clone()
+                    .or_else(|| Some(mongo_import_slugify(&row.name)));
+                (
+                    Deck {
+                        id: format!("deck_{}", uuid::Uuid::new_v4().simple()),
+                        owner_user_id: SYSTEM_OWNER_ID.to_string(),
+                        source_key,
+                        name: row.name.clone(),
+                        description: row.description.clone(),
+                        color: row.color.clone(),
+                        version: 1,
+                        sort_order: 0,
+                        is_active: true,
+                        card_count: 0,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                    true,
+                )
+            };
+
+            let saved = self.admin_upsert_system_deck(&deck).await?;
+            deck_id_by_name.insert(saved.name.clone(), saved.id.clone());
+            if created {
+                result.created_decks += 1;
+            } else {
+                result.updated_decks += 1;
+            }
+        }
+
+        if mode == ImportMode::ReplaceDeck {
+            for deck_id in deck_id_by_name.values() {
+                self.admin_delete_cards_in_deck(deck_id).await?;
+            }
+        }
+
+        for card in cards {
+            let deck_id = deck_id_by_name.get(&card.deck_name).ok_or_else(|| {
+                RepositoryError::Persistence("validated deck_name missing during import".into())
+            })?;
+
+            if mode == ImportMode::Merge {
+                if let Some(existing) = self.admin_find_card_by_front(deck_id, &card.front).await? {
+                    let update = UpdateCardRequest {
+                        front: None,
+                        back: Some(card.back.clone()),
+                        pronunciation: card.pronunciation.clone(),
+                        tags: Some(card.tags.clone()),
+                        examples: None,
+                    };
+                    self.update_card(&existing.id, &update, Some(card.examples.clone()))
+                        .await?
+                        .ok_or_else(|| {
+                            RepositoryError::Persistence("updated card missing during import".into())
+                        })?;
+                    result.updated_cards += 1;
+                    continue;
+                }
+            }
+
+            let create = CreateCardRequest {
+                front: card.front.clone(),
+                back: card.back.clone(),
+                pronunciation: card.pronunciation.clone(),
+                tags: Some(card.tags.clone()),
+                examples: None,
+            };
+            self.create_card(deck_id, &create, card.examples.clone())
+                .await?;
+            result.created_cards += 1;
+        }
+
+        Ok(result)
+    }
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        let doc = self
+            .database
+            .collection::<SettingDoc>("admin_settings")
+            .find_one(doc! { "key": key })
+            .await?;
+        Ok(doc.map(|d| d.value))
+    }
+
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        self.database
+            .collection::<SettingDoc>("admin_settings")
+            .replace_one(
+                doc! { "key": key },
+                SettingDoc {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                    updated_at: Utc::now(),
+                },
+            )
+            .upsert(true)
+            .await?;
+        Ok(())
+    }
+
+    async fn collect_job_insert(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_update(&self, _job: &CollectJob) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_get(&self, _id: &str) -> Result<Option<CollectJob>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_delete(&self, _id: &str) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+
+    async fn collect_job_list(
+        &self,
+        _q: Option<&str>,
+        _status: Option<&str>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+}
+
+fn mongo_import_slugify(name: &str) -> String {
+    let mut slug = String::new();
+    let mut last_hyphen = false;
+    for ch in name.trim().to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_hyphen = false;
+        } else if !last_hyphen && !slug.is_empty() {
+            slug.push('-');
+            last_hyphen = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
+}
+
+fn admin_deck_filter(q: Option<&str>) -> Document {
+    let mut filter = doc! { "owner_user_id": SYSTEM_OWNER_ID };
+    if let Some(q) = q {
+        filter.insert(
+            "$or",
+            vec![
+                doc! { "name": { "$regex": q, "$options": "i" } },
+                doc! { "description": { "$regex": q, "$options": "i" } },
+                doc! { "source_key": { "$regex": q, "$options": "i" } },
+            ],
+        );
+    }
+    filter
 }
 
 fn to_i64(value: u64, field: &'static str) -> Result<i64, RepositoryError> {
