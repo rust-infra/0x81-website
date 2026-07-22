@@ -1,0 +1,50 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.service.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: website
+            context: ./website
+          - name: 0xindex
+            context: ./0xindex
+          - name: crab-web
+            context: ./crab-web
+          - name: moyan-web
+            context: ./moyan-web
+          - name: moyan-admin
+            context: ./moyan-admin
+          - name: moyan-backend
+            context: ./moyan-backend
+          - name: website-rs
+            context: ./website-rs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: false
+          load: false
+          build-args: |
+            NODE_IMAGE=node:20-alpine
+            CADDY_IMAGE=caddy:2-alpine
+            RUST_IMAGE=rust:latest
+            DEBIAN_IMAGE=debian:bookworm-slim
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
