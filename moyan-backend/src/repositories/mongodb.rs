@@ -1224,6 +1224,45 @@ impl VocabularyRepository for MongoRepositories {
 
         Ok(result)
     }
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        let doc = self
+            .database
+            .collection::<SettingDoc>("admin_settings")
+            .find_one(doc! { "key": key })
+            .await?;
+        Ok(doc.map(|d| d.value))
+    }
+
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct SettingDoc {
+            key: String,
+            value: String,
+            updated_at: DateTime<Utc>,
+        }
+
+        self.database
+            .collection::<SettingDoc>("admin_settings")
+            .replace_one(
+                doc! { "key": key },
+                SettingDoc {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                    updated_at: Utc::now(),
+                },
+            )
+            .upsert(true)
+            .await?;
+        Ok(())
+    }
 }
 
 fn mongo_import_slugify(name: &str) -> String {

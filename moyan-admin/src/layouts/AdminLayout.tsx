@@ -1,8 +1,10 @@
 import { useAdminAuth } from "@/auth/AdminAuthContext";
 import {
   BookOutlined,
+  CloudDownloadOutlined,
   ImportOutlined,
   LockOutlined,
+  SettingOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Button, Layout, Menu, Typography } from "antd";
@@ -22,6 +24,16 @@ const menuItems = [
     label: "导入导出",
   },
   {
+    key: "/collect",
+    icon: <CloudDownloadOutlined />,
+    label: "数据采集",
+  },
+  {
+    key: "/settings",
+    icon: <SettingOutlined />,
+    label: "设置",
+  },
+  {
     key: "/users",
     icon: <UserOutlined />,
     label: "用户管理",
@@ -34,6 +46,12 @@ function selectedMenuKey(pathname: string): string {
   }
   if (pathname.startsWith("/import")) {
     return "/import";
+  }
+  if (pathname.startsWith("/collect")) {
+    return "/collect";
+  }
+  if (pathname.startsWith("/settings")) {
+    return "/settings";
   }
   if (pathname.startsWith("/users")) {
     return "/users";

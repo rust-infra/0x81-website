@@ -1363,6 +1363,29 @@ impl VocabularyRepository for SqliteRepositories {
         tx.commit().await?;
         Ok(result)
     }
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError> {
+        let value: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM admin_settings WHERE key = ?")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(value.map(|(v,)| v))
+    }
+
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO admin_settings (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        )
+        .bind(key)
+        .bind(value)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

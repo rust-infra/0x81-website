@@ -16,6 +16,7 @@
   3. 确认导入（默认新建系统卡组，可改选已有）
 - LLM 参数在 Admin **设置页**配置并**存库**：`base_url`、`api_key`、`model`（及可选 `temperature`）
 - 字幕来源：`yt-dlp`（Docker 运行时安装）；无字幕返回友好错误
+- 采集页可选 **网络代理**（如 `http://127.0.0.1:7890`），随 captions/extract 请求传给后端；亦回退进程环境变量 `http(s)_proxy`
 - 鉴权：现有 `X-Admin-Token`
 
 ### 明确不做（v1）

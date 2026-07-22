@@ -37,6 +37,9 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g; s/security.debian.org/mirrors
     ca-certificates \
     libsqlite3-0 \
     wget \
+    python3 \
+    python3-pip \
+    && pip3 install --break-system-packages --no-cache-dir yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder

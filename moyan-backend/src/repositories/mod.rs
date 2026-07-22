@@ -220,6 +220,9 @@ pub trait VocabularyRepository: Send + Sync {
         decks: &[AdminVocabularyImportDeck],
         cards: &[AdminVocabularyImportCard],
     ) -> Result<ImportResult, RepositoryError>;
+
+    async fn admin_get_setting(&self, key: &str) -> Result<Option<String>, RepositoryError>;
+    async fn admin_put_setting(&self, key: &str, value: &str) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]

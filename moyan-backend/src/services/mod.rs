@@ -1,19 +1,23 @@
 //! Business services that coordinate controllers and repositories.
 
 mod admin;
+mod admin_collect;
 mod admin_excel;
 mod auth;
 mod health;
+mod llm_client;
 mod settings;
 mod sync;
 mod system_decks;
 mod vocabulary;
+mod youtube_captions;
 
 use std::sync::Arc;
 
 use crate::repositories::Repository;
 
 pub use admin::AdminService;
+pub use admin_collect::AdminCollectService;
 pub use auth::AuthService;
 pub use health::HealthService;
 pub use settings::SettingsService;
@@ -30,10 +34,13 @@ pub struct Services {
     pub vocabulary: VocabularyService,
     pub system_decks: SystemDecksService,
     pub admin: AdminService,
+    pub admin_collect: AdminCollectService,
 }
 
 impl Services {
     pub fn new(repository: Arc<dyn Repository>) -> Self {
+        let admin = AdminService::new(Arc::clone(&repository));
+        let admin_collect = AdminCollectService::new(Arc::clone(&repository), admin.clone());
         Self {
             auth: AuthService::new(Arc::clone(&repository)),
             health: HealthService::new(Arc::clone(&repository)),
@@ -41,7 +48,8 @@ impl Services {
             sync: SyncService::new(Arc::clone(&repository)),
             vocabulary: VocabularyService::new(Arc::clone(&repository)),
             system_decks: SystemDecksService::new(Arc::clone(&repository)),
-            admin: AdminService::new(repository),
+            admin,
+            admin_collect,
         }
     }
 }

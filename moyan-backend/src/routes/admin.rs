@@ -36,5 +36,21 @@ pub fn routes() -> Router<AppState> {
             "/users/{user_id}",
             get(admin::get_user).patch(admin::patch_user),
         )
+        .route(
+            "/settings/llm",
+            get(admin::get_llm_settings).put(admin::update_llm_settings),
+        )
+        .route(
+            "/collect/youtube/captions",
+            axum::routing::post(admin::collect_youtube_captions),
+        )
+        .route(
+            "/collect/youtube/extract",
+            axum::routing::post(admin::collect_youtube_extract),
+        )
+        .route(
+            "/collect/youtube/import",
+            axum::routing::post(admin::collect_youtube_import),
+        )
         .layer(middleware::from_fn(admin_token_middleware))
 }

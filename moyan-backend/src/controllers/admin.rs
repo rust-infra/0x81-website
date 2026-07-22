@@ -167,6 +167,45 @@ pub async fn import_vocabulary(
     Ok(success(result))
 }
 
+pub async fn get_llm_settings(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.admin_collect.get_llm_settings().await?;
+    Ok(success(settings))
+}
+
+pub async fn update_llm_settings(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::UpdateLlmSettingsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.admin_collect.update_llm_settings(req).await?;
+    Ok(success(settings))
+}
+
+pub async fn collect_youtube_captions(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeCaptionsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.fetch_captions(req).await?;
+    Ok(success(data))
+}
+
+pub async fn collect_youtube_extract(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeExtractRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.extract_cards(req).await?;
+    Ok(success(data))
+}
+
+pub async fn collect_youtube_import(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::YoutubeImportRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let data = state.services.admin_collect.import_cards(req).await?;
+    Ok(success(data))
+}
+
 fn spreadsheet_attachment(bytes: Vec<u8>, filename: &str) -> Response {
     Response::builder()
         .status(StatusCode::OK)
