@@ -7,6 +7,9 @@ import type {
   ReviewLog,
   StudyCard,
   StudyQueue,
+  TypeStats,
+  TypeSyncRequest,
+  TypeSyncResponse,
   UpdateCardRequest,
   UpdateDeckRequest,
   UpsertCardProgressRequest,
@@ -150,4 +153,17 @@ export async function createReviewLog(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export async function syncTypePractice(
+  body: TypeSyncRequest
+): Promise<TypeSyncResponse> {
+  return apiRequest<TypeSyncResponse>("/api/type/sync", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getTypeStats(): Promise<TypeStats> {
+  return apiRequest<TypeStats>("/api/type/stats");
 }

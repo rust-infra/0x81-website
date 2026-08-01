@@ -118,3 +118,65 @@ export interface CreateReviewLogRequest {
   time_ms?: number;
   reviewed_at?: string;
 }
+
+export type TypeMode = "word" | "sentence";
+
+export interface TypeEntry {
+  id: string;
+  card_id: string;
+  deck_id: string;
+  mode: TypeMode;
+  correct_chars: number;
+  wrong_chars: number;
+  accuracy: number;
+  wpm: number;
+  duration_ms: number;
+  egregious: boolean;
+  created_at: string;
+}
+
+export interface TypeSession {
+  id: string;
+  deck_id: string | null;
+  deck_name: string | null;
+  mode: TypeMode;
+  total_cards: number;
+  completed: number;
+  skipped: number;
+  egregious_count: number;
+  avg_accuracy: number;
+  avg_wpm: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface TypeSyncRequest {
+  session: TypeSession;
+  entries: TypeEntry[];
+}
+
+export interface TypeSyncResponse {
+  saved_session: boolean;
+  saved_entries: number;
+}
+
+export interface TypeDailyTrend {
+  date: string;
+  sessions: number;
+  avg_accuracy: number;
+  avg_wpm: number;
+}
+
+export interface TypeMastery {
+  card_id: string;
+  accuracy: number;
+  egregious_count: number;
+  score: number;
+  last_practiced_at: string | null;
+}
+
+export interface TypeStats {
+  recent_sessions: TypeSession[];
+  daily_trend: TypeDailyTrend[];
+  mastery: TypeMastery[];
+}

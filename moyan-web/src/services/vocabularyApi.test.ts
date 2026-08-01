@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeck, getStudyQueue, listDecks } from "./vocabularyApi";
+import {
+  createDeck,
+  getStudyQueue,
+  getTypeStats,
+  listDecks,
+  syncTypePractice,
+} from "./vocabularyApi";
 
 class MemoryStorage {
   private data = new Map<string, string>();
@@ -98,5 +104,55 @@ describe("vocabularyApi", () => {
     );
     expect(queue.due_count).toBe(2);
     expect(queue.total_cards).toBe(7);
+  });
+
+  it("syncs type practice with JSON body", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { saved_session: true, saved_entries: 1 },
+      }),
+    });
+
+    const result = await syncTypePractice({
+      session: {
+        id: "ts_1",
+        deck_id: null,
+        deck_name: "全部词汇",
+        mode: "word",
+        total_cards: 1,
+        completed: 1,
+        skipped: 0,
+        egregious_count: 0,
+        avg_accuracy: 1,
+        avg_wpm: 20,
+        duration_ms: 10_000,
+        created_at: "2026-08-01T08:00:00Z",
+      },
+      entries: [],
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/sync$/),
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(result.saved_entries).toBe(1);
+  });
+
+  it("fetches type stats", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { recent_sessions: [], daily_trend: [], mastery: [] },
+      }),
+    });
+
+    const stats = await getTypeStats();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/stats$/),
+      expect.anything()
+    );
+    expect(stats.mastery).toEqual([]);
   });
 });
