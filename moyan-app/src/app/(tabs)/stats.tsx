@@ -76,12 +76,12 @@ export default function StatsScreen() {
       ) : (
         <ScrollView contentContainerStyle={[screen.body, styles.body]}>
           <View style={[styles.streakCard, { backgroundColor: c.buttonBg }]}>
-            <View style={styles.streakIcon}>
+            <View style={[styles.streakIcon, { backgroundColor: `${c.buttonText}1F` }]}>
               <Text style={styles.streakEmoji}>🔥</Text>
             </View>
             <View>
-              <Text style={styles.streakValue}>{stats.today}</Text>
-              <Text style={styles.streakLabel}>{t('todayReview')}</Text>
+              <Text style={[styles.streakValue, { color: c.buttonText }]}>{stats.today}</Text>
+              <Text style={[styles.streakLabel, { color: `${c.buttonText}99` }]}>{t('todayReview')}</Text>
             </View>
           </View>
 
@@ -149,13 +149,12 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   streakEmoji: { fontSize: 26 },
-  streakValue: { color: '#FFFFFF', fontSize: 28, fontWeight: '700', fontFamily: serif },
-  streakLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 },
+  streakValue: { fontSize: 28, fontWeight: '700', fontFamily: serif },
+  streakLabel: { fontSize: 12, marginTop: 2 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

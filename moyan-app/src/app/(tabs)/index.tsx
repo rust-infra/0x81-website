@@ -90,12 +90,12 @@ export default function HomeScreen() {
           <View style={[styles.progressCard, { backgroundColor: c.buttonBg }]}>
             <View style={styles.progressRow}>
               <View>
-                <Text style={styles.progressLabel}>{t('totalWords')}</Text>
-                <Text style={styles.progressValue}>{progress}%</Text>
+                <Text style={[styles.progressLabel, { color: `${c.buttonText}B3` }]}>{t('totalWords')}</Text>
+                <Text style={[styles.progressValue, { color: c.buttonText }]}>{progress}%</Text>
               </View>
               <View style={styles.progressRight}>
-                <Text style={styles.progressLabel}>{t('todayReview')}</Text>
-                <Text style={styles.progressToday}>{stats.today} {t('wordUnit')}</Text>
+                <Text style={[styles.progressLabel, { color: `${c.buttonText}B3` }]}>{t('todayReview')}</Text>
+                <Text style={[styles.progressToday, { color: c.buttonText }]}>{stats.today} {t('wordUnit')}</Text>
               </View>
             </View>
           </View>
@@ -104,13 +104,13 @@ export default function HomeScreen() {
             style={[styles.cta, { backgroundColor: c.buttonBg }]}
             onPress={() => setShowPicker(true)}
           >
-            <Text style={styles.ctaTitle}>{t('dailyRequired')}</Text>
-            <Text style={styles.ctaDesc}>
+            <Text style={[styles.ctaTitle, { color: c.buttonText }]}>{t('dailyRequired')}</Text>
+            <Text style={[styles.ctaDesc, { color: `${c.buttonText}B3` }]}>
               {stats.due > 0
                 ? t('dailyDue', { count: stats.due })
                 : t('dailyDone')}
             </Text>
-            <Text style={styles.ctaGo}>{t('chooseDeck')}</Text>
+            <Text style={[styles.ctaGo, { color: `${c.buttonText}D9` }]}>{t('chooseDeck')}</Text>
           </Pressable>
 
           <View style={styles.grid}>
@@ -196,18 +196,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  progressLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 4 },
-  progressValue: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', fontFamily: serif },
+  progressLabel: { fontSize: 12, marginBottom: 4 },
+  progressValue: { fontSize: 26, fontWeight: '700', fontFamily: serif },
   progressRight: { alignItems: 'flex-end' },
-  progressToday: { color: '#FFFFFF', fontSize: 18, fontWeight: '600' },
+  progressToday: { fontSize: 18, fontWeight: '600' },
   cta: {
     borderRadius: 24,
     padding: 22,
     marginBottom: 16,
   },
-  ctaTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', fontFamily: serif },
-  ctaDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 6 },
-  ctaGo: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 18, fontWeight: '500' },
+  ctaTitle: { fontSize: 18, fontWeight: '700', fontFamily: serif },
+  ctaDesc: { fontSize: 13, marginTop: 6 },
+  ctaGo: { fontSize: 13, marginTop: 18, fontWeight: '500' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
