@@ -220,7 +220,7 @@ export default function DeckDetailScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: c.accent }]}>‹ 返回</Text>
+          <Text style={[styles.back, { color: c.accent }]}>‹ {t('back')}</Text>
         </Pressable>
         {deck ? (
           <Pressable onPress={() => setShowDeckEdit(true)} hitSlop={12}>
