@@ -18,7 +18,7 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{admin, auth, health, settings, sync, vocabulary};
+use crate::routes::{admin, auth, health, settings, sync, typing, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
@@ -66,6 +66,7 @@ fn build_app(state: AppState) -> Router {
         .route("/api/settings/", settings::router())
         .nest("/api/sync", sync::routes())
         .nest("/api", vocabulary::routes())
+        .nest("/api/type", typing::routes())
         .nest("/api/health", health::routes())
         .nest("/api/admin", admin::routes())
         .route("/", get(root_handler))
@@ -111,14 +112,7 @@ mod tests {
     #[tokio::test]
     async fn settings_route_matches_with_and_without_trailing_slash() -> anyhow::Result<()> {
         let repository = Arc::new(SqliteRepositories::connect("sqlite::memory:").await?);
-        let state = AppState {
-            services: Services::new(repository),
-            jwt_secret: "test-secret".to_string(),
-            google_client_id: String::new(),
-            google_client_secret: String::new(),
-            google_redirect_url: String::new(),
-            admin_token: String::new(),
-        };
+        let state = test_state(repository);
         let app = build_app(state);
 
         for path in ["/api/settings", "/api/settings/"] {
@@ -137,6 +131,157 @@ mod tests {
                 "expected {path} to match the settings route"
             );
         }
+        Ok(())
+    }
+
+    fn test_state(repository: Arc<SqliteRepositories>) -> AppState {
+        AppState {
+            services: Services::new(repository),
+            jwt_secret: "test-secret".to_string(),
+            google_client_id: String::new(),
+            google_client_secret: String::new(),
+            google_redirect_url: String::new(),
+            admin_token: String::new(),
+        }
+    }
+
+    fn valid_type_payload() -> serde_json::Value {
+        serde_json::json!({
+            "session": {
+                "id": "ts_http_1",
+                "deck_id": null,
+                "deck_name": "全部词汇",
+                "mode": "word",
+                "total_cards": 2,
+                "completed": 2,
+                "skipped": 0,
+                "egregious_count": 0,
+                "avg_accuracy": 0.9,
+                "avg_wpm": 25.0,
+                "duration_ms": 60_000,
+                "created_at": "2026-08-01T08:00:00Z"
+            },
+            "entries": [
+                {
+                    "id": "te_http_1",
+                    "card_id": "card_a",
+                    "deck_id": "deck_a",
+                    "mode": "word",
+                    "correct_chars": 9,
+                    "wrong_chars": 1,
+                    "accuracy": 0.9,
+                    "wpm": 25.0,
+                    "duration_ms": 4_000,
+                    "egregious": false,
+                    "created_at": "2026-08-01T08:00:04Z"
+                }
+            ]
+        })
+    }
+
+    async fn read_json(response: axum::response::Response) -> anyhow::Result<serde_json::Value> {
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await?;
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    #[tokio::test]
+    async fn type_sync_saves_session_and_entries() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/sync")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&valid_type_payload())?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["saved_session"], true);
+        assert_eq!(body["data"]["saved_entries"], 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_sync_rejects_invalid_mode_with_400() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let mut payload = valid_type_payload();
+        payload["session"]["mode"] = serde_json::json!("typing");
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/sync")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_sync_rejects_out_of_range_accuracy_with_400() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let mut payload = valid_type_payload();
+        payload["entries"][0]["accuracy"] = serde_json::json!(1.5);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/sync")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_stats_returns_practiced_mastery() -> anyhow::Result<()> {
+        let repository = Arc::new(SqliteRepositories::connect("sqlite::memory:").await?);
+        let app = build_app(test_state(repository.clone()));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/sync")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&valid_type_payload())?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/type/stats")
+                    .header("authorization", "Bearer test-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["recent_sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(body["data"]["mastery"].as_array().unwrap().len(), 1);
+        let mastery = &body["data"]["mastery"][0];
+        assert_eq!(mastery["card_id"], "card_a");
+        assert!(mastery["score"].as_f64().unwrap() > 0.0);
         Ok(())
     }
 }
