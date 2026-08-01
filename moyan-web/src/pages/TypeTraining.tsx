@@ -55,6 +55,8 @@ interface TypeCard {
   pronunciation?: string | null;
   /** Sentence example text for typing mode */
   exampleText?: string;
+  /** Chinese translation of the example (display only) */
+  exampleZh?: string;
   /** Current SRS state (backend mode only) */
   srs?: SRSData;
   localNumericId?: number;
@@ -94,13 +96,15 @@ function progressToSrs(progress: CardProgress | null): SRSData {
 
 function mapApiTypeCard(sc: StudyCard): TypeCard {
   const card = sc.card;
+  const example = card.examples?.[0];
   return {
     id: card.id,
     deckId: card.deck_id,
     front: card.front,
     back: card.back,
     pronunciation: card.pronunciation,
-    exampleText: card.examples?.[0]?.sentence_en || undefined,
+    exampleText: example?.sentence_en || undefined,
+    exampleZh: example?.translation_zh || undefined,
     srs: progressToSrs(sc.progress),
   };
 }
@@ -1275,7 +1279,12 @@ export default function TypeTraining() {
 
           {currentCard?.exampleText && mode === 'word' && (
             <div className="mt-6 max-w-lg mx-auto space-y-1 opacity-60">
-              {splitExample(currentCard.exampleText).map((seg, i) => (
+              {[
+                ...splitExample(currentCard.exampleText),
+                ...(currentCard.exampleZh
+                  ? [{ text: currentCard.exampleZh, lang: 'zh' as const }]
+                  : []),
+              ].map((seg, i) => (
                 <div key={i} className="flex items-start justify-center gap-2">
                   <p
                     className={`text-xs flex-1 text-center leading-relaxed ${seg.lang === 'en' ? 'italic' : ''}`}
