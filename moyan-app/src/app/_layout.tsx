@@ -2,7 +2,9 @@ import { Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { I18nProvider } from '../lib/i18n';
 import { ThemeProvider, useTheme } from '../lib/theme-context';
+import { ToastProvider } from '../lib/toast';
 
 function RootNavigator() {
   const { ready, token } = useAuth();
@@ -46,9 +48,13 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <RootNavigator />
+            </ToastProvider>
+          </AuthProvider>
+        </I18nProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

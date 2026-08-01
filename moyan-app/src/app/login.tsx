@@ -17,6 +17,7 @@ import {
   type KimiDeviceInfo,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme-context';
 
 function randomDeviceId(): string {
@@ -26,6 +27,7 @@ function randomDeviceId(): string {
 export default function LoginScreen() {
   const { token, signIn } = useAuth();
   const { theme } = useTheme();
+  const { t } = useI18n();
   const c = theme.colors;
   const [mode, setMode] = useState<'choose' | 'kimi' | 'token'>('choose');
   const [tokenInput, setTokenInput] = useState('');
@@ -104,8 +106,8 @@ export default function LoginScreen() {
     }
     await signIn(value, {
       id: 'local',
-      name: 'Token User',
-      email: `${value.slice(0, 12)}@moyan.local`,
+      name: t('loginToken'),
+      email: '',
       avatar: '',
       provider: 'local',
     });
@@ -117,9 +119,9 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={[styles.title, { color: c.ink }]}>墨言单词</Text>
+        <Text style={[styles.title, { color: c.ink }]}>{t('appName')}</Text>
         <Text style={[styles.subtitle, { color: c.inkMuted }]}>
-          水墨风格英语单词学习
+          {t('appDesc')}
         </Text>
 
         {mode === 'choose' && (
@@ -128,7 +130,7 @@ export default function LoginScreen() {
               style={[styles.button, { backgroundColor: c.accent }]}
               onPress={startKimiLogin}
             >
-              <Text style={styles.buttonText}>使用 Kimi 登录</Text>
+              <Text style={styles.buttonText}>{t('loginKimi')}</Text>
             </Pressable>
             <Pressable
               style={[styles.secondary, { borderColor: c.border }]}
@@ -137,7 +139,7 @@ export default function LoginScreen() {
                 setMode('token');
               }}
             >
-              <Text style={{ color: c.inkMuted }}>使用 token 登录（开发）</Text>
+              <Text style={{ color: c.inkMuted }}>{t('loginToken')}</Text>
             </Pressable>
           </>
         )}
@@ -145,7 +147,7 @@ export default function LoginScreen() {
         {mode === 'kimi' && deviceInfo && (
           <View style={styles.kimiBox}>
             <Text style={[styles.kimiHint, { color: c.inkMuted }]}>
-              在打开的页面中输入验证码
+              {t('loginHint')}
             </Text>
             <Text style={[styles.userCode, { color: c.accent }]}>
               {deviceInfo.user_code}
@@ -159,10 +161,10 @@ export default function LoginScreen() {
                 WebBrowser.openBrowserAsync(deviceInfo.verification_uri_complete)
               }
             >
-              <Text style={{ color: c.inkMuted }}>重新打开验证页面</Text>
+              <Text style={{ color: c.inkMuted }}>{t('openVerify')}</Text>
             </Pressable>
             <Pressable onPress={cancelKimi}>
-              <Text style={[styles.cancel, { color: c.inkMuted }]}>取消</Text>
+              <Text style={[styles.cancel, { color: c.inkMuted }]}>{t('cancel')}</Text>
             </Pressable>
           </View>
         )}
@@ -171,7 +173,7 @@ export default function LoginScreen() {
           <>
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder="粘贴登录 token"
+              placeholder={t('loginPlaceholder')}
               placeholderTextColor={c.inkMuted}
               value={tokenInput}
               onChangeText={setTokenInput}
@@ -182,10 +184,10 @@ export default function LoginScreen() {
               style={[styles.button, { backgroundColor: c.accent }]}
               onPress={handleLogin}
             >
-              <Text style={styles.buttonText}>登录</Text>
+              <Text style={styles.buttonText}>{t('login')}</Text>
             </Pressable>
             <Pressable onPress={() => setMode('choose')}>
-              <Text style={[styles.cancel, { color: c.inkMuted }]}>返回</Text>
+              <Text style={[styles.cancel, { color: c.inkMuted }]}>{t('back')}</Text>
             </Pressable>
           </>
         )}

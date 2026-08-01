@@ -2,7 +2,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -13,13 +12,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createDeck, deleteDeck, listDecks } from '../../lib/api';
+import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
+import { confirmAsync, useToast } from '../../lib/toast';
 import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
 import type { Deck } from '../../lib/types';
 
 export default function DecksScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { t } = useI18n();
+  const toast = useToast();
   const c = theme.colors;
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +73,7 @@ export default function DecksScreen() {
             </Text>
           ) : null}
           <Text style={[styles.deckCount, { color: c.inkLight }]}>
-            {deck.card_count} 词
+            {deck.card_count} {t('wordUnit')}
           </Text>
         </View>
         {deck.owner_user_id !== 'system' ? (
@@ -86,21 +89,16 @@ export default function DecksScreen() {
   );
 
   const handleDelete = (deck: Deck) => {
-    Alert.alert('删除词库', `确定删除「${deck.name}」吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDeck(deck.id);
-            setDecks((prev) => prev.filter((d) => d.id !== deck.id));
-          } catch (err) {
-            Alert.alert('删除失败', err instanceof Error ? err.message : String(err));
-          }
-        },
-      },
-    ]);
+    void confirmAsync(t('delete'), `确定删除「${deck.name}」吗？`).then(async (ok) => {
+      if (!ok) return;
+      try {
+        await deleteDeck(deck.id);
+        setDecks((prev) => prev.filter((d) => d.id !== deck.id));
+        toast(t('saved'));
+      } catch (err) {
+        toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
   };
 
   const handleCreate = async () => {
@@ -117,7 +115,7 @@ export default function DecksScreen() {
       const data = await listDecks();
       setDecks(data);
     } catch (err) {
-      Alert.alert('创建失败', err instanceof Error ? err.message : String(err));
+      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -126,7 +124,7 @@ export default function DecksScreen() {
       <View style={screen.header}>
         <View style={styles.titleRow}>
           <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            词库
+            {t('tabDecks')}
           </Text>
           <Pressable
             style={[roundButton, { backgroundColor: c.buttonBg }]}
@@ -153,11 +151,11 @@ export default function DecksScreen() {
             return (
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: c.inkLight }]}>
-                  {item.key === 'system' ? '系统词库' : '我的词库'}
+                  {item.key === 'system' ? t('systemDecks') : t('myDecks')}
                 </Text>
                 {list.map(renderDeck)}
                 {list.length === 0 && (
-                  <Text style={[styles.empty, { color: c.inkLight }]}>暂无词库</Text>
+                  <Text style={[styles.empty, { color: c.inkLight }]}>{t('noDecks')}</Text>
                 )}
               </View>
             );
@@ -173,23 +171,23 @@ export default function DecksScreen() {
       >
         <Pressable style={styles.mask} onPress={() => setShowCreate(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>新建词库</Text>
+            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>{t('newDeck')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder="词库名称"
+              placeholder={t('deckNamePlaceholder')}
               placeholderTextColor={c.inkMuted}
               value={newName}
               onChangeText={setNewName}
             />
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder="描述（可选）"
+              placeholder={t('deckDescPlaceholder')}
               placeholderTextColor={c.inkMuted}
               value={newDesc}
               onChangeText={setNewDesc}
             />
             <Pressable style={[styles.createBtn, { backgroundColor: c.buttonBg }]} onPress={handleCreate}>
-              <Text style={{ color: c.buttonText, fontWeight: '600' }}>创建</Text>
+              <Text style={{ color: c.buttonText, fontWeight: '600' }}>{t('create')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>

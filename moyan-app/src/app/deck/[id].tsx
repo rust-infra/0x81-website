@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -24,6 +23,8 @@ import {
   updateDeck,
 } from '../../lib/api';
 import { useTheme } from '../../lib/theme-context';
+import { useI18n } from '../../lib/i18n';
+import { confirmAsync, useToast } from '../../lib/toast';
 import { serif } from '../../lib/ui';
 import type { Card, Deck, StudyCard } from '../../lib/types';
 
@@ -54,6 +55,8 @@ export default function DeckDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { theme } = useTheme();
+  const { t } = useI18n();
+  const toast = useToast();
   const c = theme.colors;
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
@@ -166,29 +169,24 @@ export default function DeckDetailScreen() {
       setShowCardModal(false);
       await load();
     } catch (err) {
-      Alert.alert('保存失败', err instanceof Error ? err.message : String(err));
+      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
   };
 
   const removeCard = (card: Card) => {
-    Alert.alert('删除卡片', `确定删除「${card.front}」吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteCard(card.id);
-            setShowCardModal(false);
-            await load();
-          } catch (err) {
-            Alert.alert('删除失败', err instanceof Error ? err.message : String(err));
-          }
-        },
-      },
-    ]);
+    void confirmAsync(t('delete'), `确定删除「${card.front}」吗？`).then(async (ok) => {
+      if (!ok) return;
+      try {
+        await deleteCard(card.id);
+        setShowCardModal(false);
+        await load();
+        toast(t('saved'));
+      } catch (err) {
+        toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
   };
 
   const saveDeck = async () => {
@@ -201,27 +199,21 @@ export default function DeckDetailScreen() {
       setShowDeckEdit(false);
       await load();
     } catch (err) {
-      Alert.alert('保存失败', err instanceof Error ? err.message : String(err));
+      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const removeDeck = () => {
     if (!id || !deck) return;
-    Alert.alert('删除词库', `确定删除「${deck.name}」及其卡片吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDeck(id);
-            router.replace('/decks');
-          } catch (err) {
-            Alert.alert('删除失败', err instanceof Error ? err.message : String(err));
-          }
-        },
-      },
-    ]);
+    void confirmAsync(t('delete'), `确定删除「${deck.name}」及其卡片吗？`).then(async (ok) => {
+      if (!ok) return;
+      try {
+        await deleteDeck(id);
+        router.replace('/decks');
+      } catch (err) {
+        toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
   };
 
   return (
@@ -232,7 +224,7 @@ export default function DeckDetailScreen() {
         </Pressable>
         {deck ? (
           <Pressable onPress={() => setShowDeckEdit(true)} hitSlop={12}>
-            <Text style={{ color: c.inkLight }}>编辑</Text>
+            <Text style={{ color: c.inkLight }}>{t('edit')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -243,7 +235,7 @@ export default function DeckDetailScreen() {
         <View style={styles.body}>
           <View style={[styles.hero, { backgroundColor: deck.color || c.accent }]}>
             <Text style={[styles.heroName, { fontFamily: serif }]}>{deck.name}</Text>
-            <Text style={styles.heroMeta}>{deck.card_count} 词</Text>
+            <Text style={styles.heroMeta}>{deck.card_count} {t('wordUnit')}</Text>
           </View>
           {deck.description ? (
             <Text style={[styles.desc, { color: c.inkMuted }]}>{deck.description}</Text>
@@ -254,19 +246,19 @@ export default function DeckDetailScreen() {
               style={[styles.start, { backgroundColor: c.accent }]}
               onPress={() => router.push(`/study/${deck.id}`)}
             >
-              <Text style={styles.startText}>开始学习</Text>
+              <Text style={styles.startText}>{t('startStudy')}</Text>
             </Pressable>
             <Pressable
               style={[styles.addCard, { backgroundColor: c.buttonBg }]}
               onPress={openCreate}
             >
-              <Text style={{ color: c.buttonText }}>＋ 添加卡片</Text>
+              <Text style={{ color: c.buttonText }}>{t('addCard')}</Text>
             </Pressable>
           </View>
 
           <TextInput
             style={[styles.search, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-            placeholder="搜索卡片..."
+            placeholder={t('searchCards')}
             placeholderTextColor={c.inkMuted}
             value={query}
             onChangeText={setQuery}
@@ -279,7 +271,7 @@ export default function DeckDetailScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.cardList}
             ListEmptyComponent={
-              <Text style={[styles.empty, { color: c.inkMuted }]}>暂无卡片</Text>
+              <Text style={[styles.empty, { color: c.inkMuted }]}>{t('noCards')}</Text>
             }
             renderItem={({ item }) => {
               const status = progressOf(item.id)?.srs_status;
@@ -298,7 +290,7 @@ export default function DeckDetailScreen() {
                   </View>
                   <View style={[styles.badge, { backgroundColor: `${statusColor(status)}18` }]}>
                     <Text style={[styles.badgeText, { color: statusColor(status) }]}>
-                      {status ? STATUS_LABEL[status] || status : '未学'}
+                      {status ? STATUS_LABEL[status] || status : t('new')}
                     </Text>
                   </View>
                 </Pressable>
@@ -316,26 +308,26 @@ export default function DeckDetailScreen() {
       <Modal visible={showDeckEdit} transparent animationType="slide" onRequestClose={() => setShowDeckEdit(false)}>
         <Pressable style={styles.mask} onPress={() => setShowDeckEdit(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>编辑词库</Text>
+            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>{t('edit')} {t('tabDecks')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder="名称"
+              placeholder={t('deckNamePlaceholder')}
               placeholderTextColor={c.inkMuted}
               value={deckName}
               onChangeText={setDeckName}
             />
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder="描述"
+              placeholder={t('deckDescPlaceholder')}
               placeholderTextColor={c.inkMuted}
               value={deckDesc}
               onChangeText={setDeckDesc}
             />
             <Pressable style={[styles.createBtn, { backgroundColor: c.buttonBg }]} onPress={saveDeck}>
-              <Text style={{ color: c.buttonText, fontWeight: '600' }}>保存</Text>
+              <Text style={{ color: c.buttonText, fontWeight: '600' }}>{t('save')}</Text>
             </Pressable>
             <Pressable onPress={removeDeck} style={styles.deleteDeck}>
-              <Text style={{ color: c.accent }}>删除词库</Text>
+              <Text style={{ color: c.accent }}>{t('delete')} {t('tabDecks')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -346,40 +338,40 @@ export default function DeckDetailScreen() {
         <Pressable style={styles.mask} onPress={() => setShowCardModal(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
-              {editingCard ? '编辑卡片' : '添加卡片'}
+              {editingCard ? t('editCard') : t('addCardTitle')}
             </Text>
             <ScrollView>
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-                placeholder="单词 / 正面"
+                placeholder={t('cardFront')}
                 placeholderTextColor={c.inkMuted}
                 value={form.front}
                 onChangeText={(v) => setForm((f) => ({ ...f, front: v }))}
               />
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-                placeholder="释义 / 背面"
+                placeholder={t('cardBack')}
                 placeholderTextColor={c.inkMuted}
                 value={form.back}
                 onChangeText={(v) => setForm((f) => ({ ...f, back: v }))}
               />
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-                placeholder="音标（可选）"
+                placeholder={t('pronunciation')}
                 placeholderTextColor={c.inkMuted}
                 value={form.pronunciation}
                 onChangeText={(v) => setForm((f) => ({ ...f, pronunciation: v }))}
               />
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-                placeholder="例句 EN（可选）"
+                placeholder={t('exampleEn')}
                 placeholderTextColor={c.inkMuted}
                 value={form.exampleEn}
                 onChangeText={(v) => setForm((f) => ({ ...f, exampleEn: v }))}
               />
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-                placeholder="例句 中文（可选）"
+                placeholder={t('exampleZh')}
                 placeholderTextColor={c.inkMuted}
                 value={form.exampleZh}
                 onChangeText={(v) => setForm((f) => ({ ...f, exampleZh: v }))}
@@ -389,11 +381,13 @@ export default function DeckDetailScreen() {
               style={[styles.createBtn, { backgroundColor: c.buttonBg, opacity: saving ? 0.6 : 1 }]}
               onPress={saveCard}
             >
-              <Text style={{ color: c.buttonText, fontWeight: '600' }}>{saving ? '保存中...' : '保存'}</Text>
+              <Text style={{ color: c.buttonText, fontWeight: '600' }}>
+                {saving ? t('saving') : t('save')}
+              </Text>
             </Pressable>
             {editingCard ? (
               <Pressable onPress={() => removeCard(editingCard)} style={styles.deleteDeck}>
-                <Text style={{ color: c.accent }}>删除卡片</Text>
+                <Text style={{ color: c.accent }}>{t('delete')} {t('card')}</Text>
               </Pressable>
             ) : null}
           </Pressable>

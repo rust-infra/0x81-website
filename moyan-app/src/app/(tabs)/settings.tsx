@@ -1,6 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,18 +10,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  fetchUserSettings,
-  saveUserSettings,
-} from '../../lib/api';
+import { fetchUserSettings, saveUserSettings } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useI18n } from '../../lib/i18n';
 import {
   getSpeechSettings,
   saveSpeechSettings,
   type SpeechSettings,
 } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
-import { cardStyle, screen, serif } from '../../lib/ui';
+import { useToast } from '../../lib/toast';
+import { screen, serif } from '../../lib/ui';
 
 const PROVIDERS = [
   { key: 'webspeech', label: '浏览器/系统语音' },
@@ -33,20 +32,26 @@ const PROVIDERS = [
 export default function SettingsScreen() {
   const { theme, themeName, setTheme, themes } = useTheme();
   const { user, signOut } = useAuth();
+  const { lang, setLang, t } = useI18n();
+  const toast = useToast();
   const c = theme.colors;
   const [speech, setSpeech] = useState<SpeechSettings | null>(null);
-  const [language, setLanguage] = useState('zh-CN');
 
   const loadSettings = useCallback(async () => {
     const local = await getSpeechSettings();
     setSpeech(local);
     try {
       const remote = await fetchUserSettings();
-      if (remote.language) setLanguage(remote.language);
-      if (remote.theme && themes.some((t) => t.name === remote.theme)) {
+      if (remote.language) setLang(remote.language as 'zh-CN' | 'en');
+      // 仅当本机从未设置过主题/语音时才套用云端，避免覆盖用户刚点的选择
+      const [themeStored, speechStored] = await Promise.all([
+        AsyncStorage.getItem('app_theme'),
+        AsyncStorage.getItem('speech_settings'),
+      ]);
+      if (!themeStored && remote.theme && themes.some((t) => t.name === remote.theme)) {
         setTheme(remote.theme as typeof themes[number]['name']);
       }
-      if (remote.speech_provider || remote.speech_speed != null || remote.auto_play != null) {
+      if (!speechStored && (remote.speech_provider || remote.speech_speed != null || remote.auto_play != null)) {
         const merged: SpeechSettings = {
           ...local,
           provider: (remote.speech_provider as SpeechSettings['provider']) || local.provider,
@@ -60,9 +65,9 @@ export default function SettingsScreen() {
         await saveSpeechSettings(merged);
       }
     } catch {
-      // 未登录或后端不可达时静默
+      // 后端不可达时静默
     }
-  }, [setTheme, themes]);
+  }, [setTheme, themes, setLang]);
 
   useEffect(() => {
     void loadSettings();
@@ -81,7 +86,7 @@ export default function SettingsScreen() {
       const s = speech || (await getSpeechSettings());
       await saveUserSettings({
         theme: themeName,
-        language,
+        language: lang,
         speech_provider: s.provider,
         speech_voice: s.speech_voice,
         speech_zh_voice: s.speech_zh_voice,
@@ -89,16 +94,16 @@ export default function SettingsScreen() {
         speech_speed: s.speech_speed,
         auto_play: s.auto_play,
       });
-      Alert.alert('已同步', '设置已上传到云端');
+      toast(t('synced'));
     } catch (err) {
-      Alert.alert('同步失败', err instanceof Error ? err.message : String(err));
+      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const downloadSettings = async () => {
     try {
       const remote = await fetchUserSettings();
-      if (remote.language) setLanguage(remote.language);
+      if (remote.language) setLang(remote.language as 'zh-CN' | 'en');
       if (remote.theme && themes.some((t) => t.name === remote.theme)) {
         setTheme(remote.theme as typeof themes[number]['name']);
       }
@@ -115,9 +120,19 @@ export default function SettingsScreen() {
         setSpeech(merged);
         await saveSpeechSettings(merged);
       }
-      Alert.alert('已恢复', '云端设置已应用到本机');
+      toast(t('restored'));
     } catch (err) {
-      Alert.alert('恢复失败', err instanceof Error ? err.message : String(err));
+      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const changeLanguage = async (next: 'zh-CN' | 'en') => {
+    setLang(next);
+    try {
+      await saveUserSettings({ language: next });
+      toast(t('saved'));
+    } catch {
+      // 后端不可达时仅本地生效
     }
   };
 
@@ -127,51 +142,55 @@ export default function SettingsScreen() {
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={screen.header}>
         <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-          设置
+          {t('tabSettings')}
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={[screen.body, styles.body]}>
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>主题</Text>
-        <View style={cardStyle(c.card)}>
-          {themes.map((t) => {
-            const active = t.name === themeName;
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('theme')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
+          {themes.map((th) => {
+            const active = th.name === themeName;
             return (
               <Pressable
-                key={t.name}
+                key={th.name}
                 style={[styles.row, active && { backgroundColor: c.tagBg }]}
-                onPress={() => setTheme(t.name)}
+                onPress={() => setTheme(th.name)}
               >
-                <View style={[styles.themeDot, { backgroundColor: t.preview }]} />
+                <View style={[styles.themeDot, { backgroundColor: th.preview }]} />
                 <View style={styles.rowBody}>
-                  <Text style={[styles.rowTitle, { color: c.ink }]}>{t.label}</Text>
-                  <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{t.description}</Text>
+                  <Text style={[styles.rowTitle, { color: c.ink }]}>{th.label}</Text>
+                  <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{th.description}</Text>
                 </View>
-                <Text style={[styles.check, { color: active ? c.accent : 'transparent' }]}>✓</Text>
+                <Text style={[styles.check, active ? { color: c.accent } : { color: 'transparent' }]}>✓</Text>
               </Pressable>
             );
           })}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>语言</Text>
-        <View style={cardStyle(c.card)}>
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('language')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
           <View style={styles.langRow}>
-            {(['zh-CN', 'en'] as const).map((lang) => (
+            {(['zh-CN', 'en'] as const).map((lg) => (
               <Pressable
-                key={lang}
-                style={[styles.langBtn, { borderColor: c.border }, language === lang && { backgroundColor: c.accent, borderColor: c.accent }]}
-                onPress={() => setLanguage(lang)}
+                key={lg}
+                style={[
+                  styles.langBtn,
+                  { borderColor: c.border },
+                  lang === lg && { backgroundColor: c.accent, borderColor: c.accent },
+                ]}
+                onPress={() => changeLanguage(lg)}
               >
-                <Text style={{ color: language === lang ? '#fff' : c.ink }}>
-                  {lang === 'zh-CN' ? '中文' : 'English'}
+                <Text style={{ color: lang === lg ? '#fff' : c.ink }}>
+                  {lg === 'zh-CN' ? '中文' : 'English'}
                 </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>语音</Text>
-        <View style={cardStyle(c.card)}>
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('voice')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
           {PROVIDERS.map((p) => (
             <Pressable
               key={p.key}
@@ -179,7 +198,11 @@ export default function SettingsScreen() {
               onPress={() => updateSpeech({ provider: p.key })}
             >
               <Text style={[styles.rowTitle, { color: c.ink }]}>{p.label}</Text>
-              <Text style={[styles.check, { color: speech?.provider === p.key ? c.accent : 'transparent' }]}>✓</Text>
+              <Text
+                style={[styles.check, speech?.provider === p.key ? { color: c.accent } : { color: 'transparent' }]}
+              >
+                ✓
+              </Text>
             </Pressable>
           ))}
 
@@ -210,7 +233,7 @@ export default function SettingsScreen() {
           )}
 
           <View style={[styles.row, { paddingVertical: 14 }]}>
-            <Text style={[styles.rowTitle, { color: c.ink }]}>语速</Text>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('speechSpeed')}</Text>
             <View style={styles.speedCtrl}>
               <Pressable
                 style={[styles.speedBtn, { borderColor: c.border }]}
@@ -229,7 +252,7 @@ export default function SettingsScreen() {
           </View>
 
           <View style={[styles.row, { paddingVertical: 14 }]}>
-            <Text style={[styles.rowTitle, { color: c.ink }]}>自动朗读</Text>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('autoSpeak')}</Text>
             <Switch
               value={!!speech?.auto_play}
               onValueChange={(v) => updateSpeech({ auto_play: v })}
@@ -238,25 +261,25 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>同步</Text>
-        <View style={cardStyle(c.card)}>
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('sync')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
           <Pressable style={[styles.syncBtn, { backgroundColor: c.buttonBg }]} onPress={syncToBackend}>
-            <Text style={{ color: c.buttonText }}>上传设置到云端</Text>
+            <Text style={{ color: c.buttonText }}>{t('uploadSettings')}</Text>
           </Pressable>
           <Pressable style={[styles.syncBtn, { backgroundColor: `${c.accent}18` }]} onPress={downloadSettings}>
-            <Text style={{ color: c.accent }}>从云端恢复设置</Text>
+            <Text style={{ color: c.accent }}>{t('downloadSettings')}</Text>
           </Pressable>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>账户</Text>
-        <View style={cardStyle(c.card)}>
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('account')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
           {user ? (
             <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
-              {user.name} · {user.email}
+              {user.email ? `${user.name} · ${user.email}` : user.name}
             </Text>
           ) : null}
           <Pressable style={[styles.logout, { backgroundColor: `${c.accent}18` }]} onPress={signOut}>
-            <Text style={{ color: c.accent }}>退出登录</Text>
+            <Text style={{ color: c.accent }}>{t('logout')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -267,6 +290,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   body: { paddingBottom: 120 },
   sectionTitle: { fontSize: 13, fontWeight: '500', marginTop: 8, marginBottom: 10 },
+  card: { borderRadius: 16, padding: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

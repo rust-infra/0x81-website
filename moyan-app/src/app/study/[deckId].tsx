@@ -10,6 +10,7 @@ import {
 } from '../../lib/api';
 import { calculateSRS, progressToSrs } from '../../lib/srs';
 import { speak, stopSpeaking } from '../../lib/speech';
+import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 import type { StudyCard } from '../../lib/types';
@@ -23,6 +24,7 @@ export default function StudyScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const router = useRouter();
   const { theme } = useTheme();
+  const { t } = useI18n();
   const c = theme.colors;
   const [queue, setQueue] = useState<StudyCard[]>([]);
   const [index, setIndex] = useState(0);
@@ -169,24 +171,24 @@ export default function StudyScreen() {
       return (
         <View style={styles.center}>
           <Text style={[styles.doneTitle, { color: c.studyText, fontFamily: serif }]}>
-            本次复习完成
+            {t('doneTitle')}
           </Text>
           <Text style={[styles.doneMeta, { color: c.studyMuted }]}>
-            共浸润 {total} 个词汇
+            {t('doneMeta', { count: total })}
           </Text>
 
           <View style={[styles.doneStats, { backgroundColor: `${c.studyText}0D` }]}>
             <View style={styles.doneStatRow}>
-              <Text style={{ color: c.studyMuted }}>准确率</Text>
+              <Text style={{ color: c.studyMuted }}>{t('accuracy')}</Text>
               <Text style={{ color: c.accent, fontWeight: '600' }}>{accuracy}%</Text>
             </View>
             <View style={[styles.doneDivider, { backgroundColor: `${c.studyText}10` }]} />
             <View style={styles.doneStatRow}>
-              <Text style={{ color: c.studyMuted }}>模糊</Text>
+              <Text style={{ color: c.studyMuted }}>{t('again')}</Text>
               <Text style={{ color: c.studyText }}>{sessionStats.again + sessionStats.hard}</Text>
             </View>
             <View style={styles.doneStatRow}>
-              <Text style={{ color: c.studyMuted }}>铭记</Text>
+              <Text style={{ color: c.studyMuted }}>{t('remember')}</Text>
               <Text style={{ color: c.studyText }}>{sessionStats.good + sessionStats.easy}</Text>
             </View>
           </View>
@@ -196,13 +198,13 @@ export default function StudyScreen() {
               style={[styles.button, { backgroundColor: `${c.studyText}15` }]}
               onPress={() => void load()}
             >
-              <Text style={{ color: c.studyText }}>再来一轮</Text>
+              <Text style={{ color: c.studyText }}>{t('restart')}</Text>
             </Pressable>
             <Pressable
               style={[styles.button, { backgroundColor: c.studyText }]}
               onPress={() => router.back()}
             >
-              <Text style={{ color: c.studyBg }}>返回</Text>
+              <Text style={{ color: c.studyBg }}>{t('back')}</Text>
             </Pressable>
           </View>
         </View>
@@ -245,7 +247,7 @@ export default function StudyScreen() {
                     {current.card.pronunciation}
                   </Text>
                 ) : null}
-                <Text style={[styles.tapHint, { color: c.studyMuted }]}>点击查看释义</Text>
+                <Text style={[styles.tapHint, { color: c.studyMuted }]}>{t('flipHint')}</Text>
               </View>
             ) : (
               <View style={{ transform: [{ rotateY: '-180deg' }] }}>
@@ -268,7 +270,7 @@ export default function StudyScreen() {
                       onPress={() => handleRate(rating)}
                     >
                       <Text style={{ color: c.accent }}>
-                        {rating === 'again' ? '模糊' : rating === 'hard' ? '困难' : rating === 'good' ? '良好' : '简单'}
+                        {rating === 'again' ? t('again') : rating === 'hard' ? t('hard') : rating === 'good' ? t('good') : t('easy')}
                       </Text>
                     </Pressable>
                   ))}
@@ -286,7 +288,7 @@ export default function StudyScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Text style={{ color: c.studyMuted, fontSize: 16 }}>‹ 退出</Text>
+            <Text style={{ color: c.studyMuted, fontSize: 16 }}>‹ {t('exit')}</Text>
           </Pressable>
           <Pressable onPress={toggleSpeak} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 16 }}>

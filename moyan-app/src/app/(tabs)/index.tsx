@@ -12,18 +12,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getStudyQueue, listDecks } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 import type { Deck } from '../../lib/types';
 
-function formatDate() {
+function formatDate(lang: 'zh-CN' | 'en') {
   const d = new Date();
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 · 周${'日一二三四五六'[d.getDay()]}`;
+  if (lang === 'zh-CN') {
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 · 周${'日一二三四五六'[d.getDay()]}`;
+  }
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', weekday: 'short' });
 }
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { lang, t } = useI18n();
   const { theme } = useTheme();
   const c = theme.colors;
   const [stats, setStats] = useState<{
@@ -71,10 +76,10 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={styles.header}>
         <Text style={[styles.greeting, { color: c.ink, fontFamily: serif }]}>
-          你好，{user?.name?.split(' ')[0] || 'User'}。
+          {t('greeting')}，{user?.name?.split(' ')[0] || 'User'}。
         </Text>
         <Text style={[styles.date, { color: c.inkLight }]}>
-          {formatDate()} · 还有 {stats?.due ?? 0} 个词汇待复习
+          {formatDate(lang)} · {t('dailyDue', { count: stats?.due ?? 0 })}
         </Text>
       </View>
 
@@ -85,12 +90,12 @@ export default function HomeScreen() {
           <View style={[styles.progressCard, { backgroundColor: c.buttonBg }]}>
             <View style={styles.progressRow}>
               <View>
-                <Text style={styles.progressLabel}>总词汇</Text>
+                <Text style={styles.progressLabel}>{t('totalWords')}</Text>
                 <Text style={styles.progressValue}>{progress}%</Text>
               </View>
               <View style={styles.progressRight}>
-                <Text style={styles.progressLabel}>今日复习</Text>
-                <Text style={styles.progressToday}>{stats.today} 词</Text>
+                <Text style={styles.progressLabel}>{t('todayReview')}</Text>
+                <Text style={styles.progressToday}>{stats.today} {t('wordUnit')}</Text>
               </View>
             </View>
           </View>
@@ -99,31 +104,31 @@ export default function HomeScreen() {
             style={[styles.cta, { backgroundColor: c.buttonBg }]}
             onPress={() => setShowPicker(true)}
           >
-            <Text style={styles.ctaTitle}>今日必修</Text>
+            <Text style={styles.ctaTitle}>{t('dailyRequired')}</Text>
             <Text style={styles.ctaDesc}>
               {stats.due > 0
-                ? `还有 ${stats.due} 个词汇待浸润`
-                : '今日已浸润完毕'}
+                ? t('dailyDue', { count: stats.due })
+                : t('dailyDone')}
             </Text>
-            <Text style={styles.ctaGo}>选择词库开始 →</Text>
+            <Text style={styles.ctaGo}>{t('chooseDeck')}</Text>
           </Pressable>
 
           <View style={styles.grid}>
             <View style={[styles.statCard, { backgroundColor: c.card }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.due}</Text>
-              <Text style={[styles.statLabel, { color: c.inkLight }]}>待复习</Text>
+              <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('due')}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: c.card }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.fresh}</Text>
-              <Text style={[styles.statLabel, { color: c.inkLight }]}>新词</Text>
+              <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('new')}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: c.card }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.total}</Text>
-              <Text style={[styles.statLabel, { color: c.inkLight }]}>总词汇</Text>
+              <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('totalWords')}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: c.card }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.today}</Text>
-              <Text style={[styles.statLabel, { color: c.inkLight }]}>今日复习</Text>
+              <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('todayReview')}</Text>
             </View>
           </View>
         </View>
@@ -138,7 +143,7 @@ export default function HomeScreen() {
         <Pressable style={styles.mask} onPress={() => setShowPicker(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.paper }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
-              选择词库
+              {t('chooseDeck')}
             </Text>
             <FlatList
               data={['30天', '其他']}

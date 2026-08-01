@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Text, type ColorValue } from 'react-native';
+import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 
 function EmojiIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
@@ -8,6 +9,7 @@ function EmojiIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
 
 export default function TabsLayout() {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const c = theme.colors;
 
   return (
@@ -39,7 +41,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '首页',
+          title: t('tabHome'),
           tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="🏠" color={color} />
           ),
@@ -48,7 +50,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="decks"
         options={{
-          title: '词库',
+          title: t('tabDecks'),
           tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="📚" color={color} />
           ),
@@ -57,7 +59,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="stats"
         options={{
-          title: '统计',
+          title: t('tabStats'),
           tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="📊" color={color} />
           ),
@@ -66,7 +68,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: '设置',
+          title: t('tabSettings'),
           tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="⚙️" color={color} />
           ),
