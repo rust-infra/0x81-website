@@ -6,7 +6,8 @@ export type ThemeName =
   | 'zhuqing'
   | 'zhusha'
   | 'dailan'
-  | 'fense';
+  | 'fense'
+  | 'ios';
 
 export interface ThemeColors {
   paper: string;
@@ -227,6 +228,37 @@ export const THEMES: Theme[] = [
       divider: '#E8D8D8',
       hoverBg: '#F0E4E0',
       inputBg: '#FAF2F0',
+    },
+  },
+  {
+    name: 'ios',
+    label: 'iOS 清爽',
+    description: '系统蓝，简洁明快',
+    preview: '#F2F2F7',
+    colors: {
+      paper: '#F2F2F7',
+      paperGradient: '#F2F2F7',
+      card: '#FFFFFF',
+      ink: '#000000',
+      inkLight: '#3C3C43',
+      inkMuted: '#8E8E93',
+      accent: '#007AFF',
+      accentLight: '#007AFF18',
+      border: '#E5E5EA',
+      navBg: '#F9F9F9',
+      navText: '#3C3C43',
+      studyBg: '#F2F2F7',
+      studyCard: '#FFFFFF',
+      studyText: '#000000',
+      studyMuted: 'rgba(0, 0, 0, 0.55)',
+      progressBar: '#007AFF',
+      tagBg: 'rgba(0, 122, 255, 0.08)',
+      tagText: '#3C3C43',
+      buttonBg: '#007AFF',
+      buttonText: '#FFFFFF',
+      divider: '#E5E5EA',
+      hoverBg: '#E9E9EB',
+      inputBg: '#FFFFFF',
     },
   },
 ];
