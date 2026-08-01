@@ -16,8 +16,8 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
     ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
-    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats,
+    TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeSession, UpdateCardRequest, UpdateDeckRequest,
+    UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -245,6 +245,36 @@ pub trait VocabularyRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait TypeRepository: Send + Sync {
+    /// Insert a session; returns false when the id already exists (idempotent).
+    async fn type_session_insert(
+        &self,
+        user_id: &str,
+        session: &TypeSession,
+    ) -> Result<bool, RepositoryError>;
+    /// Insert entries, skipping ids that already exist; returns number inserted.
+    async fn type_entries_insert(
+        &self,
+        user_id: &str,
+        entries: &[TypeEntry],
+    ) -> Result<usize, RepositoryError>;
+    async fn type_recent_sessions(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<Vec<TypeSession>, RepositoryError>;
+    async fn type_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<TypeDailyTrend>, RepositoryError>;
+    async fn type_mastery_rows(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeMasteryRow>, RepositoryError>;
+}
+
+#[async_trait]
 pub trait HealthRepository: Send + Sync {
     async fn is_healthy(&self) -> bool;
     fn backend_name(&self) -> &'static str;
@@ -255,6 +285,7 @@ pub trait Repository:
     + LearningRepository
     + SettingsRepository
     + VocabularyRepository
+    + TypeRepository
     + HealthRepository
 {
 }
@@ -264,6 +295,7 @@ impl<T> Repository for T where
         + LearningRepository
         + SettingsRepository
         + VocabularyRepository
+        + TypeRepository
         + HealthRepository
 {
 }

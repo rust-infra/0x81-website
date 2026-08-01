@@ -16,12 +16,13 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeSession, UpdateCardRequest,
+    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
-    UserRepository, VocabularyRepository,
+    TypeRepository, UserRepository, VocabularyRepository,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1418,6 +1419,58 @@ impl VocabularyRepository for MongoRepositories {
     ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
         Err(RepositoryError::Configuration(
             "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+}
+
+#[async_trait]
+impl TypeRepository for MongoRepositories {
+    async fn type_session_insert(
+        &self,
+        _user_id: &str,
+        _session: &TypeSession,
+    ) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_entries_insert(
+        &self,
+        _user_id: &str,
+        _entries: &[TypeEntry],
+    ) -> Result<usize, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_recent_sessions(
+        &self,
+        _user_id: &str,
+        _limit: i64,
+    ) -> Result<Vec<TypeSession>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_daily_trend(
+        &self,
+        _user_id: &str,
+        _days: i64,
+    ) -> Result<Vec<TypeDailyTrend>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mastery_rows(
+        &self,
+        _user_id: &str,
+    ) -> Result<Vec<TypeMasteryRow>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
         ))
     }
 }
