@@ -1919,7 +1919,8 @@ impl TypeRepository for SqliteRepositories {
                 correct_chars = excluded.correct_chars,
                 wrong_chars = excluded.wrong_chars,
                 typed_states = excluded.typed_states,
-                updated_at = excluded.updated_at",
+                updated_at = excluded.updated_at
+             WHERE excluded.updated_at >= type_resume.updated_at",
         )
         .bind(user_id)
         .bind(&resume.deck_id)
@@ -3723,6 +3724,52 @@ mod tests {
         assert!(repo.type_resume_delete(&user.id, "deck_r").await?);
         assert!(repo.type_resume_get(&user.id, "deck_r").await?.is_none());
         assert!(!repo.type_resume_delete(&user.id, "deck_r").await?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_upsert_keeps_newer_checkpoint() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-newest-1",
+                name: "Newest Resume",
+                email: "newest-resume@example.com",
+                avatar: None,
+            })
+            .await?;
+        let older: DateTime<Utc> = Utc::now() - Duration::hours(1);
+        let now = Utc::now();
+        let newer: DateTime<Utc> = Utc::now() + Duration::hours(1);
+        let make = |id: &str, card: &str, at: DateTime<Utc>| TypeResume {
+            deck_id: "deck_newest".into(),
+            deck_name: None,
+            mode: "word".into(),
+            card_id: card.into(),
+            target: "hello".into(),
+            char_index: 1,
+            correct_chars: 1,
+            wrong_chars: 0,
+            typed_states: vec![TypedCharState {
+                state: "correct".into(),
+                input_char: Some("h".into()),
+            }],
+            updated_at: at,
+        };
+
+        // newest first
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_new", newer)).await?;
+        // an older checkpoint must NOT overwrite the newer one
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_stale", older)).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_newest").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_new");
+
+        // a newer checkpoint DOES overwrite
+        let even_newer: DateTime<Utc> = Utc::now() + Duration::hours(2);
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_fresh", even_newer)).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_newest").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_fresh");
         Ok(())
     }
 

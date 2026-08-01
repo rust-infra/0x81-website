@@ -311,6 +311,7 @@ export default function TypeTraining() {
   const sessionCreatedAtRef = useRef('');
   const sessionFinishedRef = useRef(false);
   const syncTickRef = useRef<() => void>(() => {});
+  const resumePutChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const currentCard = cards[currentIndex];
 
@@ -452,6 +453,7 @@ export default function TypeTraining() {
         }
         setCards(loaded);
         if (loaded.length > 0) {
+          const localResume = loadLocalResume(deckId);
           let resume: TypeResume | null = null;
           if (backend) {
             try {
@@ -459,9 +461,11 @@ export default function TypeTraining() {
             } catch {
               resume = null;
             }
-            if (!resume) resume = loadLocalResume(deckId);
-          } else {
-            resume = loadLocalResume(deckId);
+          }
+          // prefer whichever checkpoint is newer (localStorage may be fresher
+          // when the backend PUT failed or the page left before it landed)
+          if (!resume || (localResume && localResume.updated_at > resume.updated_at)) {
+            resume = localResume;
           }
           let savedIdx = getTypeSavedIndex(deckId, loaded);
           if (resume) {
@@ -650,7 +654,11 @@ export default function TypeTraining() {
     };
     localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
     if (backend) {
-      putTypeResume(resume).catch(() => {});
+      // serialize PUTs so an older checkpoint can never land after a newer one
+      resumePutChainRef.current = resumePutChainRef.current
+        .catch(() => {})
+        .then(() => putTypeResume(resume))
+        .catch(() => {});
     }
   };
 
