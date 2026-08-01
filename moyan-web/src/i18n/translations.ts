@@ -159,6 +159,13 @@ export const translations: Record<Language, TranslationSet> = {
     'stats.best.day': '最佳单日',
     'stats.avg.day': '日均',
     'stats.no.data': '暂无数据，开始学习吧',
+    'stats.type.title': '打字训练',
+    'stats.type.recent': '最近会话',
+    'stats.type.trend': '每日趋势',
+    'stats.type.no.data': '暂无打字记录，练一练吧',
+    'stats.type.deck': '词库',
+    'stats.type.avg.accuracy': '平均准确率',
+    'stats.type.avg.wpm': '平均 WPM',
 
     // Settings
     'settings.title': '设置',
@@ -436,6 +443,13 @@ export const translations: Record<Language, TranslationSet> = {
     'stats.best.day': 'Best Day',
     'stats.avg.day': 'Daily Avg',
     'stats.no.data': 'No data yet. Start studying!',
+    'stats.type.title': 'Typing Practice',
+    'stats.type.recent': 'Recent Sessions',
+    'stats.type.trend': 'Daily Trend',
+    'stats.type.no.data': 'No typing sessions yet',
+    'stats.type.deck': 'Deck',
+    'stats.type.avg.accuracy': 'Avg Accuracy',
+    'stats.type.avg.wpm': 'Avg WPM',
 
     // Settings
     'settings.title': 'Settings',
