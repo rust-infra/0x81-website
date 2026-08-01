@@ -139,6 +139,7 @@ function mapLocalDeck(deck: LocalDeck): UiDeck {
 // ---- Progress Persistence ----
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
 const TYPE_SYNC_INTERVAL_MS = 5000;
+const TYPE_AUTOPLAY_KEY = 'moyan_type_autoplay';
 
 interface TypeProgress {
   [deckId: string]: {
@@ -288,7 +289,11 @@ export default function TypeTraining() {
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [autoPlay, setAutoPlay] = useState(() => getSpeechSettings().autoPlay);
+  const [autoPlay, setAutoPlay] = useState(() => {
+    // typing page defaults to auto-play; header toggle persists the preference
+    const stored = localStorage.getItem(TYPE_AUTOPLAY_KEY);
+    return stored === null ? true : stored === '1';
+  });
   const [deckName, setDeckName] = useState<string>('');
   const [showDeckPicker, setShowDeckPicker] = useState(!deckId);
   const [decks, setDecks] = useState<UiDeck[]>([]);
@@ -879,6 +884,7 @@ export default function TypeTraining() {
   const toggleAutoPlay = () => {
     const next = !autoPlay;
     setAutoPlay(next);
+    localStorage.setItem(TYPE_AUTOPLAY_KEY, next ? '1' : '0');
     const s = getSpeechSettings();
     s.autoPlay = next;
     localStorage.setItem('speech_settings', JSON.stringify(s));
