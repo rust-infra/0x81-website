@@ -1,11 +1,20 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getStudyQueue } from '../../lib/api';
+import { getStudyQueue, listDecks } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
+import type { Deck } from '../../lib/types';
 
 function formatDate() {
   const d = new Date();
@@ -23,6 +32,8 @@ export default function HomeScreen() {
     total: number;
     today: number;
   } | null>(null);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -30,6 +41,7 @@ export default function HomeScreen() {
       (async () => {
         try {
           const queue = await getStudyQueue();
+          const decks = await listDecks();
           if (!cancelled) {
             setStats({
               due: queue.due_count,
@@ -37,6 +49,7 @@ export default function HomeScreen() {
               total: queue.total_cards,
               today: queue.today_reviewed,
             });
+            setDecks(decks);
           }
         } catch {
           // ignore
@@ -51,6 +64,8 @@ export default function HomeScreen() {
   const progress = stats && stats.total > 0
     ? Math.min(100, Math.round(((stats.total - stats.fresh) / stats.total) * 100))
     : 0;
+  const thirtyDayDecks = decks.filter((d) => d.name === '30天词汇');
+  const otherDecks = decks.filter((d) => d.name !== '30天词汇');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -82,7 +97,7 @@ export default function HomeScreen() {
 
           <Pressable
             style={[styles.cta, { backgroundColor: c.buttonBg }]}
-            onPress={() => router.push('/decks')}
+            onPress={() => setShowPicker(true)}
           >
             <Text style={styles.ctaTitle}>今日必修</Text>
             <Text style={styles.ctaDesc}>
@@ -113,6 +128,52 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+
+      <Modal
+        visible={showPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <Pressable style={styles.mask} onPress={() => setShowPicker(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: c.paper }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
+              选择词库
+            </Text>
+            <FlatList
+              data={['30天', '其他']}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => {
+                const list = item === '30天' ? thirtyDayDecks : otherDecks;
+                if (list.length === 0) return null;
+                return (
+                  <View style={{ marginBottom: 14 }}>
+                    {item === '30天' ? (
+                      <Text style={[styles.groupTitle, { color: c.inkLight }]}>30天词汇</Text>
+                    ) : null}
+                    {list.map((deck) => (
+                      <Pressable
+                        key={deck.id}
+                        style={[styles.deckRow, { backgroundColor: c.card }]}
+                        onPress={() => {
+                          setShowPicker(false);
+                          router.push(`/study/${deck.id}`);
+                        }}
+                      >
+                        <View style={[styles.deckDot, { backgroundColor: deck.color || c.accent }]} />
+                        <Text style={[styles.deckName, { color: c.ink }]} numberOfLines={1}>
+                          {deck.name}
+                        </Text>
+                        <Text style={{ color: c.inkMuted, fontSize: 12 }}>{deck.card_count}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -154,4 +215,24 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 12, marginTop: 4 },
+  mask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '75%',
+  },
+  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
+  groupTitle: { fontSize: 12, fontWeight: '500', marginBottom: 8 },
+  deckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    gap: 10,
+  },
+  deckDot: { width: 10, height: 10, borderRadius: 5 },
+  deckName: { flex: 1, fontSize: 15, fontWeight: '500' },
 });

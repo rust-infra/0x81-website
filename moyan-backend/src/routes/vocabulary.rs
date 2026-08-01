@@ -24,6 +24,7 @@ pub fn routes() -> Router<AppState> {
             get(vocabulary::list_study_cards),
         )
         .route("/study/queue", get(vocabulary::study_queue))
+        .route("/study/daily-trend", get(vocabulary::daily_trend))
         .route(
             "/cards/{card_id}",
             put(vocabulary::update_card).delete(vocabulary::delete_card),

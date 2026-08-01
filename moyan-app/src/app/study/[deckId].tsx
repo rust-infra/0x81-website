@@ -15,7 +15,9 @@ import { serif } from '../../lib/ui';
 import type { StudyCard } from '../../lib/types';
 
 type Rating = 'again' | 'hard' | 'good' | 'easy';
+type StudyMode = 'en-zh' | 'zh-en';
 const SPEAK_KEY = 'moyan_study_speak';
+const MODE_KEY = 'moyan_study_mode';
 
 export default function StudyScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
@@ -28,6 +30,7 @@ export default function StudyScreen() {
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [speakEnabled, setSpeakEnabled] = useState(true);
+  const [studyMode, setStudyMode] = useState<StudyMode>('en-zh');
   const [sessionStats, setSessionStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   const cardStartRef = useRef(Date.now());
   const flipAnim = useRef(new Animated.Value(0)).current;
@@ -67,6 +70,11 @@ export default function StudyScreen() {
     AsyncStorage.getItem(SPEAK_KEY)
       .then((v) => setSpeakEnabled(v !== '0'))
       .catch(() => {});
+    AsyncStorage.getItem(MODE_KEY)
+      .then((v) => {
+        if (v === 'zh-en' || v === 'en-zh') setStudyMode(v);
+      })
+      .catch(() => {});
   }, [load]);
 
   const current = queue[index];
@@ -76,10 +84,13 @@ export default function StudyScreen() {
       cardStartRef.current = Date.now();
       flipAnim.setValue(0);
       if (speakEnabled) {
-        speak(current.card.front, { language: 'en-US' });
+        void speak(
+          studyMode === 'en-zh' ? current.card.front : current.card.back,
+          { language: studyMode === 'en-zh' ? 'en-US' : 'zh-CN' }
+        );
       }
     }
-  }, [current, showAnswer, speakEnabled, flipAnim]);
+  }, [current, showAnswer, speakEnabled, flipAnim, studyMode]);
 
   const flipCard = () => {
     if (showAnswer || transitioning) return;
@@ -91,7 +102,7 @@ export default function StudyScreen() {
     }).start(() => {
       setShowAnswer(true);
       if (speakEnabled && current?.card.examples?.[0]) {
-        speak(current.card.examples[0].sentence_en, { language: 'en-US' });
+        void speak(current.card.examples[0].sentence_en, { language: 'en-US' });
       }
       Animated.timing(flipAnim, {
         toValue: 180,
@@ -105,7 +116,14 @@ export default function StudyScreen() {
     const next = !speakEnabled;
     setSpeakEnabled(next);
     AsyncStorage.setItem(SPEAK_KEY, next ? '1' : '0').catch(() => {});
-    if (!next) stopSpeaking();
+    if (!next) void stopSpeaking();
+  };
+
+  const toggleMode = () => {
+    const next: StudyMode = studyMode === 'en-zh' ? 'zh-en' : 'en-zh';
+    setStudyMode(next);
+    AsyncStorage.setItem(MODE_KEY, next).catch(() => {});
+    void stopSpeaking();
   };
 
   const handleRate = async (rating: Rating) => {
@@ -114,7 +132,7 @@ export default function StudyScreen() {
     const timeTakenMs = Date.now() - cardStartRef.current;
     const updatedSRS = calculateSRS(progressToSrs(current.progress), rating);
     try {
-      if (speakEnabled) stopSpeaking();
+      if (speakEnabled) void stopSpeaking();
       await upsertCardProgress(current.card.id, {
         srs_status: updatedSRS.status,
         interval: updatedSRS.interval,
@@ -191,6 +209,8 @@ export default function StudyScreen() {
       );
     }
     if (!current) return null;
+    const frontText = studyMode === 'en-zh' ? current.card.front : current.card.back;
+    const backText = studyMode === 'en-zh' ? current.card.back : current.card.front;
 
     const rotateY = flipAnim.interpolate({
       inputRange: [0, 180],
@@ -219,7 +239,7 @@ export default function StudyScreen() {
           >
             {!showAnswer ? (
               <View>
-                <Text style={[styles.front, { color: c.studyText }]}>{current.card.front}</Text>
+                <Text style={[styles.front, { color: c.studyText }]}>{frontText}</Text>
                 {current.card.pronunciation ? (
                   <Text style={[styles.pron, { color: c.studyMuted }]}>
                     {current.card.pronunciation}
@@ -229,7 +249,7 @@ export default function StudyScreen() {
               </View>
             ) : (
               <View style={{ transform: [{ rotateY: '-180deg' }] }}>
-                <Text style={[styles.back, { color: c.studyText }]}>{current.card.back}</Text>
+                <Text style={[styles.back, { color: c.studyText }]}>{backText}</Text>
                 {current.card.examples?.[0] ? (
                   <View style={styles.exampleBox}>
                     <Text style={[styles.exampleEn, { color: c.studyMuted }]}>
@@ -271,6 +291,11 @@ export default function StudyScreen() {
           <Pressable onPress={toggleSpeak} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 16 }}>
               {speakEnabled ? '🔊' : '🔇'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={toggleMode} hitSlop={12}>
+            <Text style={{ color: c.studyMuted, fontSize: 14 }}>
+              {studyMode === 'en-zh' ? '英→中' : '中→英'}
             </Text>
           </Pressable>
         </View>

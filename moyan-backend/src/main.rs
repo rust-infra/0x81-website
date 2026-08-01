@@ -384,6 +384,25 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn study_daily_trend_route_returns_points() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/study/daily-trend?days=7")
+                    .header("authorization", "Bearer test-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert!(body["data"].is_array());
+        Ok(())
+    }
 }
 
 #[tokio::main]

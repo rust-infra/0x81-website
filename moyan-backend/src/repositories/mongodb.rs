@@ -18,7 +18,7 @@ use crate::models::{
     ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
     SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
     UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, SYSTEM_OWNER_ID,
+    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -598,6 +598,16 @@ impl LearningRepository for MongoRepositories {
                 "reviews count",
             )?,
         })
+    }
+
+    async fn study_daily_trend(
+        &self,
+        _user_id: &str,
+        _days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "study daily trend requires sqlite backend".into(),
+        ))
     }
 }
 

@@ -1,7 +1,8 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::Json,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::middleware::auth::Claims;
@@ -105,6 +106,22 @@ pub async fn study_queue(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let queue = state.services.vocabulary.study_queue(&claims.sub).await?;
     Ok(success(queue))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DailyTrendQuery {
+    pub days: Option<i64>,
+}
+
+pub async fn daily_trend(
+    State(state): State<AppState>,
+    claims: axum::Extension<Claims>,
+    Query(query): Query<DailyTrendQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let days = query.days.unwrap_or(7).clamp(1, 30);
+    Ok(success(
+        state.services.vocabulary.daily_trend(&claims.sub, days).await?,
+    ))
 }
 
 pub async fn update_card(

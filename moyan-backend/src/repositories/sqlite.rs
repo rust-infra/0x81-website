@@ -11,7 +11,7 @@ use crate::models::{
     DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
     SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
     UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, SYSTEM_OWNER_ID,
+    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -724,6 +724,34 @@ impl LearningRepository for SqliteRepositories {
             .fetch_one(&self.pool)
             .await?,
         })
+    }
+
+    async fn study_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError> {
+        let since = Utc::now() - Duration::days(days);
+        let rows = sqlx::query_as::<_, (String, i64, f64)>(
+            "SELECT date(reviewed_at) AS date, COUNT(*) AS reviews,
+                    AVG(CASE WHEN rating IN ('good','easy') THEN 1.0 ELSE 0.0 END) AS accuracy
+             FROM review_logs_v2
+             WHERE owner_user_id = ? AND reviewed_at >= ?
+             GROUP BY date(reviewed_at)
+             ORDER BY date",
+        )
+        .bind(user_id)
+        .bind(since)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(date, reviews, accuracy)| DailyTrendPoint {
+                date,
+                reviews,
+                accuracy,
+            })
+            .collect())
     }
 }
 
@@ -3666,6 +3694,75 @@ mod tests {
         .await?;
         assert!(repo.type_recent_sessions(&second.id, 20).await?.is_empty());
         assert!(repo.type_mastery_rows(&second.id).await?.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn study_daily_trend_aggregates_reviews_by_day() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "trend-1",
+                name: "Trend User",
+                email: "trend@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Trend Deck".into(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".into(),
+                    back: "你好".into(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+        let day1 = (Utc::now() - Duration::days(1))
+            .with_hour(10).unwrap().with_minute(0).unwrap().with_second(0).unwrap();
+        let day2 = Utc::now();
+        for (reviewed_at, rating) in [
+            (day1, "good".to_string()),
+            (day1, "again".to_string()),
+            (day2, "easy".to_string()),
+            (day2, "good".to_string()),
+            (day2, "hard".to_string()),
+        ] {
+            repo.create_review_log(
+                &user.id,
+                &CreateReviewLogRequest {
+                    card_id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    rating,
+                    time_ms: Some(1000),
+                    reviewed_at: Some(reviewed_at),
+                },
+            )
+            .await?;
+        }
+
+        let trend = repo.study_daily_trend(&user.id, 30).await?;
+        assert_eq!(trend.len(), 2);
+        assert_eq!(trend[0].date, day1.date_naive().to_string());
+        assert_eq!(trend[0].reviews, 2);
+        assert!((trend[0].accuracy - 0.5).abs() < 1e-9);
+        assert_eq!(trend[1].date, day2.date_naive().to_string());
+        assert_eq!(trend[1].reviews, 3);
+        assert!((trend[1].accuracy - 2.0 / 3.0).abs() < 1e-9);
         Ok(())
     }
 

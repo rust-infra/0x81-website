@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -11,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listDecks } from '../../lib/api';
+import { createDeck, deleteDeck, listDecks } from '../../lib/api';
 import { useTheme } from '../../lib/theme-context';
 import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
 import type { Deck } from '../../lib/types';
@@ -72,9 +73,53 @@ export default function DecksScreen() {
             {deck.card_count} 词
           </Text>
         </View>
+        {deck.owner_user_id !== 'system' ? (
+          <Pressable
+            hitSlop={10}
+            onPress={() => handleDelete(deck)}
+          >
+            <Text style={{ color: c.inkMuted, fontSize: 16 }}>🗑</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );
+
+  const handleDelete = (deck: Deck) => {
+    Alert.alert('删除词库', `确定删除「${deck.name}」吗？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteDeck(deck.id);
+            setDecks((prev) => prev.filter((d) => d.id !== deck.id));
+          } catch (err) {
+            Alert.alert('删除失败', err instanceof Error ? err.message : String(err));
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    try {
+      await createDeck({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        color: '#2B2B2B',
+      });
+      setNewName('');
+      setNewDesc('');
+      setShowCreate(false);
+      const data = await listDecks();
+      setDecks(data);
+    } catch (err) {
+      Alert.alert('创建失败', err instanceof Error ? err.message : String(err));
+    }
+  };
 
   return (
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -143,7 +188,7 @@ export default function DecksScreen() {
               value={newDesc}
               onChangeText={setNewDesc}
             />
-            <Pressable style={[styles.createBtn, { backgroundColor: c.buttonBg }]} onPress={() => setShowCreate(false)}>
+            <Pressable style={[styles.createBtn, { backgroundColor: c.buttonBg }]} onPress={handleCreate}>
               <Text style={{ color: c.buttonText, fontWeight: '600' }}>创建</Text>
             </Pressable>
           </Pressable>

@@ -16,8 +16,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
     ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
-    TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession, UpdateCardRequest,
-    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    DailyTrendPoint, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -102,6 +103,12 @@ pub trait LearningRepository: Send + Sync {
     async fn download(&self, user_id: &str) -> Result<SyncData, RepositoryError>;
     async fn status(&self, user_id: &str) -> Result<SyncStatusResponse, RepositoryError>;
     async fn stats(&self, user_id: &str) -> Result<UserStats, RepositoryError>;
+    /// Daily review counts + accuracy over the last N days (UTC dates).
+    async fn study_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError>;
 }
 
 #[async_trait]

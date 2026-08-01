@@ -104,3 +104,54 @@ export interface User {
   avatar: string;
   provider: string;
 }
+
+export interface CreateDeckRequest {
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface UpdateDeckRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
+export interface CardExampleInput {
+  id?: string;
+  sentence_en: string;
+  translation_zh: string;
+}
+
+export interface CreateCardRequest {
+  front: string;
+  back: string;
+  pronunciation?: string;
+  tags?: string[];
+  examples?: CardExampleInput[];
+}
+
+export interface UpdateCardRequest {
+  front?: string;
+  back?: string;
+  pronunciation?: string | null;
+  tags?: string[];
+  examples?: CardExampleInput[];
+}
+
+export interface UserSettings {
+  theme?: string;
+  language?: string;
+  speech_provider?: string;
+  speech_voice?: string;
+  speech_zh_voice?: string;
+  speech_model?: string;
+  speech_speed?: number;
+  auto_play?: boolean;
+}
+
+export interface DailyTrendPoint {
+  date: string;
+  reviews: number;
+  accuracy: number;
+}

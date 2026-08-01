@@ -78,3 +78,11 @@ pub struct UserStats {
     pub decks_count: i64,
     pub reviews_count: i64,
 }
+
+/// Per-day study aggregate for the mobile stats trend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyTrendPoint {
+    pub date: String,
+    pub reviews: i64,
+    pub accuracy: f64,
+}

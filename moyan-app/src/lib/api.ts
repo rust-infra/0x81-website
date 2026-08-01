@@ -4,11 +4,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBase } from './config';
 import type {
   CardProgress,
+  Card,
   CreateReviewLogRequest,
+  CreateCardRequest,
+  CreateDeckRequest,
+  DailyTrendPoint,
   Deck,
   ReviewLog,
   StudyCard,
   StudyQueue,
+  UpdateCardRequest,
+  UpdateDeckRequest,
+  UserSettings,
   User,
   UpsertCardProgressRequest,
 } from './types';
@@ -61,6 +68,64 @@ export async function listDecks(): Promise<Deck[]> {
   return apiRequest<Deck[]>('/api/decks');
 }
 
+export async function createDeck(body: CreateDeckRequest): Promise<Deck> {
+  return apiRequest<Deck>('/api/decks', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateDeck(
+  deckId: string,
+  body: UpdateDeckRequest
+): Promise<Deck> {
+  return apiRequest<Deck>(`/api/decks/${encodeURIComponent(deckId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteDeck(deckId: string): Promise<void> {
+  await apiRequest<null>(`/api/decks/${encodeURIComponent(deckId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listCards(deckId: string): Promise<Card[]> {
+  return apiRequest<Card[]>(
+    `/api/decks/${encodeURIComponent(deckId)}/cards`
+  );
+}
+
+export async function createCard(
+  deckId: string,
+  body: CreateCardRequest
+): Promise<Card> {
+  return apiRequest<Card>(
+    `/api/decks/${encodeURIComponent(deckId)}/cards`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function updateCard(
+  cardId: string,
+  body: UpdateCardRequest
+): Promise<Card> {
+  return apiRequest<Card>(`/api/cards/${encodeURIComponent(cardId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCard(cardId: string): Promise<void> {
+  await apiRequest<null>(`/api/cards/${encodeURIComponent(cardId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listStudyCards(deckId: string): Promise<StudyCard[]> {
   return apiRequest<StudyCard[]>(
     `/api/decks/${encodeURIComponent(deckId)}/study-cards`
@@ -91,6 +156,23 @@ export async function createReviewLog(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export async function fetchUserSettings(): Promise<UserSettings> {
+  return apiRequest<UserSettings>('/api/settings');
+}
+
+export async function saveUserSettings(
+  settings: UserSettings
+): Promise<UserSettings> {
+  return apiRequest<UserSettings>('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ settings }),
+  });
+}
+
+export async function getDailyTrend(days = 7): Promise<DailyTrendPoint[]> {
+  return apiRequest<DailyTrendPoint[]>(`/api/study/daily-trend?days=${days}`);
 }
 
 // ==================== Kimi Device Flow 登录 ====================

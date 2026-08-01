@@ -2,9 +2,10 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getStudyQueue } from '../../lib/api';
+import { getDailyTrend, getStudyQueue } from '../../lib/api';
 import { useTheme } from '../../lib/theme-context';
 import { screen, serif } from '../../lib/ui';
+import type { DailyTrendPoint } from '../../lib/types';
 
 export default function StatsScreen() {
   const { theme } = useTheme();
@@ -15,6 +16,7 @@ export default function StatsScreen() {
     total: number;
     today: number;
   } | null>(null);
+  const [trend, setTrend] = useState<DailyTrendPoint[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -22,6 +24,7 @@ export default function StatsScreen() {
       (async () => {
         try {
           const queue = await getStudyQueue();
+          const trendData = await getDailyTrend(7);
           if (!cancelled) {
             setStats({
               due: queue.due_count,
@@ -29,6 +32,7 @@ export default function StatsScreen() {
               total: queue.total_cards,
               today: queue.today_reviewed,
             });
+            setTrend(trendData);
           }
         } catch {
           // ignore
@@ -39,6 +43,23 @@ export default function StatsScreen() {
       };
     }, [])
   );
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const byDate = new Map(trend.map((t) => [t.date, t]));
+  const filled = days.map((date) => byDate.get(date) || { date, reviews: 0, accuracy: 0 });
+  const maxReviews = Math.max(...filled.map((d) => d.reviews), 1);
+  const overallAccuracy =
+    filled.length > 0
+      ? Math.round(
+          (filled.reduce((sum, d) => sum + d.accuracy * d.reviews, 0) /
+            Math.max(filled.reduce((sum, d) => sum + d.reviews, 0), 1)) *
+            100
+        )
+      : 0;
 
   return (
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -74,6 +95,32 @@ export default function StatsScreen() {
                 <Text style={[styles.statLabel, { color: c.inkLight }]}>{item.label}</Text>
               </View>
             ))}
+          </View>
+
+          <View style={[styles.trendCard, { backgroundColor: c.card }]}>
+            <View style={styles.trendHeader}>
+              <Text style={[styles.trendTitle, { color: c.ink }]}>本周趋势</Text>
+              <Text style={[styles.trendAcc, { color: c.accent }]}>准确率 {overallAccuracy}%</Text>
+            </View>
+            <View style={styles.bars}>
+              {filled.map((day) => (
+                <View key={day.date} style={styles.barCol}>
+                  {day.reviews > 0 && (
+                    <Text style={[styles.barLabel, { color: c.inkMuted }]}>{day.reviews}</Text>
+                  )}
+                  <View
+                    style={[
+                      styles.bar,
+                      {
+                        backgroundColor: c.buttonBg,
+                        height: `${Math.max((day.reviews / maxReviews) * 80, 4)}%`,
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.barDate, { color: c.inkMuted }]}>{day.date.slice(5)}</Text>
+                </View>
+              ))}
+            </View>
           </View>
 
           <Text style={[styles.quote, { color: c.inkMuted }]}>
@@ -120,4 +167,28 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 12, marginTop: 4 },
   quote: { textAlign: 'center', fontSize: 13, marginTop: 28, fontFamily: serif },
+  trendCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
+  },
+  trendHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  trendTitle: { fontSize: 15, fontWeight: '600' },
+  trendAcc: { fontSize: 12, fontWeight: '600' },
+  bars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 110,
+    gap: 6,
+  },
+  barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' },
+  barLabel: { fontSize: 10, marginBottom: 4 },
+  bar: { width: '100%', maxWidth: 26, borderRadius: 999 },
+  barDate: { fontSize: 10, marginTop: 6 },
 });
