@@ -8,6 +8,7 @@ import type {
   StudyCard,
   StudyQueue,
   TypeStats,
+  TypeResume,
   TypeSyncRequest,
   TypeSyncResponse,
   UpdateCardRequest,
@@ -166,4 +167,27 @@ export async function syncTypePractice(
 
 export async function getTypeStats(): Promise<TypeStats> {
   return apiRequest<TypeStats>("/api/type/stats");
+}
+
+export async function putTypeResume(body: TypeResume): Promise<void> {
+  await apiRequest<{ saved: boolean }>("/api/type/resume", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getTypeResume(
+  deckId: string | null
+): Promise<TypeResume | null> {
+  const data = await apiRequest<{ resume: TypeResume | null }>(
+    `/api/type/resume?deck_id=${encodeURIComponent(deckId ?? "")}`
+  );
+  return data.resume;
+}
+
+export async function deleteTypeResume(deckId: string | null): Promise<void> {
+  await apiRequest<{ deleted: boolean }>(
+    `/api/type/resume?deck_id=${encodeURIComponent(deckId ?? "")}`,
+    { method: "DELETE" }
+  );
 }

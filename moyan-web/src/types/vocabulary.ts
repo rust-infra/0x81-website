@@ -180,3 +180,21 @@ export interface TypeStats {
   daily_trend: TypeDailyTrend[];
   mastery: TypeMastery[];
 }
+
+export interface TypedCharState {
+  state: "correct" | "wrong";
+  input_char?: string | null;
+}
+
+export interface TypeResume {
+  deck_id: string;
+  deck_name: string | null;
+  mode: TypeMode;
+  card_id: string;
+  target: string;
+  char_index: number;
+  correct_chars: number;
+  wrong_chars: number;
+  typed_states: TypedCharState[];
+  updated_at: string;
+}

@@ -4,8 +4,11 @@ import { calculateSRS } from "./srs";
 import {
   buildTypeEntry,
   buildTypeSession,
+  buildTypeResume,
+  canResumeAt,
   egregiousSrsUpdates,
   isEgregious,
+  typedStatesFromCharInfos,
   toAgainUpsertBody,
   wpmOf,
 } from "./typePractice";
@@ -179,5 +182,71 @@ describe("SRS again updates", () => {
     expect(body.ease_factor).toBe(updated.easeFactor);
     expect(body.due_date).toBe(updated.dueDate.toISOString());
     expect(body.last_reviewed_at).toBe("2026-08-01T09:00:00Z");
+  });
+});
+
+describe("type resume helpers", () => {
+  it("builds a resume with snake_case fields", () => {
+    const resume = buildTypeResume({
+      deckId: "deck_a",
+      deckName: "Rust语言核心",
+      mode: "word",
+      cardId: "card_a",
+      target: "hello",
+      charIndex: 3,
+      correctChars: 2,
+      wrongChars: 1,
+      typedStates: [
+        { state: "correct", inputChar: "h" },
+        { state: "wrong", inputChar: "x" },
+        { state: "correct", inputChar: "l" },
+      ],
+      updatedAt: "2026-08-01T08:30:00Z",
+    });
+    expect(resume.deck_id).toBe("deck_a");
+    expect(resume.char_index).toBe(3);
+    expect(resume.correct_chars).toBe(2);
+    expect(resume.typed_states[1].state).toBe("wrong");
+    expect(resume.typed_states[1].input_char).toBe("x");
+  });
+
+  it("extracts typed states from char infos", () => {
+    const states = typedStatesFromCharInfos(
+      [
+        { state: "correct", inputChar: "h" },
+        { state: "wrong", inputChar: "x" },
+        { state: "pending" },
+        { state: "correct" },
+      ],
+      2
+    );
+    expect(states).toEqual([
+      { state: "correct", inputChar: "h" },
+      { state: "wrong", inputChar: "x" },
+    ]);
+  });
+
+  it("decides when a mid-word resume is possible", () => {
+    const midWord = buildTypeResume({
+      deckId: "",
+      deckName: null,
+      mode: "word",
+      cardId: "card_a",
+      target: "hello",
+      charIndex: 3,
+      correctChars: 2,
+      wrongChars: 1,
+      typedStates: [],
+      updatedAt: "2026-08-01T08:30:00Z",
+    });
+    expect(canResumeAt(midWord, "word", "hello")).toBe(true);
+    // completed word → start fresh
+    expect(canResumeAt({ ...midWord, char_index: 5 }, "word", "hello")).toBe(false);
+    // mode mismatch → start fresh
+    expect(canResumeAt(midWord, "sentence", "hello")).toBe(false);
+    // target mismatch (card content changed) → start fresh
+    expect(canResumeAt(midWord, "word", "world")).toBe(false);
+    // null resume → false
+    expect(canResumeAt(null, "word", "hello")).toBe(false);
   });
 });

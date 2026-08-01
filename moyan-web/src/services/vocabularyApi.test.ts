@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDeck,
+  deleteTypeResume,
+  getTypeResume,
   getStudyQueue,
   getTypeStats,
   listDecks,
+  putTypeResume,
   syncTypePractice,
 } from "./vocabularyApi";
 
@@ -154,5 +157,59 @@ describe("vocabularyApi", () => {
       expect.anything()
     );
     expect(stats.mastery).toEqual([]);
+  });
+
+  it("puts a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { saved: true } }),
+    });
+
+    await putTypeResume({
+      deck_id: "deck_a",
+      deck_name: null,
+      mode: "word",
+      card_id: "card_a",
+      target: "hello",
+      char_index: 3,
+      correct_chars: 2,
+      wrong_chars: 1,
+      typed_states: [{ state: "correct", input_char: "h" }],
+      updated_at: "2026-08-01T08:30:00Z",
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume$/),
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
+  it("fetches a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { resume: { card_id: "card_a", char_index: 3 } },
+      }),
+    });
+
+    const resume = await getTypeResume("deck_a");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume\?deck_id=deck_a$/),
+      expect.anything()
+    );
+    expect(resume?.char_index).toBe(3);
+  });
+
+  it("deletes a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { deleted: true } }),
+    });
+
+    await deleteTypeResume("deck_a");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume\?deck_id=deck_a$/),
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 });

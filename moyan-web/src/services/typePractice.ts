@@ -1,4 +1,9 @@
-import type { TypeEntry, TypeMode, TypeSession } from "@/types/vocabulary";
+import type {
+  TypeEntry,
+  TypeMode,
+  TypeResume,
+  TypeSession,
+} from "@/types/vocabulary";
 import type { SRSData } from "../db";
 import { calculateSRS } from "./srs";
 
@@ -121,4 +126,58 @@ export function toAgainUpsertBody(
     due_date: updated.dueDate.toISOString(),
     last_reviewed_at: lastReviewedAt,
   };
+}
+
+export interface TypedCharStateInput {
+  state: "correct" | "wrong";
+  inputChar?: string | null;
+}
+
+export function buildTypeResume(input: {
+  deckId: string;
+  deckName: string | null;
+  mode: TypeMode;
+  cardId: string;
+  target: string;
+  charIndex: number;
+  correctChars: number;
+  wrongChars: number;
+  typedStates: TypedCharStateInput[];
+  updatedAt: string;
+}): TypeResume {
+  return {
+    deck_id: input.deckId,
+    deck_name: input.deckName,
+    mode: input.mode,
+    card_id: input.cardId,
+    target: input.target,
+    char_index: input.charIndex,
+    correct_chars: input.correctChars,
+    wrong_chars: input.wrongChars,
+    typed_states: input.typedStates.map((s) => ({
+      state: s.state,
+      input_char: s.inputChar ?? null,
+    })),
+    updated_at: input.updatedAt,
+  };
+}
+
+export function typedStatesFromCharInfos(
+  charInfos: Array<{ state: string; inputChar?: string }>,
+  count: number
+): TypedCharStateInput[] {
+  return charInfos.slice(0, count).map((c) => ({
+    state: c.state === "wrong" ? "wrong" : "correct",
+    inputChar: c.inputChar ?? null,
+  }));
+}
+
+export function canResumeAt(
+  resume: TypeResume | null,
+  mode: TypeMode,
+  target: string
+): boolean {
+  if (!resume) return false;
+  if (resume.mode !== mode || resume.target !== target) return false;
+  return resume.char_index > 0 && resume.char_index < target.length;
 }
