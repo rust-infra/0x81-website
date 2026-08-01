@@ -10,8 +10,8 @@ use crate::models::{
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
     SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
-    TypedCharState, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -2367,6 +2367,7 @@ impl HealthRepository for SqliteRepositories {
 mod tests {
     use super::*;
     use chrono::Timelike;
+    use crate::models::TypedCharState;
 
     #[tokio::test]
     async fn persists_user_learning_data_and_stats() -> Result<(), RepositoryError> {
