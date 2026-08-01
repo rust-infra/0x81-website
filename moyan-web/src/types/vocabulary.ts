@@ -50,6 +50,14 @@ export interface StudyCard {
   progress: CardProgress | null;
 }
 
+export interface StudyQueue {
+  cards: StudyCard[];
+  due_count: number;
+  new_count: number;
+  total_cards: number;
+  today_reviewed: number;
+}
+
 export interface ReviewLog {
   id: string;
   owner_user_id: string;

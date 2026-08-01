@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
             "/decks/{deck_id}/study-cards",
             get(vocabulary::list_study_cards),
         )
+        .route("/study/queue", get(vocabulary::study_queue))
         .route(
             "/cards/{card_id}",
             put(vocabulary::update_card).delete(vocabulary::delete_card),

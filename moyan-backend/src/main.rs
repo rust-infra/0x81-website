@@ -1,13 +1,12 @@
 use axum::{
-    Extension,
-    Router,
+    Extension, Router,
     http::Method,
     http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderName, HeaderValue},
     routing::get,
 };
 use std::net::SocketAddr;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
-use tracing::{Level, info};
+use tracing::{Level, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 mod controllers;
@@ -36,9 +35,60 @@ fn parse_allowed_origins() -> Vec<HeaderValue> {
         .collect()
 }
 
+fn build_app(state: AppState) -> Router {
+    // CORS configuration
+    // Must use explicit origins when allow_credentials(true) is enabled.
+    // Set ALLOWED_ORIGINS as a comma-separated list (e.g. "https://app.example.com,https://admin.example.com").
+    let cors = CorsLayer::new()
+        .allow_origin(parse_allowed_origins())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::HEAD,
+        ])
+        .allow_headers([
+            AUTHORIZATION,
+            CONTENT_TYPE,
+            ACCEPT,
+            HeaderName::from_static("x-requested-with"),
+            HeaderName::from_static("x-client-id"),
+            HeaderName::from_static("x-admin-token"),
+        ])
+        .allow_credentials(true);
+
+    Router::new()
+        .nest("/api/auth", auth::routes())
+        .route("/api/settings", settings::router())
+        .route("/api/settings/", settings::router())
+        .nest("/api/sync", sync::routes())
+        .nest("/api", vocabulary::routes())
+        .nest("/api/health", health::routes())
+        .nest("/api/admin", admin::routes())
+        .route("/", get(root_handler))
+        .layer(Extension(state.clone()))
+        .layer(CompressionLayer::new())
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_allowed_origins;
+    use super::{build_app, parse_allowed_origins};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    use crate::middleware::error::AppState;
+    use crate::repositories::SqliteRepositories;
+    use crate::services::Services;
 
     #[test]
     fn default_allowed_origins_include_local_frontend_hosts() {
@@ -56,6 +106,38 @@ mod tests {
         assert!(origins.contains(&"http://127.0.0.1:5000".to_string()));
         assert!(origins.contains(&"http://localhost:5001".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5001".to_string()));
+    }
+
+    #[tokio::test]
+    async fn settings_route_matches_with_and_without_trailing_slash() -> anyhow::Result<()> {
+        let repository = Arc::new(SqliteRepositories::connect("sqlite::memory:").await?);
+        let state = AppState {
+            services: Services::new(repository),
+            jwt_secret: "test-secret".to_string(),
+            google_client_id: String::new(),
+            google_client_secret: String::new(),
+            google_redirect_url: String::new(),
+            admin_token: String::new(),
+        };
+        let app = build_app(state);
+
+        for path in ["/api/settings", "/api/settings/"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(path)
+                        .header("authorization", "Bearer test-token")
+                        .body(Body::empty())?,
+                )
+                .await?;
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "expected {path} to match the settings route"
+            );
+        }
+        Ok(())
     }
 }
 
@@ -94,44 +176,23 @@ async fn main() -> anyhow::Result<()> {
         admin_token: std::env::var("ADMIN_TOKEN").unwrap_or_default(),
     };
 
-    // CORS configuration
-    // Must use explicit origins when allow_credentials(true) is enabled.
-    // Set ALLOWED_ORIGINS as a comma-separated list (e.g. "https://app.example.com,https://admin.example.com").
-    let cors = CorsLayer::new()
-        .allow_origin(parse_allowed_origins())
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::PATCH,
-            Method::DELETE,
-            Method::OPTIONS,
-            Method::HEAD,
-        ])
-        .allow_headers([
-            AUTHORIZATION,
-            CONTENT_TYPE,
-            ACCEPT,
-            HeaderName::from_static("x-requested-with"),
-            HeaderName::from_static("x-client-id"),
-            HeaderName::from_static("x-admin-token"),
-        ])
-        .allow_credentials(true);
+    match state
+        .services
+        .admin_collect
+        .recover_interrupted_jobs()
+        .await
+    {
+        Ok(recovered) if recovered > 0 => {
+            info!(jobs = recovered, "Resuming interrupted collect jobs");
+        }
+        Ok(_) => {}
+        Err(err) => {
+            warn!("collect job recovery failed: {err:?}");
+        }
+    }
 
     // Build router
-    let app = Router::new()
-        .nest("/api/auth", auth::routes())
-        .nest("/api/settings", settings::routes())
-        .nest("/api/sync", sync::routes())
-        .nest("/api", vocabulary::routes())
-        .nest("/api/health", health::routes())
-        .nest("/api/admin", admin::routes())
-        .route("/", get(root_handler))
-        .layer(Extension(state.clone()))
-        .layer(CompressionLayer::new())
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = build_app(state);
 
     // Get port
     let port = std::env::var("PORT")

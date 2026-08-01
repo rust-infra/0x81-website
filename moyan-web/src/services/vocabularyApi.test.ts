@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeck, listDecks } from "./vocabularyApi";
+import { createDeck, getStudyQueue, listDecks } from "./vocabularyApi";
 
 class MemoryStorage {
   private data = new Map<string, string>();
@@ -73,5 +73,30 @@ describe("vocabularyApi", () => {
         body: JSON.stringify({ name: "Mine", description: "d" }),
       })
     );
+  });
+
+  it("fetches the aggregated study queue", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          cards: [],
+          due_count: 2,
+          new_count: 5,
+          total_cards: 7,
+          today_reviewed: 1,
+        },
+      }),
+    });
+
+    const queue = await getStudyQueue();
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/study\/queue$/),
+      expect.anything()
+    );
+    expect(queue.due_count).toBe(2);
+    expect(queue.total_cards).toBe(7);
   });
 });

@@ -209,6 +209,31 @@ impl AdminCollectService {
         Ok(job)
     }
 
+    /// Re-launch workers for jobs left in a running state by a previous process
+    /// (queued, fetching captions, or mid-extraction). Mid-extraction jobs resume
+    /// from the next unfinished caption chunk using their stored captions.
+    pub async fn recover_interrupted_jobs(&self) -> Result<usize, AppError> {
+        let mut recovered = 0usize;
+        for status in [
+            CollectJobStatus::Queued.as_str(),
+            CollectJobStatus::FetchingCaptions.as_str(),
+            CollectJobStatus::Extracting.as_str(),
+        ] {
+            let (jobs, _) = self
+                .repository
+                .collect_job_list(None, Some(status), 0, 1000)
+                .await?;
+            for job in jobs {
+                if job.cancel_requested {
+                    continue;
+                }
+                self.spawn_worker(job.id.clone());
+                recovered += 1;
+            }
+        }
+        Ok(recovered)
+    }
+
     pub async fn list_jobs(
         &self,
         query: CollectJobListQuery,
@@ -330,41 +355,54 @@ impl AdminCollectService {
             return self.mark_paused(job).await;
         }
 
-        let now = Utc::now().to_rfc3339();
-        job.status = CollectJobStatus::FetchingCaptions.as_str().to_string();
-        job.step = "fetching_captions".into();
-        job.error = None;
-        job.started_at = Some(now.clone());
-        job.updated_at = now;
-        self.repository.collect_job_update(&job).await?;
+        let plan = resume_plan(&job);
 
-        let captions = youtube_captions::fetch_youtube_captions(
-            &job.url,
-            job.proxy.as_deref(),
-        )
-        .await?;
+        if !plan.resume_from_extract {
+            let now = Utc::now().to_rfc3339();
+            job.status = CollectJobStatus::FetchingCaptions.as_str().to_string();
+            job.step = "fetching_captions".into();
+            job.error = None;
+            job.started_at = Some(now.clone());
+            job.updated_at = now;
+            self.repository.collect_job_update(&job).await?;
 
-        job = match self.reload_or_gone(job_id).await? {
-            Some(j) => j,
-            None => return Ok(()),
-        };
-        if job.cancel_requested {
-            return self.mark_paused(job).await;
+            let captions = youtube_captions::fetch_youtube_captions(
+                &job.url,
+                job.proxy.as_deref(),
+            )
+            .await?;
+
+            job = match self.reload_or_gone(job_id).await? {
+                Some(j) => j,
+                None => return Ok(()),
+            };
+            if job.cancel_requested {
+                return self.mark_paused(job).await;
+            }
+
+            job.video_id = Some(captions.video_id.clone());
+            job.title = Some(captions.title.clone());
+            job.language = Some(captions.language.clone());
+            job.source_url = Some(captions.source_url.clone());
+            job.caption_text = Some(captions.caption_text.clone());
+            let llm_now = Utc::now().to_rfc3339();
+            job.status = CollectJobStatus::Extracting.as_str().to_string();
+            job.step = "extracting".into();
+            job.llm_started_at = Some(llm_now.clone());
+            job.llm_chunk_done = 0;
+            job.llm_chunk_total = 0;
+            job.updated_at = llm_now;
+            self.repository.collect_job_update(&job).await?;
+        } else {
+            // Process restarted mid-extraction: keep stored captions/progress and
+            // continue from the next unfinished chunk.
+            job.step = format!(
+                "extracting {}/{}",
+                job.llm_chunk_done, job.llm_chunk_total
+            );
+            job.updated_at = Utc::now().to_rfc3339();
+            self.repository.collect_job_update(&job).await?;
         }
-
-        job.video_id = Some(captions.video_id.clone());
-        job.title = Some(captions.title.clone());
-        job.language = Some(captions.language.clone());
-        job.source_url = Some(captions.source_url.clone());
-        job.caption_text = Some(captions.caption_text.clone());
-        let llm_now = Utc::now().to_rfc3339();
-        job.status = CollectJobStatus::Extracting.as_str().to_string();
-        job.step = "extracting".into();
-        job.llm_started_at = Some(llm_now.clone());
-        job.llm_chunk_done = 0;
-        job.llm_chunk_total = 0;
-        job.updated_at = llm_now;
-        self.repository.collect_job_update(&job).await?;
 
         let settings = self.load_llm_settings().await?;
         // Prefer explicit MOYAN_LLM_PROXY; otherwise reuse collect proxy (needed when
@@ -374,14 +412,24 @@ impl AdminCollectService {
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty())
             .or_else(|| job.proxy.clone());
+        let video_id = job.video_id.clone().unwrap_or_default();
+        let title = job.title.clone().unwrap_or_default();
+        let caption = job.caption_text.clone().unwrap_or_default();
+        let initial_cards: Vec<DraftCard> = if plan.resume_from_extract {
+            job.draft_cards.clone()
+        } else {
+            Vec::new()
+        };
         let this = self.clone();
         let progress_job_id = job_id.to_string();
         let outcome = llm_client::extract_vocabulary_cards_with_progress(
             &settings,
-            &captions.video_id,
-            &captions.title,
-            &captions.caption_text,
+            &video_id,
+            &title,
+            &caption,
             llm_proxy.as_deref(),
+            plan.start_chunk,
+            &initial_cards,
             |cards, done, total| {
                 let this = this.clone();
                 let job_id = progress_job_id.clone();
@@ -467,6 +515,98 @@ impl AdminCollectService {
             }
         }
         Ok(fill_from_env_if_empty(LlmSettingsStored::default()))
+    }
+}
+
+struct ResumePlan {
+    resume_from_extract: bool,
+    start_chunk: usize,
+}
+
+/// Decide whether a collect job can continue from its stored extraction state
+/// (mid-extraction with captions already saved) instead of restarting from scratch.
+fn resume_plan(job: &CollectJob) -> ResumePlan {
+    let resumable = job.status == CollectJobStatus::Extracting.as_str()
+        && job.caption_text.is_some()
+        && job.video_id.is_some()
+        && job.title.is_some();
+    if resumable {
+        ResumePlan {
+            resume_from_extract: true,
+            start_chunk: job.llm_chunk_done as usize,
+        }
+    } else {
+        ResumePlan {
+            resume_from_extract: false,
+            start_chunk: 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(status: &str, caption: bool, done: u32) -> CollectJob {
+        CollectJob {
+            id: "cjob_test".to_string(),
+            url: "https://www.youtube.com/watch?v=test".to_string(),
+            proxy: None,
+            status: status.to_string(),
+            step: "extracting 7/19".to_string(),
+            error: None,
+            video_id: Some("test".to_string()),
+            title: Some("Test Video".to_string()),
+            language: Some("en".to_string()),
+            source_url: None,
+            caption_text: caption.then(|| "caption".to_string()),
+            draft_cards: Vec::new(),
+            truncated: false,
+            cancel_requested: false,
+            created_at: "2026-08-01T00:00:00Z".to_string(),
+            updated_at: "2026-08-01T00:00:00Z".to_string(),
+            started_at: Some("2026-08-01T00:00:00Z".to_string()),
+            finished_at: None,
+            llm_started_at: Some("2026-08-01T00:00:00Z".to_string()),
+            llm_chunk_done: done,
+            llm_chunk_total: 19,
+        }
+    }
+
+    #[test]
+    fn extracting_job_with_stored_caption_resumes_from_done_chunk() {
+        let plan = resume_plan(&job(
+            CollectJobStatus::Extracting.as_str(),
+            true,
+            7,
+        ));
+
+        assert!(plan.resume_from_extract);
+        assert_eq!(plan.start_chunk, 7);
+    }
+
+    #[test]
+    fn extracting_job_without_stored_caption_restarts_from_scratch() {
+        let plan = resume_plan(&job(
+            CollectJobStatus::Extracting.as_str(),
+            false,
+            7,
+        ));
+
+        assert!(!plan.resume_from_extract);
+        assert_eq!(plan.start_chunk, 0);
+    }
+
+    #[test]
+    fn fetching_job_does_not_resume_extraction() {
+        let plan = resume_plan(&job(
+            CollectJobStatus::FetchingCaptions.as_str(),
+            true,
+            0,
+        ));
+
+        assert!(!plan.resume_from_extract);
+        assert_eq!(plan.start_chunk, 0);
     }
 }
 

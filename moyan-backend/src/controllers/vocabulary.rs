@@ -99,6 +99,14 @@ pub async fn list_study_cards(
     Ok(success(cards))
 }
 
+pub async fn study_queue(
+    State(state): State<AppState>,
+    claims: axum::Extension<Claims>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let queue = state.services.vocabulary.study_queue(&claims.sub).await?;
+    Ok(success(queue))
+}
+
 pub async fn update_card(
     State(state): State<AppState>,
     claims: axum::Extension<Claims>,

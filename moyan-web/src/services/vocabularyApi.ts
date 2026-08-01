@@ -6,6 +6,7 @@ import type {
   Deck,
   ReviewLog,
   StudyCard,
+  StudyQueue,
   UpdateCardRequest,
   UpdateDeckRequest,
   UpsertCardProgressRequest,
@@ -123,6 +124,10 @@ export async function listStudyCards(deckId: string): Promise<StudyCard[]> {
   return apiRequest<StudyCard[]>(
     `/api/decks/${encodeURIComponent(deckId)}/study-cards`
   );
+}
+
+export async function getStudyQueue(): Promise<StudyQueue> {
+  return apiRequest<StudyQueue>("/api/study/queue");
 }
 
 export async function upsertCardProgress(

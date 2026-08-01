@@ -15,8 +15,9 @@ use thiserror::Error;
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
-    ImportResult, ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest,
-    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -155,6 +156,12 @@ pub trait VocabularyRepository: Send + Sync {
         user_id: &str,
         deck_id: &str,
     ) -> Result<Vec<StudyCard>, RepositoryError>;
+    /// Aggregate study queue across every deck the user can study.
+    async fn study_queue(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<StudyQueue, RepositoryError>;
     async fn upsert_card_progress(
         &self,
         user_id: &str,

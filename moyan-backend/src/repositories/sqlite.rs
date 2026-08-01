@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
-    DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData,
+    DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
     SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
     UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
@@ -670,8 +670,11 @@ impl LearningRepository for SqliteRepositories {
              srs_next_review, srs_interval, srs_ease, created_at, updated_at FROM user_cards WHERE user_id = ?",
         ).bind(user_id).fetch_all(&self.pool).await?.into_iter().map(Into::into).collect();
         let review_logs = sqlx::query_as::<_, ReviewLogRow>(
-            "SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs WHERE user_id = ?",
+            "SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs WHERE user_id = ?
+             UNION
+             SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs_v2 WHERE owner_user_id = ?",
         )
+        .bind(user_id)
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?
@@ -684,7 +687,7 @@ impl LearningRepository for SqliteRepositories {
             cards,
             review_logs,
             settings: None,
-            sync_timestamp: Utc::now(),
+            sync_timestamp: Some(Utc::now()),
         })
     }
 
@@ -708,7 +711,17 @@ impl LearningRepository for SqliteRepositories {
         Ok(UserStats {
             cards_count: count(&self.pool, "user_cards", user_id).await?,
             decks_count: count(&self.pool, "user_decks", user_id).await?,
-            reviews_count: count(&self.pool, "review_logs", user_id).await?,
+            reviews_count: sqlx::query_scalar(
+                "SELECT COUNT(*) FROM (
+                    SELECT id FROM review_logs WHERE user_id = ?
+                    UNION
+                    SELECT id FROM review_logs_v2 WHERE owner_user_id = ?
+                 )",
+            )
+            .bind(user_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?,
         })
     }
 }
@@ -870,7 +883,20 @@ impl VocabularyRepository for SqliteRepositories {
             .bind(user_id)
             .execute(&self.pool)
             .await?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
+        // Clean up sync shadow tables; the deck/card rows there have no FK to the
+        // vocabulary catalog, so they would otherwise survive as orphans.
+        sqlx::query("DELETE FROM user_decks WHERE id = ?")
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM user_cards WHERE deck_id = ?")
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(true)
     }
 
     async fn list_cards(&self, deck_id: &str) -> Result<Vec<Card>, RepositoryError> {
@@ -973,7 +999,14 @@ impl VocabularyRepository for SqliteRepositories {
             .bind(card_id)
             .execute(&self.pool)
             .await?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
+        sqlx::query("DELETE FROM user_cards WHERE id = ?")
+            .bind(card_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(true)
     }
 
     async fn list_study_cards(
@@ -1006,6 +1039,105 @@ impl VocabularyRepository for SqliteRepositories {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn study_queue(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<StudyQueue, RepositoryError> {
+        let now = Utc::now();
+        let day_start = now
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is a valid time")
+            .and_utc();
+
+        let rows = sqlx::query_as::<_, StudyCardRow>(
+            "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
+                    c.created_at, c.updated_at,
+                    p.id AS progress_id, p.owner_user_id AS progress_owner_user_id,
+                    p.card_id AS progress_card_id, p.srs_status AS progress_srs_status,
+                    p.interval_days AS progress_interval_days, p.repetitions AS progress_repetitions,
+                    p.ease_factor AS progress_ease_factor, p.due_date AS progress_due_date,
+                    p.last_reviewed_at AS progress_last_reviewed_at,
+                    p.created_at AS progress_created_at, p.updated_at AS progress_updated_at
+             FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE (d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?
+             ORDER BY
+               CASE WHEN p.due_date IS NOT NULL AND p.due_date <= ? THEN 0 ELSE 1 END,
+               CASE WHEN d.owner_user_id = ? THEN 0 ELSE 1 END,
+               COALESCE(p.due_date, c.created_at),
+               c.id
+             LIMIT ?",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .bind(now)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        let cards = rows
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<StudyCard>, _>>()?;
+
+        let due_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE ((d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?)
+               AND p.due_date IS NOT NULL AND p.due_date <= ?",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let new_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE ((d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?)
+               AND p.id IS NULL",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let total_cards: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             WHERE (d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?",
+        )
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let today_reviewed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM review_logs_v2 WHERE owner_user_id = ? AND reviewed_at >= ?",
+        )
+        .bind(user_id)
+        .bind(day_start)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(StudyQueue {
+            cards,
+            due_count,
+            new_count,
+            total_cards,
+            today_reviewed,
+        })
     }
 
     async fn upsert_card_progress(
@@ -1983,7 +2115,7 @@ mod tests {
                 time_ms: Some(1200),
             }],
             settings: None,
-            sync_timestamp: now,
+            sync_timestamp: Some(now),
         };
 
         let counts = repository.upload(&user.id, &data, now).await?;
@@ -1991,6 +2123,240 @@ mod tests {
         assert_eq!(repository.download(&user.id).await?.cards.len(), 1);
         assert_eq!(repository.stats(&user.id).await?.reviews_count, 1);
         assert!(repository.status(&user.id).await?.has_data);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn review_log_created_via_vocabulary_api_is_counted_in_stats_and_download()
+    -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "review-v2-1",
+                name: "Review V2 User",
+                email: "review-v2@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Review Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+        let card_id = card.id.clone();
+        repo.create_review_log(
+            &user.id,
+            &CreateReviewLogRequest {
+                card_id: card.id,
+                deck_id: deck.id,
+                rating: "good".to_string(),
+                time_ms: Some(1200),
+                reviewed_at: None,
+            },
+        )
+        .await?;
+
+        let stats = repo.stats(&user.id).await?;
+        assert_eq!(stats.reviews_count, 1);
+
+        let download = repo.download(&user.id).await?;
+        assert_eq!(download.review_logs.len(), 1);
+        assert_eq!(download.review_logs[0].card_id, card_id);
+        assert_eq!(download.review_logs[0].rating, "good");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_user_deck_cleans_sync_shadow_tables() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "delete-deck-sync-1",
+                name: "Delete Deck Sync",
+                email: "delete-deck-sync@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+
+        let now = Utc::now();
+        repo.upload(
+            &user.id,
+            &SyncData {
+                decks: vec![DeckData {
+                    id: deck.id.clone(),
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    category: None,
+                    card_count: 1,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                cards: vec![CardData {
+                    id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    example: None,
+                    pronunciation: None,
+                    tags: None,
+                    srs_level: 0,
+                    srs_status: "new".to_string(),
+                    srs_next_review: None,
+                    srs_interval: 0.0,
+                    srs_ease: 2.5,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                review_logs: Vec::new(),
+                settings: None,
+                sync_timestamp: Some(now),
+            },
+            now,
+        )
+        .await?;
+
+        assert!(repo.delete_user_deck(&user.id, &deck.id).await?);
+
+        let download = repo.download(&user.id).await?;
+        assert!(
+            download.decks.is_empty(),
+            "download should not return deleted deck"
+        );
+        assert!(
+            download.cards.is_empty(),
+            "download should not return cards of deleted deck"
+        );
+        let stats = repo.stats(&user.id).await?;
+        assert_eq!(stats.decks_count, 0);
+        assert_eq!(stats.cards_count, 0);
+        assert!(!repo.status(&user.id).await?.has_data);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_card_cleans_sync_shadow_table() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "delete-card-sync-1",
+                name: "Delete Card Sync",
+                email: "delete-card-sync@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "world".to_string(),
+                    back: "世界".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+
+        let now = Utc::now();
+        repo.upload(
+            &user.id,
+            &SyncData {
+                decks: vec![DeckData {
+                    id: deck.id.clone(),
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    category: None,
+                    card_count: 1,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                cards: vec![CardData {
+                    id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    front: "world".to_string(),
+                    back: "世界".to_string(),
+                    example: None,
+                    pronunciation: None,
+                    tags: None,
+                    srs_level: 0,
+                    srs_status: "new".to_string(),
+                    srs_next_review: None,
+                    srs_interval: 0.0,
+                    srs_ease: 2.5,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                review_logs: Vec::new(),
+                settings: None,
+                sync_timestamp: Some(now),
+            },
+            now,
+        )
+        .await?;
+
+        assert!(repo.delete_card(&card.id).await?);
+
+        let download = repo.download(&user.id).await?;
+        assert!(
+            download.cards.is_empty(),
+            "download should not return deleted card"
+        );
+        assert_eq!(repo.stats(&user.id).await?.cards_count, 0);
         Ok(())
     }
 
@@ -2533,6 +2899,151 @@ mod tests {
         let recent_sync_count = repo.admin_recent_sync_count(&user.id).await?;
         assert_eq!(recent_sync_count, 0);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn study_queue_returns_due_cards_before_new_with_counts() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "study-queue-1",
+                name: "Queue User",
+                email: "queue@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Queue Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let new_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "alpha".to_string(),
+                    back: "a".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+        let due_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "beta".to_string(),
+                    back: "b".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+        repo.upsert_card_progress(
+            &user.id,
+            &due_card.id,
+            &UpsertCardProgressRequest {
+                srs_status: "review".to_string(),
+                interval: 1.0,
+                repetitions: 1,
+                ease_factor: 2.5,
+                due_date: Utc::now() - Duration::hours(1),
+                last_reviewed_at: Some(Utc::now()),
+            },
+        )
+        .await?;
+
+        let queue = repo.study_queue(&user.id, 50).await?;
+
+        assert_eq!(queue.total_cards, 2);
+        assert_eq!(queue.due_count, 1);
+        assert_eq!(queue.new_count, 1);
+        assert_eq!(queue.cards.len(), 2);
+        assert_eq!(queue.cards[0].card.id, due_card.id);
+        assert_eq!(queue.cards[1].card.id, new_card.id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn study_queue_prioritizes_users_own_decks_before_system_cards() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "study-queue-2",
+                name: "Queue User 2",
+                email: "queue2@example.com",
+                avatar: None,
+            })
+            .await?;
+        let old = Utc::now() - Duration::hours(1);
+        repo.insert_system_deck(&Deck {
+            id: "deck_sys_q".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("sys-q".to_string()),
+            name: "System Queue Deck".to_string(),
+            description: String::new(),
+            color: None,
+            version: 1,
+            sort_order: 0,
+            is_active: true,
+            card_count: 1,
+            created_at: old,
+            updated_at: old,
+        })
+        .await?;
+        repo.insert_system_card(&Card {
+            id: "card_sys_q".to_string(),
+            deck_id: "deck_sys_q".to_string(),
+            front: "system card".to_string(),
+            back: "s".to_string(),
+            pronunciation: None,
+            tags: vec![],
+            examples: vec![],
+            created_at: old,
+            updated_at: old,
+        })
+        .await?;
+
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "My Queue Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let my_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "my card".to_string(),
+                    back: "m".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+
+        let queue = repo.study_queue(&user.id, 50).await?;
+
+        assert_eq!(queue.cards[0].card.id, my_card.id);
+        assert_eq!(queue.cards[0].card.deck_id, deck.id);
         Ok(())
     }
 

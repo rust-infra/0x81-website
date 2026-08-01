@@ -15,6 +15,7 @@ import { getCurrentTheme } from "../theme";
 import { t } from "../i18n/translations";
 import {
   createReviewLog,
+  getStudyQueue,
   hasVocabularyBackend,
   listDecks,
   listStudyCards,
@@ -303,12 +304,24 @@ export default function Study() {
         const d = decks.find((x) => x.id === deckId);
         if (d) setDeckName(d.name);
       } else if (backend && !deckId) {
-        // Free mode with backend: not yet supported via due aggregation — fall back empty
         if (!getCurrentUser()) {
           navigate("/login");
           return;
         }
-        loaded = [];
+        const queue = await getStudyQueue();
+        loaded = queue.cards.map((sc) => ({
+          id: sc.card.id,
+          deckId: sc.card.deck_id,
+          front: sc.card.front,
+          back: sc.card.back,
+          pronunciation: sc.card.pronunciation,
+          tags: sc.card.tags ?? [],
+          examples: (sc.card.examples ?? []).map((ex) => ({
+            sentence_en: ex.sentence_en,
+            translation_zh: ex.translation_zh,
+          })),
+          srs: progressToSrs(sc.progress),
+        }));
       } else {
         let localCards: LocalCard[];
         if (deckId) {

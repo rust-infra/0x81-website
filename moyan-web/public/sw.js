@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moyan-v1';
+const CACHE_NAME = 'moyan-v2';
 
 // Assets to cache on install
 const ASSETS_TO_CACHE = [
@@ -49,6 +49,10 @@ self.addEventListener('fetch', (event) => {
 
   // Skip browser extensions and non-http(s) schemes
   if (!url.protocol.startsWith('http')) return;
+
+  // Never intercept API requests — the UI must always get fresh data,
+  // otherwise mutations (add card, update deck, ...) appear stale.
+  if (url.pathname.startsWith('/api/')) return;
 
   // Static assets: cache-first
   if (isStaticAsset(url)) {

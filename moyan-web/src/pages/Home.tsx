@@ -7,7 +7,7 @@ import { UserMenu } from '../components/UserMenu';
 import { db, getDueCards, getStudyStats } from '../db';
 import { initVocabularyDecks } from '../services/vocabularyLoader';
 import { getCurrentUser, onAuthChange, type User } from '../services/authService';
-import { hasVocabularyBackend, listDecks } from '../services/vocabularyApi';
+import { getStudyQueue, hasVocabularyBackend, listDecks } from '../services/vocabularyApi';
 import type { Deck as ApiDeck } from '@/types/vocabulary';
 import type { Deck as LocalDeck } from '../db';
 import { t, getLanguage } from '../i18n/translations';
@@ -91,13 +91,15 @@ export default function Home() {
         const remote = await listDecks();
         const mapped = remote.map(mapApiDeck);
         setDecks(mapped);
-        const total = mapped.reduce((sum, d) => sum + d.cardCount, 0);
-        setTotalCards(total);
-        // Due/progress from server study-cards is expensive across all decks;
-        // show card totals for now and keep due at 0 until per-deck study.
-        setDueCount(0);
-        setTodayReviewed(0);
-        setProgress(0);
+        const queue = await getStudyQueue();
+        setTotalCards(queue.total_cards);
+        setDueCount(queue.due_count);
+        setTodayReviewed(queue.today_reviewed);
+        setProgress(
+          queue.total_cards > 0
+            ? Math.min(1, (queue.total_cards - queue.new_count) / queue.total_cards)
+            : 0
+        );
       } else {
         await initVocabularyDecks();
         const due = await getDueCards();

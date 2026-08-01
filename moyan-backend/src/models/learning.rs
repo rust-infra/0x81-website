@@ -2,12 +2,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncData {
     pub decks: Vec<DeckData>,
     pub cards: Vec<CardData>,
+    #[serde(default)]
     pub review_logs: Vec<ReviewLogData>,
+    #[serde(default)]
     pub settings: Option<UserSettings>,
-    pub sync_timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub sync_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

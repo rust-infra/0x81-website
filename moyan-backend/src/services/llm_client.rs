@@ -115,6 +115,8 @@ pub async fn extract_vocabulary_cards(
         title,
         caption_text,
         proxy,
+        0,
+        &[],
         |_cards, _done, _total| async { Ok(()) },
     )
     .await
@@ -126,6 +128,8 @@ pub async fn extract_vocabulary_cards_with_progress<F, Fut>(
     title: &str,
     caption_text: &str,
     proxy: Option<&str>,
+    start_chunk: usize,
+    initial_cards: &[DraftCard],
     mut on_progress: F,
 ) -> Result<ExtractOutcome, AppError>
 where
@@ -155,12 +159,21 @@ where
         });
     }
 
-    let mut merged: Vec<DraftCard> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut merged: Vec<DraftCard> = initial_cards.to_vec();
+    let mut seen: HashSet<String> = initial_cards
+        .iter()
+        .filter_map(|c| {
+            let key = normalize_front(&c.front);
+            (!key.is_empty()).then_some(key)
+        })
+        .collect();
     let total_chunks = chunks.len();
     let mut chunk_errors: Vec<String> = Vec::new();
 
     for (index, chunk) in chunks.into_iter().enumerate() {
+        if index < start_chunk {
+            continue;
+        }
         match extract_one_chunk(
             settings,
             video_id,
