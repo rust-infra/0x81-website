@@ -9,6 +9,7 @@ import type {
   ReviewLog,
   StudyCard,
   StudyQueue,
+  User,
   UpsertCardProgressRequest,
 } from './types';
 
@@ -90,4 +91,64 @@ export async function createReviewLog(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+// ==================== Kimi Device Flow 登录 ====================
+
+export interface KimiDeviceInfo {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+}
+
+export async function kimiDevice(deviceId: string): Promise<KimiDeviceInfo> {
+  const res = await fetch(`${API_BASE}/api/auth/kimi/device`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: deviceId }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    throw new Error(body?.error?.message || `设备授权失败 (${res.status})`);
+  }
+  return body.data as KimiDeviceInfo;
+}
+
+export async function kimiTokenPoll(
+  deviceCode: string,
+  deviceId: string
+): Promise<{ status: 'ok'; accessToken: string } | { status: 'pending' }> {
+  const res = await fetch(`${API_BASE}/api/auth/kimi/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_code: deviceCode, device_id: deviceId }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && body?.success && body?.data?.access_token) {
+    return { status: 'ok', accessToken: body.data.access_token };
+  }
+  const message: string = body?.error?.message || '';
+  if (/authorization_pending|slow_down|pending/i.test(message)) {
+    return { status: 'pending' };
+  }
+  throw new Error(message || `登录轮询失败 (${res.status})`);
+}
+
+export async function kimiLogin(
+  accessToken: string
+): Promise<{ token: string; user: User }> {
+  const res = await fetch(`${API_BASE}/api/auth/kimi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: accessToken }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    throw new Error(body?.error?.message || `登录失败 (${res.status})`);
+  }
+  const data = body.data as { token: string; user: User };
+  return { token: data.token, user: data.user };
 }

@@ -96,3 +96,11 @@ export interface SRSData {
   lastReviewed?: Date;
   status: 'new' | 'learning' | 'review' | 'relearning';
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  provider: string;
+}

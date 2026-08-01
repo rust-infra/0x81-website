@@ -7,14 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { TOKEN_KEY } from './api';
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar: string;
-  provider: string;
-}
+import type { User } from './types';
 
 const USER_KEY = 'moyan_user';
 
