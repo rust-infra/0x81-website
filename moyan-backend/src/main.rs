@@ -284,6 +284,104 @@ mod tests {
         assert!(mastery["score"].as_f64().unwrap() > 0.0);
         Ok(())
     }
+
+    fn valid_resume_payload() -> serde_json::Value {
+        serde_json::json!({
+            "deck_id": "deck_resume",
+            "deck_name": "Rust语言核心",
+            "mode": "word",
+            "card_id": "card_resume",
+            "target": "hello",
+            "char_index": 3,
+            "correct_chars": 2,
+            "wrong_chars": 1,
+            "typed_states": [
+                { "state": "correct", "input_char": "h" },
+                { "state": "wrong", "input_char": "x" },
+                { "state": "correct", "input_char": "l" }
+            ],
+            "updated_at": "2026-08-01T08:30:00Z"
+        })
+    }
+
+    #[tokio::test]
+    async fn type_resume_put_get_delete_round_trip() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let put = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/type/resume")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&valid_resume_payload())?))?,
+            )
+            .await?;
+        assert_eq!(put.status(), StatusCode::OK);
+
+        let get = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/type/resume?deck_id=deck_resume")
+                    .header("authorization", "Bearer test-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(get.status(), StatusCode::OK);
+        let body = read_json(get).await?;
+        assert_eq!(body["data"]["resume"]["card_id"], "card_resume");
+        assert_eq!(body["data"]["resume"]["char_index"], 3);
+        assert_eq!(body["data"]["resume"]["typed_states"].as_array().unwrap().len(), 3);
+
+        let del = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/type/resume?deck_id=deck_resume")
+                    .header("authorization", "Bearer test-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(del.status(), StatusCode::OK);
+
+        let get_after = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/type/resume?deck_id=deck_resume")
+                    .header("authorization", "Bearer test-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        let body = read_json(get_after).await?;
+        assert!(body["data"]["resume"].is_null());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_rejects_invalid_mode_with_400() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let mut payload = valid_resume_payload();
+        payload["mode"] = serde_json::json!("typing");
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/type/resume")
+                    .header("authorization", "Bearer test-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
 }
 
 #[tokio::main]

@@ -76,3 +76,30 @@ pub struct TypeStatsResponse {
     pub daily_trend: Vec<TypeDailyTrend>,
     pub mastery: Vec<TypeMastery>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypedCharState {
+    pub state: String,
+    #[serde(default)]
+    pub input_char: Option<String>,
+}
+
+/// Per-deck typing resume checkpoint ('' deck_id = 全部词汇).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeResume {
+    pub deck_id: String,
+    pub deck_name: Option<String>,
+    pub mode: String,
+    pub card_id: String,
+    pub target: String,
+    pub char_index: i64,
+    pub correct_chars: i64,
+    pub wrong_chars: i64,
+    pub typed_states: Vec<TypedCharState>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeResumeResponse {
+    pub resume: Option<TypeResume>,
+}

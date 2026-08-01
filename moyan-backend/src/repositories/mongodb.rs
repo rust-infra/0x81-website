@@ -16,9 +16,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeSession, UpdateCardRequest,
-    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
-    SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1469,6 +1469,36 @@ impl TypeRepository for MongoRepositories {
         &self,
         _user_id: &str,
     ) -> Result<Vec<TypeMasteryRow>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_upsert(
+        &self,
+        _user_id: &str,
+        _resume: &TypeResume,
+    ) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_get(
+        &self,
+        _user_id: &str,
+        _deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_delete(
+        &self,
+        _user_id: &str,
+        _deck_id: &str,
+    ) -> Result<bool, RepositoryError> {
         Err(RepositoryError::Configuration(
             "type practice requires sqlite backend".into(),
         ))

@@ -1,6 +1,6 @@
 use axum::{
     middleware,
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 
@@ -12,5 +12,11 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/sync", post(typing::sync))
         .route("/stats", get(typing::stats))
+        .route(
+            "/resume",
+            put(typing::put_resume)
+                .get(typing::get_resume)
+                .delete(typing::delete_resume),
+        )
         .layer(middleware::from_fn(jwt_middleware))
 }

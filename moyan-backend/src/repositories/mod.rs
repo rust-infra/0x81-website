@@ -16,8 +16,8 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
     ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
-    TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeSession, UpdateCardRequest, UpdateDeckRequest,
-    UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession, UpdateCardRequest,
+    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -272,6 +272,22 @@ pub trait TypeRepository: Send + Sync {
         &self,
         user_id: &str,
     ) -> Result<Vec<TypeMasteryRow>, RepositoryError>;
+    /// Upsert the typing resume checkpoint for (user, deck_id).
+    async fn type_resume_upsert(
+        &self,
+        user_id: &str,
+        resume: &TypeResume,
+    ) -> Result<(), RepositoryError>;
+    async fn type_resume_get(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError>;
+    async fn type_resume_delete(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<bool, RepositoryError>;
 }
 
 #[async_trait]

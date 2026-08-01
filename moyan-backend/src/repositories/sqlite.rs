@@ -9,9 +9,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeSession, UpdateCardRequest,
-    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
-    SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
+    TypedCharState, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
+    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1741,6 +1741,37 @@ impl From<TypeMasteryRowDb> for TypeMasteryRow {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct TypeResumeRow {
+    deck_id: String,
+    deck_name: Option<String>,
+    mode: String,
+    card_id: String,
+    target: String,
+    char_index: i64,
+    correct_chars: i64,
+    wrong_chars: i64,
+    typed_states: String,
+    updated_at: DateTime<Utc>,
+}
+
+impl From<TypeResumeRow> for TypeResume {
+    fn from(row: TypeResumeRow) -> Self {
+        Self {
+            deck_id: row.deck_id,
+            deck_name: row.deck_name,
+            mode: row.mode,
+            card_id: row.card_id,
+            target: row.target,
+            char_index: row.char_index,
+            correct_chars: row.correct_chars,
+            wrong_chars: row.wrong_chars,
+            typed_states: serde_json::from_str(&row.typed_states).unwrap_or_default(),
+            updated_at: row.updated_at,
+        }
+    }
+}
+
 #[async_trait]
 impl TypeRepository for SqliteRepositories {
     async fn type_session_insert(
@@ -1867,6 +1898,76 @@ impl TypeRepository for SqliteRepositories {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows.into_iter().map(TypeMasteryRow::from).collect())
+    }
+
+    async fn type_resume_upsert(
+        &self,
+        user_id: &str,
+        resume: &TypeResume,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            "INSERT INTO type_resume (
+                owner_user_id, deck_id, deck_name, mode, card_id, target, char_index,
+                correct_chars, wrong_chars, typed_states, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(owner_user_id, deck_id) DO UPDATE SET
+                deck_name = excluded.deck_name,
+                mode = excluded.mode,
+                card_id = excluded.card_id,
+                target = excluded.target,
+                char_index = excluded.char_index,
+                correct_chars = excluded.correct_chars,
+                wrong_chars = excluded.wrong_chars,
+                typed_states = excluded.typed_states,
+                updated_at = excluded.updated_at",
+        )
+        .bind(user_id)
+        .bind(&resume.deck_id)
+        .bind(&resume.deck_name)
+        .bind(&resume.mode)
+        .bind(&resume.card_id)
+        .bind(&resume.target)
+        .bind(resume.char_index)
+        .bind(resume.correct_chars)
+        .bind(resume.wrong_chars)
+        .bind(
+            serde_json::to_string(&resume.typed_states)
+                .unwrap_or_else(|_| "[]".to_string()),
+        )
+        .bind(resume.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn type_resume_get(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError> {
+        let row = sqlx::query_as::<_, TypeResumeRow>(
+            "SELECT deck_id, deck_name, mode, card_id, target, char_index,
+                    correct_chars, wrong_chars, typed_states, updated_at
+             FROM type_resume WHERE owner_user_id = ? AND deck_id = ?",
+        )
+        .bind(user_id)
+        .bind(deck_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(TypeResume::from))
+    }
+
+    async fn type_resume_delete(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<bool, RepositoryError> {
+        let result = sqlx::query("DELETE FROM type_resume WHERE owner_user_id = ? AND deck_id = ?")
+            .bind(user_id)
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
     }
 }
 
@@ -3563,6 +3664,112 @@ mod tests {
         .await?;
         assert!(repo.type_recent_sessions(&second.id, 20).await?.is_empty());
         assert!(repo.type_mastery_rows(&second.id).await?.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_upsert_get_delete_round_trip() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-1",
+                name: "Resume User",
+                email: "resume@example.com",
+                avatar: None,
+            })
+            .await?;
+        let resume = TypeResume {
+            deck_id: "deck_r".into(),
+            deck_name: Some("Rust语言核心".into()),
+            mode: "word".into(),
+            card_id: "card_r".into(),
+            target: "hello".into(),
+            char_index: 3,
+            correct_chars: 2,
+            wrong_chars: 1,
+            typed_states: vec![
+                TypedCharState {
+                    state: "correct".into(),
+                    input_char: Some("h".into()),
+                },
+                TypedCharState {
+                    state: "wrong".into(),
+                    input_char: Some("x".into()),
+                },
+                TypedCharState {
+                    state: "correct".into(),
+                    input_char: Some("l".into()),
+                },
+            ],
+            updated_at: Utc::now(),
+        };
+
+        repo.type_resume_upsert(&user.id, &resume).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_r").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_r");
+        assert_eq!(loaded.char_index, 3);
+        assert_eq!(loaded.typed_states.len(), 3);
+        assert_eq!(loaded.typed_states[1].state, "wrong");
+        assert_eq!(loaded.typed_states[1].input_char.as_deref(), Some("x"));
+
+        // upsert replaces the previous checkpoint for the same deck
+        let mut updated = resume;
+        updated.char_index = 5;
+        repo.type_resume_upsert(&user.id, &updated).await?;
+        assert_eq!(repo.type_resume_get(&user.id, "deck_r").await?.unwrap().char_index, 5);
+
+        assert!(repo.type_resume_delete(&user.id, "deck_r").await?);
+        assert!(repo.type_resume_get(&user.id, "deck_r").await?.is_none());
+        assert!(!repo.type_resume_delete(&user.id, "deck_r").await?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_is_isolated_per_user_and_deck() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let first = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-iso-1",
+                name: "Resume One",
+                email: "resume-one@example.com",
+                avatar: None,
+            })
+            .await?;
+        let second = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-iso-2",
+                name: "Resume Two",
+                email: "resume-two@example.com",
+                avatar: None,
+            })
+            .await?;
+        let resume = |deck_id: &str| TypeResume {
+            deck_id: deck_id.into(),
+            deck_name: None,
+            mode: "word".into(),
+            card_id: "card_x".into(),
+            target: "hello".into(),
+            char_index: 1,
+            correct_chars: 1,
+            wrong_chars: 0,
+            typed_states: vec![TypedCharState {
+                state: "correct".into(),
+                input_char: Some("h".into()),
+            }],
+            updated_at: Utc::now(),
+        };
+        repo.type_resume_upsert(&first.id, &resume("deck_a")).await?;
+        repo.type_resume_upsert(&first.id, &resume("deck_b")).await?;
+        repo.type_resume_upsert(&second.id, &resume("deck_a")).await?;
+
+        assert!(repo.type_resume_get(&first.id, "deck_a").await?.is_some());
+        assert!(repo.type_resume_get(&first.id, "deck_b").await?.is_some());
+        assert!(repo.type_resume_get(&first.id, "deck_c").await?.is_none());
+        assert!(repo.type_resume_get(&second.id, "deck_a").await?.is_some());
+        assert!(repo.type_resume_get(&second.id, "deck_b").await?.is_none());
         Ok(())
     }
 }

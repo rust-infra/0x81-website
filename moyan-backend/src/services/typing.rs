@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::middleware::error::AppError;
 use crate::models::{
-    TypeEntry, TypeMastery, TypeMasteryRow, TypeSession, TypeStatsResponse, TypeSyncRequest,
-    TypeSyncResponse,
+    TypeEntry, TypeMastery, TypeMasteryRow, TypeResume, TypeResumeResponse, TypeSession,
+    TypeStatsResponse, TypeSyncRequest, TypeSyncResponse,
 };
 use crate::repositories::Repository;
 
@@ -69,6 +69,27 @@ impl TypeService {
             mastery,
         })
     }
+
+    pub async fn put_resume(&self, user_id: &str, req: TypeResume) -> Result<(), AppError> {
+        validate_resume(&req)?;
+        self.repository.type_resume_upsert(user_id, &req).await?;
+        Ok(())
+    }
+
+    pub async fn get_resume(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<TypeResumeResponse, AppError> {
+        Ok(TypeResumeResponse {
+            resume: self.repository.type_resume_get(user_id, deck_id).await?,
+        })
+    }
+
+    pub async fn delete_resume(&self, user_id: &str, deck_id: &str) -> Result<(), AppError> {
+        self.repository.type_resume_delete(user_id, deck_id).await?;
+        Ok(())
+    }
 }
 
 fn validate_session(session: &TypeSession) -> Result<(), AppError> {
@@ -115,6 +136,30 @@ fn validate_entry(entry: &TypeEntry) -> Result<(), AppError> {
     {
         return Err(AppError::BadRequest(
             "entry stats must be non-negative".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_resume(resume: &TypeResume) -> Result<(), AppError> {
+    if !VALID_TYPE_MODES.contains(&resume.mode.as_str()) {
+        return Err(AppError::BadRequest(format!(
+            "invalid mode '{}'; expected word or sentence",
+            resume.mode
+        )));
+    }
+    if resume.char_index < 0
+        || resume.correct_chars < 0
+        || resume.wrong_chars < 0
+        || resume.typed_states.len() as i64 != resume.char_index
+    {
+        return Err(AppError::BadRequest(
+            "resume counts and typed_states length must match char_index".into(),
+        ));
+    }
+    if resume.card_id.trim().is_empty() || resume.target.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "card_id and target are required".into(),
         ));
     }
     Ok(())
