@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { listDecks, listStudyCards } from '../../lib/api';
 import { useTheme } from '../../lib/theme-context';
+import { serif } from '../../lib/ui';
 import type { Deck, StudyCard } from '../../lib/types';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -88,7 +89,7 @@ export default function DeckDetailScreen() {
       ) : deck ? (
         <View style={styles.body}>
           <View style={[styles.hero, { backgroundColor: deck.color || c.accent }]}>
-            <Text style={styles.heroName}>{deck.name}</Text>
+            <Text style={[styles.heroName, { fontFamily: serif }]}>{deck.name}</Text>
             <Text style={styles.heroMeta}>{deck.card_count} 词</Text>
           </View>
           {deck.description ? (

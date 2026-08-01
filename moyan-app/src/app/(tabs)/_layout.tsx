@@ -14,16 +14,42 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: c.accent,
-        tabBarInactiveTintColor: c.inkMuted,
-        tabBarStyle: { backgroundColor: c.navBg, borderTopColor: c.border },
+        tabBarActiveTintColor: c.ink,
+        tabBarInactiveTintColor: c.inkLight,
+        tabBarStyle: {
+          position: 'absolute',
+          left: 24,
+          right: 24,
+          bottom: 16,
+          height: 62,
+          borderRadius: 999,
+          backgroundColor: c.navBg,
+          borderTopWidth: 0,
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
+        tabBarItemStyle: { paddingVertical: 2 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
+          title: '首页',
+          tabBarIcon: ({ color }: { color: ColorValue }) => (
+            <EmojiIcon emoji="🏠" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="decks"
+        options={{
           title: '词库',
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="📚" color={color} />
           ),
         }}
@@ -32,7 +58,7 @@ export default function TabsLayout() {
         name="stats"
         options={{
           title: '统计',
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="📊" color={color} />
           ),
         }}
@@ -41,7 +67,7 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: '设置',
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }: { color: ColorValue }) => (
             <EmojiIcon emoji="⚙️" color={color} />
           ),
         }}

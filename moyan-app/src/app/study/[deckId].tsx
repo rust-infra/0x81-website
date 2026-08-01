@@ -11,6 +11,7 @@ import {
 import { calculateSRS, progressToSrs } from '../../lib/srs';
 import { speak, stopSpeaking } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
+import { serif } from '../../lib/ui';
 import type { StudyCard } from '../../lib/types';
 
 type Rating = 'again' | 'hard' | 'good' | 'easy';
@@ -27,6 +28,7 @@ export default function StudyScreen() {
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [speakEnabled, setSpeakEnabled] = useState(true);
+  const [sessionStats, setSessionStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   const cardStartRef = useRef(Date.now());
   const flipAnim = useRef(new Animated.Value(0)).current;
 
@@ -51,6 +53,7 @@ export default function StudyScreen() {
       setQueue(sorted);
       setIndex(0);
       setShowAnswer(false);
+      setSessionStats({ again: 0, hard: 0, good: 0, easy: 0 });
       flipAnim.setValue(0);
     } catch {
       setQueue([]);
@@ -131,6 +134,7 @@ export default function StudyScreen() {
     }
     flipAnim.setValue(0);
     setShowAnswer(false);
+    setSessionStats((s) => ({ ...s, [rating]: s[rating] + 1 }));
     setIndex((i) => i + 1);
     setTransitioning(false);
   };
@@ -140,24 +144,47 @@ export default function StudyScreen() {
       return <Text style={{ color: c.inkMuted }}>加载中...</Text>;
     }
     if (queue.length === 0 || index >= queue.length) {
+      const total =
+        sessionStats.again + sessionStats.hard + sessionStats.good + sessionStats.easy;
+      const accuracy =
+        total > 0 ? Math.round(((sessionStats.good + sessionStats.easy) / total) * 100) : 0;
       return (
         <View style={styles.center}>
-          <Text style={[styles.doneTitle, { color: c.ink }]}>本次复习完成</Text>
-          <Text style={[styles.doneMeta, { color: c.inkMuted }]}>
-            共完成 {queue.length} 张卡片
+          <Text style={[styles.doneTitle, { color: c.studyText, fontFamily: serif }]}>
+            本次复习完成
           </Text>
+          <Text style={[styles.doneMeta, { color: c.studyMuted }]}>
+            共浸润 {total} 个词汇
+          </Text>
+
+          <View style={[styles.doneStats, { backgroundColor: `${c.studyText}0D` }]}>
+            <View style={styles.doneStatRow}>
+              <Text style={{ color: c.studyMuted }}>准确率</Text>
+              <Text style={{ color: c.accent, fontWeight: '600' }}>{accuracy}%</Text>
+            </View>
+            <View style={[styles.doneDivider, { backgroundColor: `${c.studyText}10` }]} />
+            <View style={styles.doneStatRow}>
+              <Text style={{ color: c.studyMuted }}>模糊</Text>
+              <Text style={{ color: c.studyText }}>{sessionStats.again + sessionStats.hard}</Text>
+            </View>
+            <View style={styles.doneStatRow}>
+              <Text style={{ color: c.studyMuted }}>铭记</Text>
+              <Text style={{ color: c.studyText }}>{sessionStats.good + sessionStats.easy}</Text>
+            </View>
+          </View>
+
           <View style={styles.doneButtons}>
             <Pressable
-              style={[styles.button, { backgroundColor: c.accent }]}
+              style={[styles.button, { backgroundColor: `${c.studyText}15` }]}
               onPress={() => void load()}
             >
-              <Text style={styles.buttonText}>再来一轮</Text>
+              <Text style={{ color: c.studyText }}>再来一轮</Text>
             </Pressable>
             <Pressable
-              style={[styles.buttonGhost, { borderColor: c.border }]}
+              style={[styles.button, { backgroundColor: c.studyText }]}
               onPress={() => router.back()}
             >
-              <Text style={{ color: c.inkMuted }}>返回</Text>
+              <Text style={{ color: c.studyBg }}>返回</Text>
             </Pressable>
           </View>
         </View>
@@ -265,15 +292,21 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center' },
   doneTitle: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
   doneMeta: { fontSize: 13, marginBottom: 24 },
+  doneStats: {
+    alignSelf: 'stretch',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  doneStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    fontSize: 14,
+    paddingVertical: 3,
+  },
+  doneDivider: { height: 1, marginVertical: 8 },
   doneButtons: { flexDirection: 'row', gap: 12 },
   button: { borderRadius: 999, paddingVertical: 12, paddingHorizontal: 40 },
-  buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  buttonGhost: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-  },
   cardArea: { alignItems: 'center', alignSelf: 'stretch' },
   progressTrack: {
     alignSelf: 'stretch',
