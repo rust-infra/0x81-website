@@ -408,6 +408,7 @@ export default function TypeTraining() {
 
   useEffect(() => {
     if (!deckId && showDeckPicker) return;
+    let cancelled = false;
     const load = async () => {
       try {
         let loaded: TypeCard[];
@@ -421,7 +422,7 @@ export default function TypeTraining() {
             loaded = studyCards.map(mapApiTypeCard);
             const decksList = await listDecks();
             const d = decksList.find(x => x.id === deckId);
-            if (d) setDeckName(d.name);
+            if (d && !cancelled) setDeckName(d.name);
           } else {
             const decksList = await listDecks();
             const allCards: TypeCard[] = [];
@@ -435,7 +436,7 @@ export default function TypeTraining() {
           const localCards = await db.cards.where('deckId').equals(Number(deckId)).toArray();
           loaded = localCards.map(mapLocalTypeCard);
           const d = await db.decks.get(Number(deckId));
-          if (d) setDeckName(d.name);
+          if (d && !cancelled) setDeckName(d.name);
         } else {
           const localCards = await db.cards.toArray();
           loaded = localCards.map(mapLocalTypeCard);
@@ -451,6 +452,7 @@ export default function TypeTraining() {
         } else {
           loaded = await sortCardsSmart(loaded);
         }
+        if (cancelled) return;
         setCards(loaded);
         if (loaded.length > 0) {
           const localResume = loadLocalResume(deckId);
@@ -472,6 +474,7 @@ export default function TypeTraining() {
             const idx = loaded.findIndex((c) => c.id === resume.card_id);
             if (idx >= 0) savedIdx = idx;
           }
+          if (cancelled) return;
           setCurrentIndex(savedIdx);
           const firstCard = loaded[savedIdx];
           if (
@@ -494,12 +497,16 @@ export default function TypeTraining() {
           }
         }
       } catch (err) {
+        if (cancelled) return;
         console.error('[Type] load failed:', err);
         setLoadError('Load error: ' + (err instanceof Error ? err.message : String(err)));
       }
     };
     void load();
     preloadWebSpeechVoices();
+    return () => {
+      cancelled = true;
+    };
   }, [deckId, mode, showDeckPicker, backend]);
 
   useEffect(() => {
