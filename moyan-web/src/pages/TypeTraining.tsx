@@ -138,6 +138,7 @@ function mapLocalDeck(deck: LocalDeck): UiDeck {
 
 // ---- Progress Persistence ----
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
+const TYPE_SYNC_INTERVAL_MS = 5000;
 
 interface TypeProgress {
   [deckId: string]: {
@@ -305,7 +306,11 @@ export default function TypeTraining() {
   const entriesRef = useRef<TypeEntry[]>([]);
   const skippedCountRef = useRef(0);
   const startTimeRef = useRef(0);
-  const sessionSyncedRef = useRef(false);
+  const syncedCountRef = useRef(0);
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionCreatedAtRef = useRef('');
+  const sessionFinishedRef = useRef(false);
+  const syncTickRef = useRef<() => void>(() => {});
 
   const currentCard = cards[currentIndex];
 
@@ -676,14 +681,75 @@ export default function TypeTraining() {
     wordRef.current = null;
   };
 
-  const syncSession = async (abandoned: boolean) => {
-    if (!backend || sessionSyncedRef.current) return;
-    const entries = [...entriesRef.current];
+  const applySrsAgain = async (entries: TypeEntry[]) => {
+    const srsByCard = new Map(
+      cards.filter((c) => c.srs).map((c) => [c.id, c.srs!])
+    );
+    const updates = egregiousSrsUpdates(entries, srsByCard);
+    if (updates.length > 0) {
+      await Promise.allSettled(
+        updates.map(({ cardId, srs }) =>
+          upsertCardProgress(cardId, toAgainUpsertBody(srs))
+        )
+      );
+    }
+  };
+
+  const ensureSessionMeta = () => {
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = newPrefixedId('ts_');
+      sessionCreatedAtRef.current = new Date().toISOString();
+    }
+  };
+
+  /** Upload one batch; the session summary covers all entries so far (idempotent upsert). */
+  const pushSync = async (
+    summaryEntries: TypeEntry[],
+    sendEntries: TypeEntry[]
+  ): Promise<boolean> => {
+    if (sendEntries.length === 0) return true;
+    ensureSessionMeta();
+    const session = buildTypeSession({
+      id: sessionIdRef.current!,
+      deckId,
+      deckName: deckName || null,
+      mode,
+      entries: summaryEntries,
+      totalCards: cards.length,
+      skipped: skippedCountRef.current,
+      durationMs: Math.max(Date.now() - startTimeRef.current, 0),
+      createdAt: sessionCreatedAtRef.current,
+    });
+    try {
+      await syncTypePractice({ session, entries: sendEntries });
+      return true;
+    } catch {
+      // silent: next throttled tick retries unsynced entries
+      return false;
+    }
+  };
+
+  /** Throttled sync of completed words + current checkpoint. */
+  const syncIncremental = async () => {
+    if (!backend || sessionFinishedRef.current) return;
+    const all = entriesRef.current;
+    const pending = all.slice(syncedCountRef.current);
+    if (pending.length === 0) return;
+    if (await pushSync(all, pending)) {
+      syncedCountRef.current = all.length;
+      await applySrsAgain(pending);
+    }
+  };
+
+  /** Final flush: session end or page leave. */
+  const flushSession = async (abandoned: boolean) => {
+    if (!backend || sessionFinishedRef.current) return;
+    const all = [...entriesRef.current];
     if (abandoned && wordRef.current) {
       const w = wordRef.current;
       const card = cards.find((c) => c.id === w.cardId);
       if (card) {
-        entries.push(
+        all.push(
           buildTypeEntry({
             id: newPrefixedId('te_'),
             cardId: card.id,
@@ -698,36 +764,33 @@ export default function TypeTraining() {
         );
       }
     }
-    if (entries.length === 0) return;
-    sessionSyncedRef.current = true;
-    const session = buildTypeSession({
-      id: newPrefixedId('ts_'),
-      deckId,
-      deckName: deckName || null,
-      mode,
-      entries,
-      totalCards: cards.length,
-      skipped: skippedCountRef.current + (abandoned ? 1 : 0),
-      durationMs: Math.max(Date.now() - startTimeRef.current, 0),
-      createdAt: new Date().toISOString(),
-    });
-    try {
-      await syncTypePractice({ session, entries });
-    } catch {
-      // silent: never block training or nag the user
+    if (all.length === 0) {
+      sessionFinishedRef.current = true;
+      return;
     }
-    const srsByCard = new Map(
-      cards.filter((c) => c.srs).map((c) => [c.id, c.srs!])
-    );
-    const updates = egregiousSrsUpdates(entries, srsByCard);
-    if (updates.length > 0) {
-      await Promise.allSettled(
-        updates.map(({ cardId, srs }) =>
-          upsertCardProgress(cardId, toAgainUpsertBody(srs))
-        )
-      );
+    const pending = all.slice(syncedCountRef.current);
+    if (await pushSync(all, pending.length > 0 ? pending : all)) {
+      syncedCountRef.current = all.length;
+      await applySrsAgain(pending);
     }
+    sessionFinishedRef.current = true;
   };
+
+  useEffect(() => {
+    syncTickRef.current = () => {
+      void syncIncremental();
+      if (wordRef.current || inputIndex > 0) {
+        const resume = buildCurrentResume();
+        if (resume) persistResume(resume, currentIndex);
+      }
+    };
+  });
+
+  useEffect(() => {
+    if (!backend || !isStarted || isComplete) return;
+    const id = setInterval(() => syncTickRef.current(), TYPE_SYNC_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [backend, isStarted, isComplete]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -735,7 +798,7 @@ export default function TypeTraining() {
         const resume = buildCurrentResume();
         if (resume) persistResume(resume, currentIndex);
       }
-      void syncSession(true);
+      void flushSession(true);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -792,7 +855,7 @@ export default function TypeTraining() {
     } else {
       clearTypeProgress(deckId);
       clearResume();
-      void syncSession(false);
+      void flushSession(false);
       setIsComplete(true);
       setStats(prev => ({ ...prev, endTime: Date.now() }));
     }
@@ -823,7 +886,10 @@ export default function TypeTraining() {
     entriesRef.current = [];
     skippedCountRef.current = 0;
     startTimeRef.current = 0;
-    sessionSyncedRef.current = false;
+    syncedCountRef.current = 0;
+    sessionIdRef.current = null;
+    sessionCreatedAtRef.current = '';
+    sessionFinishedRef.current = false;
     const sorted = await applySort(cards);
     setCards(sorted);
     if (sorted.length > 0) {
