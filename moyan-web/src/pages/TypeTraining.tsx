@@ -16,10 +16,13 @@ import {
   getSpeechSettings,
 } from '../services/speechService';
 import {
+  deleteTypeResume,
   hasVocabularyBackend,
   getTypeStats,
+  getTypeResume,
   listDecks,
   listStudyCards,
+  putTypeResume,
   syncTypePractice,
   upsertCardProgress,
 } from '../services/vocabularyApi';
@@ -29,13 +32,17 @@ import type {
   StudyCard,
   TypeEntry,
   TypeMastery,
+  TypeResume,
 } from '@/types/vocabulary';
 import {
+  buildTypeResume,
   buildTypeEntry,
   buildTypeSession,
+  canResumeAt,
   egregiousSrsUpdates,
   newPrefixedId,
   toAgainUpsertBody,
+  typedStatesFromCharInfos,
 } from '../services/typePractice';
 import { getCurrentUser } from '../services/authService';
 
@@ -133,7 +140,12 @@ function mapLocalDeck(deck: LocalDeck): UiDeck {
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
 
 interface TypeProgress {
-  [deckId: string]: { currentIndex: number; lastCardId: string; timestamp: number };
+  [deckId: string]: {
+    currentIndex: number;
+    lastCardId: string;
+    timestamp: number;
+    resume?: TypeResume;
+  };
 }
 
 function loadTypeProgress(): TypeProgress {
@@ -144,13 +156,6 @@ function loadTypeProgress(): TypeProgress {
   }
 }
 
-function saveTypeProgressEntry(deckId: string | null, currentIndex: number, cardId: string) {
-  const key = deckId || 'all';
-  const all = loadTypeProgress();
-  all[key] = { currentIndex, lastCardId: cardId, timestamp: Date.now() };
-  localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
-}
-
 function getTypeSavedIndex(deckId: string | null, cards: TypeCard[]): number {
   const key = deckId || 'all';
   const saved = loadTypeProgress()[key];
@@ -158,6 +163,11 @@ function getTypeSavedIndex(deckId: string | null, cards: TypeCard[]): number {
   const idx = cards.findIndex(c => c.id === String(saved.lastCardId));
   if (idx >= 0) return idx;
   return Math.min(saved.currentIndex, cards.length - 1);
+}
+
+function loadLocalResume(deckId: string | null): TypeResume | null {
+  const key = deckId || 'all';
+  return loadTypeProgress()[key]?.resume ?? null;
 }
 
 function clearTypeProgress(deckId: string | null) {
@@ -359,6 +369,27 @@ export default function TypeTraining() {
     setInputIndex(firstPending >= 0 ? firstPending : 0);
   };
 
+  const initCharInfosFromResume = (
+    card: TypeCard,
+    trainMode: TrainMode,
+    resume: TypeResume
+  ) => {
+    const target = buildTarget(card, trainMode);
+    const infos: CharInfo[] = target.split('').map((char, i) => {
+      const typed = i < resume.char_index ? resume.typed_states[i] : undefined;
+      if (typed) {
+        return { char, state: typed.state, inputChar: typed.input_char ?? undefined };
+      }
+      return { char, state: isTargetChar(card, target, i) ? 'pending' : 'correct' };
+    });
+    setCharInfos(infos);
+    let next = Math.min(resume.char_index, target.length);
+    while (next < target.length && !isTargetChar(card, target, next)) {
+      next++;
+    }
+    setInputIndex(next >= target.length ? target.length : next);
+  };
+
   const speakCurrent = async () => {
     if (!currentCard) return;
     try {
@@ -416,11 +447,41 @@ export default function TypeTraining() {
         }
         setCards(loaded);
         if (loaded.length > 0) {
-          const savedIdx = getTypeSavedIndex(deckId, loaded);
+          let resume: TypeResume | null = null;
+          if (backend) {
+            try {
+              resume = await getTypeResume(deckId);
+            } catch {
+              resume = null;
+            }
+            if (!resume) resume = loadLocalResume(deckId);
+          } else {
+            resume = loadLocalResume(deckId);
+          }
+          let savedIdx = getTypeSavedIndex(deckId, loaded);
+          if (resume) {
+            const idx = loaded.findIndex((c) => c.id === resume.card_id);
+            if (idx >= 0) savedIdx = idx;
+          }
           setCurrentIndex(savedIdx);
-          initCharInfos(loaded[savedIdx], mode);
+          const firstCard = loaded[savedIdx];
+          if (
+            firstCard &&
+            resume &&
+            canResumeAt(resume, mode, buildTarget(firstCard, mode))
+          ) {
+            initCharInfosFromResume(firstCard, mode, resume);
+            wordRef.current = {
+              cardId: firstCard.id,
+              correctChars: resume.correct_chars,
+              wrongChars: resume.wrong_chars,
+              startedAt: Date.now(),
+            };
+          } else {
+            initCharInfos(firstCard, mode);
+          }
           if (autoPlay) {
-            setTimeout(() => speak(loaded[savedIdx].front).catch(() => {}), 300);
+            setTimeout(() => speak(firstCard.front).catch(() => {}), 300);
           }
         }
       } catch (err) {
@@ -554,6 +615,46 @@ export default function TypeTraining() {
     }
   };
 
+  const buildCurrentResume = (): TypeResume | null => {
+    if (!currentCard) return null;
+    const target = buildTarget(currentCard, mode);
+    const active =
+      wordRef.current?.cardId === currentCard.id ? wordRef.current : null;
+    return buildTypeResume({
+      deckId: deckId ?? '',
+      deckName: deckName || null,
+      mode,
+      cardId: currentCard.id,
+      target,
+      charIndex: inputIndex,
+      correctChars: active?.correctChars ?? 0,
+      wrongChars: active?.wrongChars ?? 0,
+      typedStates: typedStatesFromCharInfos(charInfos, inputIndex),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const persistResume = (resume: TypeResume, index: number) => {
+    const key = deckId || 'all';
+    const all = loadTypeProgress();
+    all[key] = {
+      currentIndex: index,
+      lastCardId: resume.card_id,
+      timestamp: Date.now(),
+      resume,
+    };
+    localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
+    if (backend) {
+      putTypeResume(resume).catch(() => {});
+    }
+  };
+
+  const clearResume = () => {
+    if (backend) {
+      deleteTypeResume(deckId).catch(() => {});
+    }
+  };
+
   const finalizeWord = (card: TypeCard, skipped: boolean) => {
     const w = wordRef.current;
     if (backend && w) {
@@ -631,13 +732,14 @@ export default function TypeTraining() {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (currentCard && !isComplete) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
+        const resume = buildCurrentResume();
+        if (resume) persistResume(resume, currentIndex);
       }
       void syncSession(true);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentCard, currentIndex, deckId, isComplete, backend, cards, deckName, mode]);
+  }, [currentCard, currentIndex, deckId, isComplete, backend, cards, deckName, mode, charInfos, inputIndex]);
 
   const applySort = async (list: TypeCard[]): Promise<TypeCard[]> => {
     if (backend) {
@@ -660,8 +762,22 @@ export default function TypeTraining() {
     if (currentIndex < cards.length - 1) {
       const nextIndex = currentIndex + 1;
       const nxt = cards[nextIndex];
-      if (currentCard) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
+      if (nxt) {
+        persistResume(
+          buildTypeResume({
+            deckId: deckId ?? '',
+            deckName: deckName || null,
+            mode,
+            cardId: nxt.id,
+            target: buildTarget(nxt, mode),
+            charIndex: 0,
+            correctChars: 0,
+            wrongChars: 0,
+            typedStates: [],
+            updatedAt: new Date().toISOString(),
+          }),
+          nextIndex
+        );
       }
       setCurrentIndex(nextIndex);
       if (nxt) {
@@ -675,6 +791,7 @@ export default function TypeTraining() {
       }
     } else {
       clearTypeProgress(deckId);
+      clearResume();
       void syncSession(false);
       setIsComplete(true);
       setStats(prev => ({ ...prev, endTime: Date.now() }));
@@ -694,6 +811,7 @@ export default function TypeTraining() {
 
   const handleRestart = async () => {
     clearTypeProgress(deckId);
+    clearResume();
     setCurrentIndex(0);
     setIsComplete(false);
     setIsStarted(false);
