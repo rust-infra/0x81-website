@@ -24,7 +24,7 @@ use crate::services::Services;
 fn parse_allowed_origins() -> Vec<HeaderValue> {
     let origins = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| {
-            "http://localhost:4323,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5001,http://127.0.0.1:5001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
+            "http://localhost:4323,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5001,http://127.0.0.1:5001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8081,http://127.0.0.1:8081"
                 .to_string()
         });
     origins
@@ -104,6 +104,8 @@ mod tests {
 
         assert!(origins.contains(&"http://localhost:5173".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5173".to_string()));
+        assert!(origins.contains(&"http://localhost:8081".to_string()));
+        assert!(origins.contains(&"http://127.0.0.1:8081".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5000".to_string()));
         assert!(origins.contains(&"http://localhost:5001".to_string()));
         assert!(origins.contains(&"http://127.0.0.1:5001".to_string()));

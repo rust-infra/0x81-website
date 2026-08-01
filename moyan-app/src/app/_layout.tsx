@@ -30,15 +30,14 @@ function RootNavigator() {
         contentStyle: { backgroundColor: theme.colors.paper },
       }}
     >
-      {!token ? (
+      <Stack.Protected guard={!!token}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="deck/[id]" />
+        <Stack.Screen name="study/[deckId]" />
+      </Stack.Protected>
+      <Stack.Protected guard={!token}>
         <Stack.Screen name="login" />
-      ) : (
-        <>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="deck/[id]" />
-          <Stack.Screen name="study/[deckId]" />
-        </>
-      )}
+      </Stack.Protected>
     </Stack>
   );
 }
