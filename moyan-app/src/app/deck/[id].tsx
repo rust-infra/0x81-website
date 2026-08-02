@@ -49,6 +49,7 @@ interface CardForm {
   pronunciation: string;
   exampleEn: string;
   exampleZh: string;
+  tags: string;
 }
 
 const EMPTY_FORM: CardForm = {
@@ -57,6 +58,7 @@ const EMPTY_FORM: CardForm = {
   pronunciation: '',
   exampleEn: '',
   exampleZh: '',
+  tags: '',
 };
 
 export default function DeckDetailScreen() {
@@ -142,6 +144,7 @@ export default function DeckDetailScreen() {
       pronunciation: card.pronunciation || '',
       exampleEn: card.examples?.[0]?.sentence_en || '',
       exampleZh: card.examples?.[0]?.translation_zh || '',
+      tags: (card.tags || []).join(', '),
     });
     setShowCardModal(true);
   };
@@ -159,11 +162,16 @@ export default function DeckDetailScreen() {
               },
             ]
           : undefined;
+      const tags = form.tags
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (editingCard) {
         await updateCard(editingCard.id, {
           front: form.front.trim(),
           back: form.back.trim(),
           pronunciation: form.pronunciation.trim() || null,
+          tags,
           examples,
         });
       } else {
@@ -171,6 +179,7 @@ export default function DeckDetailScreen() {
           front: form.front.trim(),
           back: form.back.trim(),
           pronunciation: form.pronunciation.trim() || undefined,
+          tags,
           examples,
         });
       }
@@ -295,6 +304,15 @@ export default function DeckDetailScreen() {
                     <Text style={[styles.cardBack, { color: c.inkMuted }]} numberOfLines={2}>
                       {item.back}
                     </Text>
+                    {item.tags && item.tags.length > 0 ? (
+                      <View style={styles.tagRow}>
+                        {item.tags.slice(0, 4).map((tag) => (
+                          <Text key={tag} style={[styles.tagChip, { backgroundColor: c.tagBg, color: c.tagText }]}>
+                            {tag}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                   <View style={[styles.badge, { backgroundColor: `${statusColor(status)}18` }]}>
                     <Text style={[styles.badgeText, { color: statusColor(status) }]}>
@@ -316,7 +334,14 @@ export default function DeckDetailScreen() {
       <Modal visible={showDeckEdit} transparent animationType="slide" onRequestClose={() => setShowDeckEdit(false)}>
         <Pressable style={styles.mask} onPress={() => setShowDeckEdit(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>{t('edit')} {t('tabDecks')}</Text>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
+                {t('edit')} {t('tabDecks')}
+              </Text>
+              <Pressable onPress={() => setShowDeckEdit(false)} hitSlop={12}>
+                <Text style={{ color: c.inkMuted, fontSize: 18 }}>✕</Text>
+              </Pressable>
+            </View>
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
               placeholder={t('deckNamePlaceholder')}
@@ -345,9 +370,14 @@ export default function DeckDetailScreen() {
       <Modal visible={showCardModal} transparent animationType="slide" onRequestClose={() => setShowCardModal(false)}>
         <Pressable style={styles.mask} onPress={() => setShowCardModal(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
-              {editingCard ? t('editCard') : t('addCardTitle')}
-            </Text>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
+                {editingCard ? t('editCard') : t('addCardTitle')}
+              </Text>
+              <Pressable onPress={() => setShowCardModal(false)} hitSlop={12}>
+                <Text style={{ color: c.inkMuted, fontSize: 18 }}>✕</Text>
+              </Pressable>
+            </View>
             <ScrollView>
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
@@ -383,6 +413,13 @@ export default function DeckDetailScreen() {
                 placeholderTextColor={c.inkMuted}
                 value={form.exampleZh}
                 onChangeText={(v) => setForm((f) => ({ ...f, exampleZh: v }))}
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('cardTags')}
+                placeholderTextColor={c.inkMuted}
+                value={form.tags}
+                onChangeText={(v) => setForm((f) => ({ ...f, tags: v }))}
               />
             </ScrollView>
             <Pressable
@@ -461,6 +498,14 @@ const styles = StyleSheet.create({
   cardBack: { fontSize: 12, marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   badgeText: { fontSize: 11, fontWeight: '600' },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  tagChip: {
+    fontSize: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
   empty: { textAlign: 'center', marginTop: 24, fontSize: 13 },
   mask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
@@ -470,7 +515,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '80%',
   },
-  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
+  sheetTitle: { fontSize: 20, fontWeight: '700' },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 12,

@@ -143,6 +143,9 @@ mod tests {
             google_client_id: String::new(),
             google_client_secret: String::new(),
             google_redirect_url: String::new(),
+            google_mobile_client_id: String::new(),
+            google_mobile_client_secret: String::new(),
+            google_mobile_redirect_url: String::new(),
             admin_token: String::new(),
         }
     }
@@ -403,6 +406,33 @@ mod tests {
         assert!(body["data"].is_array());
         Ok(())
     }
+
+    #[tokio::test]
+    async fn google_mobile_login_requires_server_config() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/google/mobile")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&serde_json::json!({
+                        "code": "test-code"
+                    }))?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = read_json(response).await?;
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("not configured")
+        );
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -437,6 +467,9 @@ async fn main() -> anyhow::Result<()> {
         google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default(),
         google_redirect_url: std::env::var("GOOGLE_REDIRECT_URL")
             .unwrap_or_else(|_| "http://localhost:4323/api/auth/google/callback".to_string()),
+        google_mobile_client_id: std::env::var("GOOGLE_MOBILE_CLIENT_ID").unwrap_or_default(),
+        google_mobile_client_secret: std::env::var("GOOGLE_MOBILE_CLIENT_SECRET").unwrap_or_default(),
+        google_mobile_redirect_url: std::env::var("GOOGLE_MOBILE_REDIRECT_URL").unwrap_or_default(),
         admin_token: std::env::var("ADMIN_TOKEN").unwrap_or_default(),
     };
 

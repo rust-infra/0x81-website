@@ -2,7 +2,6 @@
 // - webspeech → expo-speech（原生 TTS，语速/语言跟随设置）
 // - google / elevenlabs / aliyun → HTTP 合成，缓存到本地文件后用 expo-audio 播放
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Directory, File, Paths } from 'expo-file-system';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import type { UserSettings } from './types';
@@ -68,6 +67,36 @@ function detectLanguage(text: string): 'en' | 'zh' {
   return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
 }
 
+interface LangSegment {
+  text: string;
+  lang: 'en' | 'zh';
+}
+
+/** Split mixed Chinese/English text into language segments（与 moyan-web 一致） */
+function splitByLanguage(text: string): LangSegment[] {
+  const segments: LangSegment[] = [];
+  let current = '';
+  let currentLang: 'en' | 'zh' | null = null;
+  for (const char of text) {
+    const charLang: 'en' | 'zh' =
+      /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char) ? 'zh' : 'en';
+    if (currentLang === null) {
+      currentLang = charLang;
+      current = char;
+    } else if (currentLang === charLang) {
+      current += char;
+    } else {
+      segments.push({ text: current, lang: currentLang });
+      currentLang = charLang;
+      current = char;
+    }
+  }
+  if (current && currentLang) {
+    segments.push({ text: current, lang: currentLang });
+  }
+  return segments;
+}
+
 function speakWithNative(text: string, rate: number, language?: string) {
   if (Platform.OS === 'web') {
     const w = window as unknown as {
@@ -116,6 +145,7 @@ async function cacheFile(
   data: ArrayBuffer,
   reuse: boolean
 ): Promise<string> {
+  const { File, Paths } = await import('expo-file-system');
   const safeKey = key.replace(/[^a-zA-Z0-9]/g, '').slice(0, 48);
   const file = new File(Paths.cache, `tts-${reuse ? safeKey : `${Date.now()}${Math.random().toString(36).slice(2, 8)}`}.mp3`);
   if (reuse && file.exists) return file.uri;
@@ -139,9 +169,9 @@ async function fetchAndPlay(
 
 async function speakWithProvider(
   text: string,
-  settings: SpeechSettings
+  settings: SpeechSettings,
+  lang: 'en' | 'zh'
 ): Promise<boolean> {
-  const lang = detectLanguage(text);
   switch (settings.provider) {
     case 'google': {
       if (!settings.googleKey) return false;
@@ -213,13 +243,24 @@ export async function speak(
   if (!text.trim()) return;
   const settings = await getSpeechSettings();
   const rate = opts?.rate ?? settings.speech_speed ?? 0.9;
-  try {
-    const played = await speakWithProvider(text, settings);
-    if (played) return;
-  } catch {
-    // fall back to native
+  const segments = splitByLanguage(text);
+  for (const seg of segments) {
+    const segLang = seg.lang;
+    let played = false;
+    try {
+      played = await speakWithProvider(seg.text, settings, segLang);
+    } catch {
+      played = false;
+    }
+    if (!played) {
+      speakWithNative(
+        seg.text,
+        rate,
+        opts?.language || (segLang === 'zh' ? 'zh-CN' : 'en-US')
+      );
+    }
+    await new Promise((r) => setTimeout(r, 250));
   }
-  speakWithNative(text, rate, opts?.language);
 }
 
 export async function stopSpeaking(): Promise<void> {
@@ -235,6 +276,7 @@ export async function stopSpeaking(): Promise<void> {
 
 export async function clearAudioCache(): Promise<number> {
   try {
+    const { Directory, File, Paths } = await import('expo-file-system');
     const dir = new Directory(Paths.cache);
     let cleared = 0;
     for (const item of dir.list()) {

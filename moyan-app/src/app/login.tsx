@@ -1,4 +1,5 @@
 import { Redirect } from 'expo-router';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -11,12 +12,14 @@ import {
   View,
 } from 'react-native';
 import {
+  googleMobileLogin,
   kimiDevice,
   kimiLogin,
   kimiTokenPoll,
   type KimiDeviceInfo,
 } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { getGoogleClientId, getGoogleRedirectUri } from '../lib/config';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme-context';
 
@@ -38,6 +41,11 @@ export default function LoginScreen() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const aliveRef = useRef(true);
 
+  const [googleRequest, googleResponse, googlePrompt] = Google.useAuthRequest({
+    clientId: getGoogleClientId(),
+    redirectUri: getGoogleRedirectUri(),
+  });
+
   if (token) {
     return <Redirect href="/(tabs)" />;
   }
@@ -48,6 +56,33 @@ export default function LoginScreen() {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success' && googleResponse.params?.code) {
+      void handleGoogleCode(googleResponse.params.code);
+    } else if (googleResponse?.type === 'error') {
+      setError(t('login') + ' 失败');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleResponse]);
+
+  const handleGoogleCode = async (code: string) => {
+    setError('');
+    try {
+      const login = await googleMobileLogin(code);
+      await signIn(login.token, login.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    if (!getGoogleClientId()) {
+      setError('服务端未配置 Google 登录（GOOGLE_MOBILE_CLIENT_ID）');
+      return;
+    }
+    void googlePrompt();
+  };
 
   const startKimiLogin = async () => {
     setError('');
@@ -131,6 +166,12 @@ export default function LoginScreen() {
               onPress={startKimiLogin}
             >
               <Text style={styles.buttonText}>{t('loginKimi')}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.button, { backgroundColor: c.buttonBg }]}
+              onPress={handleGoogleLogin}
+            >
+              <Text style={{ color: c.buttonText }}>{t('loginGoogle')}</Text>
             </Pressable>
             <Pressable
               style={[styles.secondary, { borderColor: c.border }]}

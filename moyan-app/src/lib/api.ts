@@ -234,3 +234,19 @@ export async function kimiLogin(
   const data = body.data as { token: string; user: User };
   return { token: data.token, user: data.user };
 }
+
+export async function googleMobileLogin(
+  code: string
+): Promise<{ token: string; user: User }> {
+  const res = await fetch(`${API_BASE}/api/auth/google/mobile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    throw new Error(body?.error?.message || `Google 登录失败 (${res.status})`);
+  }
+  const data = body.data as { token: string; user: User };
+  return { token: data.token, user: data.user };
+}

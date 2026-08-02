@@ -10,6 +10,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         // Google OAuth
         .route("/google/callback", get(auth::google_callback))
+        .route("/google/mobile", post(auth::google_mobile_login))
         // Kimi OAuth (Device Flow)
         .route("/kimi/device", post(auth::kimi_device))
         .route("/kimi/token", post(auth::kimi_token_poll))

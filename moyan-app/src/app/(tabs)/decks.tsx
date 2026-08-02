@@ -171,7 +171,12 @@ export default function DecksScreen() {
       >
         <Pressable style={styles.mask} onPress={() => setShowCreate(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>{t('newDeck')}</Text>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>{t('newDeck')}</Text>
+              <Pressable onPress={() => setShowCreate(false)} hitSlop={12}>
+                <Text style={{ color: c.inkMuted, fontSize: 18 }}>✕</Text>
+              </Pressable>
+            </View>
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
               placeholder={t('deckNamePlaceholder')}
@@ -220,7 +225,13 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
   },
-  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
+  sheetTitle: { fontSize: 20, fontWeight: '700' },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 12,

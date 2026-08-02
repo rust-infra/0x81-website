@@ -18,6 +18,9 @@ pub struct AppState {
     pub google_client_id: String,
     pub google_client_secret: String,
     pub google_redirect_url: String,
+    pub google_mobile_client_id: String,
+    pub google_mobile_client_secret: String,
+    pub google_mobile_redirect_url: String,
     pub admin_token: String,
 }
 

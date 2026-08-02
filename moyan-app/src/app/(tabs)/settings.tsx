@@ -43,6 +43,15 @@ export default function SettingsScreen() {
   const c = theme.colors;
   const [speech, setSpeech] = useState<SpeechSettings | null>(null);
   const [voicePicker, setVoicePicker] = useState<'en' | 'zh' | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('settings_last_sync')
+      .then((v) => {
+        if (v) setLastSync(new Date(v));
+      })
+      .catch(() => {});
+  }, []);
 
   const currentVoiceValue = (zh: boolean): string => {
     switch (speech?.provider) {
@@ -82,7 +91,11 @@ export default function SettingsScreen() {
   };
 
   const handleTestVoice = () => {
-    void speak('Hello, this is a voice test. 你好，这是语音测试。');
+    void speak('Hello, this is a voice test.');
+  };
+
+  const handleTestVoiceZh = () => {
+    void speak('你好，这是语音测试。');
   };
 
   const handleReset = async () => {
@@ -148,6 +161,9 @@ export default function SettingsScreen() {
         speech_speed: s.speech_speed,
         auto_play: s.auto_play,
       });
+      const now = new Date();
+      setLastSync(now);
+      AsyncStorage.setItem('settings_last_sync', now.toISOString()).catch(() => {});
       toast(t('synced'));
     } catch (err) {
       toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -355,7 +371,10 @@ export default function SettingsScreen() {
             <Text style={{ color: c.accent, fontSize: 14 }}>{t('clearCache')}</Text>
           </Pressable>
           <Pressable style={styles.row} onPress={handleTestVoice}>
-            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoice')}</Text>
+            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoiceEn')}</Text>
+          </Pressable>
+          <Pressable style={styles.row} onPress={handleTestVoiceZh}>
+            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoiceZh')}</Text>
           </Pressable>
           <Pressable style={styles.row} onPress={handleReset}>
             <Text style={{ color: c.inkMuted, fontSize: 14 }}>{t('resetDefaults')}</Text>
@@ -364,6 +383,9 @@ export default function SettingsScreen() {
 
         <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('sync')}</Text>
         <View style={[styles.card, { backgroundColor: c.card }]}>
+          <Text style={[styles.rowDesc, { color: c.inkMuted, paddingHorizontal: 12, paddingTop: 8 }]}>
+            {t('lastSync')}: {lastSync ? lastSync.toLocaleString() : t('never')}
+          </Text>
           <Pressable style={[styles.syncBtn, { backgroundColor: c.buttonBg }]} onPress={syncToBackend}>
             <Text style={{ color: c.buttonText }}>{t('uploadSettings')}</Text>
           </Pressable>

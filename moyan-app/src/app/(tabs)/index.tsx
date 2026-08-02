@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -16,6 +17,14 @@ import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 import type { Deck } from '../../lib/types';
+
+const DAILY_WORDS = [
+  'concurrency',
+  'idempotent',
+  'eventual consistency',
+  'backpressure',
+  'memory safety',
+];
 
 function formatDate(lang: 'zh-CN' | 'en') {
   const d = new Date();
@@ -39,6 +48,19 @@ export default function HomeScreen() {
   } | null>(null);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [wordIndex, setWordIndex] = useState(0);
+  const wordOpacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setWordIndex((i) => (i + 1) % DAILY_WORDS.length);
+      Animated.sequence([
+        Animated.timing(wordOpacity, { toValue: 0.06, duration: 250, useNativeDriver: true }),
+        Animated.timing(wordOpacity, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ]).start();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [wordOpacity]);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +129,12 @@ export default function HomeScreen() {
             style={[styles.cta, { backgroundColor: c.buttonBg }]}
             onPress={() => setShowPicker(true)}
           >
+            <Animated.Text
+              numberOfLines={1}
+              style={[styles.ctaWord, { color: c.buttonText, opacity: wordOpacity }]}
+            >
+              {DAILY_WORDS[wordIndex]}
+            </Animated.Text>
             <Text style={[styles.ctaTitle, { color: c.buttonText }]}>{t('dailyRequired')}</Text>
             <Text style={[styles.ctaDesc, { color: `${c.buttonText}B3` }]}>
               {stats.due > 0
@@ -145,9 +173,14 @@ export default function HomeScreen() {
       >
         <Pressable style={styles.mask} onPress={() => setShowPicker(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: c.paper }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
-              {t('chooseDeck')}
-            </Text>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
+                {t('chooseDeck')}
+              </Text>
+              <Pressable onPress={() => setShowPicker(false)} hitSlop={12}>
+                <Text style={{ color: c.inkMuted, fontSize: 18 }}>✕</Text>
+              </Pressable>
+            </View>
             <FlatList
               data={['30天', '其他']}
               keyExtractor={(item) => item}
@@ -207,6 +240,15 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 22,
     marginBottom: 16,
+    overflow: 'hidden',
+  },
+  ctaWord: {
+    position: 'absolute',
+    top: 14,
+    right: 16,
+    fontSize: 22,
+    fontFamily: serif,
+    transform: [{ rotate: '-8deg' }],
   },
   ctaTitle: { fontSize: 18, fontWeight: '700', fontFamily: serif },
   ctaDesc: { fontSize: 13, marginTop: 6 },
@@ -231,7 +273,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '75%',
   },
-  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
+  sheetTitle: { fontSize: 20, fontWeight: '700' },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   groupTitle: { fontSize: 12, fontWeight: '500', marginBottom: 8 },
   deckRow: {
     flexDirection: 'row',

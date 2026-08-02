@@ -23,7 +23,9 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://127.0.0.1:4323"
+      "apiUrl": "http://127.0.0.1:4323",
+      "googleClientId": "",
+      "googleRedirectUri": "moyan://auth/google"
     },
     "plugins": [
       "expo-router",
