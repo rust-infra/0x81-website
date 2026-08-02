@@ -41,8 +41,12 @@ export default function PodcastScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [disabled, setDisabled] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
   const apiKeyRef = useRef('');
   const searchAbortRef = useRef<AbortController | null>(null);
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
+  const queryRef = useRef('');
 
   useEffect(() => {
     getAppConfig()
@@ -66,9 +70,11 @@ export default function PodcastScreen() {
       setError(t('podcastNoKey'));
       return;
     }
+    queryRef.current = q;
     const cached = await loadSearchCache(q);
     if (cached) {
-      setResults(cached);
+      setResults(cached.items);
+      setNextPageToken(cached.nextPageToken || '');
       setMode('results');
       setError('');
     } else {
@@ -97,9 +103,10 @@ export default function PodcastScreen() {
         }))
         .filter((i: SearchItem) => i.id);
       setResults(items);
+      setNextPageToken(body.nextPageToken || '');
       setMode('results');
       if (items.length > 0) {
-        void saveSearchCache(q, items);
+        void saveSearchCache(q, items, body.nextPageToken || '');
       }
     } catch (e) {
       if (controller.signal.aborted) {
@@ -116,8 +123,47 @@ export default function PodcastScreen() {
   useEffect(() => {
     return () => {
       searchAbortRef.current?.abort();
+      loadMoreAbortRef.current?.abort();
     };
   }, []);
+
+  const loadMore = async () => {
+    const q = queryRef.current;
+    if (!q || !nextPageToken || loadingMore || loading) return;
+    setLoadingMore(true);
+    loadMoreAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadMoreAbortRef.current = controller;
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&q=${encodeURIComponent(
+        q
+      )}&pageToken=${encodeURIComponent(nextPageToken)}&key=${encodeURIComponent(
+        apiKeyRef.current
+      )}`;
+      const res = await fetch(url, { signal: controller.signal });
+      const body = await res.json();
+      const items: SearchItem[] = (body.items || [])
+        .map((it: { id?: { videoId?: string }; snippet?: { title?: string; channelTitle?: string; thumbnails?: Record<string, { url?: string }> } }) => ({
+          id: it.id?.videoId || '',
+          title: it.snippet?.title || '',
+          channel: it.snippet?.channelTitle || '',
+          thumbnail:
+            it.snippet?.thumbnails?.high?.url ||
+            it.snippet?.thumbnails?.default?.url ||
+            null,
+        }))
+        .filter((i: SearchItem) => i.id);
+      setResults((prev) => {
+        const seen = new Set(prev.map((i) => i.id));
+        return [...prev, ...items.filter((i) => !seen.has(i.id))];
+      });
+      setNextPageToken(body.nextPageToken || '');
+    } catch {
+      // keep already-loaded results; the footer button allows retrying
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const openPlayer = (item: SearchItem, url: string) => {
     router.push({
@@ -234,6 +280,28 @@ export default function PodcastScreen() {
               data={results}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.list}
+              onEndReachedThreshold={0.4}
+              onEndReached={loadMore}
+              ListFooterComponent={
+                nextPageToken ? (
+                  <Pressable
+                    style={[
+                      styles.loadMore,
+                      { borderColor: c.border, backgroundColor: c.card },
+                    ]}
+                    onPress={loadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator color={c.accent} size="small" />
+                    ) : (
+                      <Text style={{ color: c.accent, fontSize: 13 }}>
+                        {t('podcastLoadMore')}
+                      </Text>
+                    )}
+                  </Pressable>
+                ) : null
+              }
               renderItem={({ item }) =>
                 renderCard(item, `https://www.youtube.com/watch?v=${item.id}`)
               }
@@ -310,4 +378,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   resultsTitle: { fontSize: 17, fontWeight: '700' },
+  loadMore: {
+    alignSelf: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 22,
+    marginTop: 4,
+    marginBottom: 12,
+  },
 });

@@ -46,11 +46,12 @@ export interface CachedSearch {
   query: string;
   at: number;
   items: { id: string; title: string; channel: string; thumbnail: string | null }[];
+  nextPageToken?: string;
 }
 
 export async function loadSearchCache(
   query: string
-): Promise<CachedSearch['items'] | null> {
+): Promise<{ items: CachedSearch['items']; nextPageToken?: string } | null> {
   try {
     const raw = await AsyncStorage.getItem(PODCAST_SEARCH_CACHE_KEY);
     if (!raw) return null;
@@ -59,7 +60,12 @@ export async function loadSearchCache(
     const hit = parsed.find(
       (c) => c && c.query === query && Array.isArray(c.items)
     );
-    return hit ? (hit.items as CachedSearch['items']) : null;
+    return hit
+      ? {
+          items: hit.items as CachedSearch['items'],
+          nextPageToken: hit.nextPageToken || '',
+        }
+      : null;
   } catch {
     return null;
   }
@@ -67,13 +73,14 @@ export async function loadSearchCache(
 
 export async function saveSearchCache(
   query: string,
-  items: CachedSearch['items']
+  items: CachedSearch['items'],
+  nextPageToken?: string
 ): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(PODCAST_SEARCH_CACHE_KEY);
     const cached: CachedSearch[] = raw ? JSON.parse(raw) : [];
     const next = [
-      { query, at: Date.now(), items },
+      { query, at: Date.now(), items, nextPageToken },
       ...cached.filter((c) => c && c.query !== query),
     ]
       .sort((a, b) => b.at - a.at)
