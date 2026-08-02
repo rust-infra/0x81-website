@@ -57,6 +57,8 @@ pub struct YoutubeCaptionsResponse {
     pub video_id: String,
     pub title: String,
     pub duration_sec: Option<i64>,
+    pub channel: Option<String>,
+    pub thumbnail: Option<String>,
     pub language: String,
     pub caption_text: String,
     pub source_url: String,

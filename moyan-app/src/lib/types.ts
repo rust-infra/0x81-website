@@ -155,3 +155,26 @@ export interface DailyTrendPoint {
   reviews: number;
   accuracy: number;
 }
+
+export interface TimedCaption {
+  start_ms: number;
+  end_ms: number;
+  text: string;
+}
+
+export interface PodcastResolved {
+  video_id: string;
+  title: string;
+  channel: string | null;
+  duration_sec: number | null;
+  thumbnail: string | null;
+  audio_url: string;
+  captions: TimedCaption[];
+}
+
+export interface AppConfig {
+  podcast: {
+    enabled: boolean;
+    youtube_api_key: string;
+  };
+}

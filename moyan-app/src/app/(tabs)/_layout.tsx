@@ -1,5 +1,7 @@
 import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Text, type ColorValue } from 'react-native';
+import { getAppConfig } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 
@@ -10,6 +12,21 @@ function EmojiIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
 export default function TabsLayout() {
   const { theme } = useTheme();
   const { t } = useI18n();
+  const [podcastEnabled, setPodcastEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAppConfig()
+      .then((cfg) => {
+        if (!cancelled) setPodcastEnabled(!!cfg.podcast?.enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setPodcastEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const c = theme.colors;
 
   return (
@@ -56,6 +73,17 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {podcastEnabled && (
+        <Tabs.Screen
+          name="podcast"
+          options={{
+            title: t('tabPodcast'),
+            tabBarIcon: ({ color }: { color: ColorValue }) => (
+              <EmojiIcon emoji="🎙️" color={color} />
+            ),
+          }}
+        />
+      )}
       <Tabs.Screen
         name="stats"
         options={{

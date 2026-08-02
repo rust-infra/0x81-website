@@ -5,6 +5,8 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use serde::Deserialize;
+
+use crate::models::AppConfigResponse;
 use serde_json::json;
 
 use crate::middleware::error::{success, AppError, AppState};
@@ -180,6 +182,30 @@ pub async fn update_llm_settings(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let settings = state.services.admin_collect.update_llm_settings(req).await?;
     Ok(success(settings))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PodcastConfigUpdate {
+    pub enabled: bool,
+    pub youtube_api_key: Option<String>,
+}
+
+pub async fn get_podcast_config(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    Ok(success(state.services.podcast.config().await?))
+}
+
+pub async fn update_podcast_config(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<PodcastConfigUpdate>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let cfg: AppConfigResponse = state
+        .services
+        .podcast
+        .set_config(req.enabled, req.youtube_api_key.as_deref().unwrap_or(""))
+        .await?;
+    Ok(success(cfg))
 }
 
 pub async fn collect_youtube_captions(

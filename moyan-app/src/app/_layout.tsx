@@ -36,6 +36,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="deck/[id]" />
         <Stack.Screen name="study/[deckId]" />
+        <Stack.Screen name="podcast/player" />
       </Stack.Protected>
       <Stack.Protected guard={!token}>
         <Stack.Screen name="login" />

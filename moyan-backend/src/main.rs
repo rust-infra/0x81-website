@@ -18,7 +18,7 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{admin, auth, health, settings, sync, typing, vocabulary};
+use crate::routes::{admin, auth, health, podcast, settings, sync, typing, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
@@ -66,6 +66,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/settings/", settings::router())
         .nest("/api/sync", sync::routes())
         .nest("/api", vocabulary::routes())
+        .nest("/api/podcast", podcast::routes())
+        .route("/api/config", get(crate::controllers::podcast::config))
         .nest("/api/type", typing::routes())
         .nest("/api/health", health::routes())
         .nest("/api/admin", admin::routes())
@@ -431,6 +433,89 @@ mod tests {
                 .unwrap_or("")
                 .contains("not configured")
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn podcast_config_returns_feature_flag() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/config")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["podcast"]["enabled"], false);
+        assert_eq!(body["data"]["podcast"]["youtube_api_key"], "");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn podcast_resolve_caches_audio_and_captions() -> anyhow::Result<()> {
+        let cache = std::env::temp_dir().join(format!(
+            "moyan-podcast-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        unsafe {
+            std::env::set_var("PODCAST_CACHE_DIR", &cache);
+            std::env::set_var("MOYAN_COLLECT_STUB", "1");
+        }
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let payload = serde_json::json!({
+            "url": "https://www.youtube.com/watch?v=LqG1q5NpOBE"
+        });
+        let make_post = || {
+            app.clone().oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/podcast/resolve")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                    .unwrap(),
+            )
+        };
+
+        let first = make_post().await?;
+        assert_eq!(first.status(), StatusCode::OK);
+        let body = read_json(first).await?;
+        assert_eq!(body["data"]["video_id"], "LqG1q5NpOBE");
+        assert!(
+            body["data"]["captions"].as_array().unwrap().len() >= 3,
+            "stub captions should be parsed"
+        );
+        assert_eq!(
+            body["data"]["audio_url"],
+            "/api/podcast/audio/LqG1q5NpOBE"
+        );
+
+        // cache hit: second resolve still succeeds
+        let second = make_post().await?;
+        assert_eq!(second.status(), StatusCode::OK);
+
+        // audio stream serves the cached file
+        let audio = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/podcast/audio/LqG1q5NpOBE")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(audio.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(audio.into_body(), usize::MAX).await?;
+        assert_eq!(bytes.as_ref(), b"stub-audio");
+
+        unsafe {
+            std::env::remove_var("PODCAST_CACHE_DIR");
+            std::env::remove_var("MOYAN_COLLECT_STUB");
+        }
+        let _ = std::fs::remove_dir_all(&cache);
         Ok(())
     }
 }

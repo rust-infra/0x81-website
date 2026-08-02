@@ -4,12 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBase } from './config';
 import type {
   CardProgress,
+  AppConfig,
   Card,
   CreateReviewLogRequest,
   CreateCardRequest,
   CreateDeckRequest,
   DailyTrendPoint,
   Deck,
+  PodcastResolved,
   ReviewLog,
   StudyCard,
   StudyQueue,
@@ -62,6 +64,28 @@ async function apiRequest<T>(
 
   const result = await res.json();
   return result.data as T;
+}
+
+async function publicGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    throw new Error(body?.error?.message || `请求失败 (${res.status})`);
+  }
+  return body.data as T;
+}
+
+async function publicPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error?.message || `请求失败 (${res.status})`);
+  }
+  return data.data as T;
 }
 
 export async function listDecks(): Promise<Deck[]> {
@@ -173,6 +197,16 @@ export async function saveUserSettings(
 
 export async function getDailyTrend(days = 7): Promise<DailyTrendPoint[]> {
   return apiRequest<DailyTrendPoint[]>(`/api/study/daily-trend?days=${days}`);
+}
+
+// ==================== Podcast ====================
+
+export async function getAppConfig(): Promise<AppConfig> {
+  return publicGet<AppConfig>('/api/config');
+}
+
+export async function resolvePodcast(url: string): Promise<PodcastResolved> {
+  return publicPost<PodcastResolved>('/api/podcast/resolve', { url });
 }
 
 // ==================== Kimi Device Flow 登录 ====================
