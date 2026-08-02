@@ -13,7 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAppConfig } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
-import { loadRecent, type RecentItem } from '../../lib/podcast';
+import {
+  loadRecent,
+  loadSearchCache,
+  saveSearchCache,
+  type RecentItem,
+} from '../../lib/podcast';
 import { useTheme } from '../../lib/theme-context';
 import { screen, serif } from '../../lib/ui';
 
@@ -37,6 +42,7 @@ export default function PodcastScreen() {
   const [error, setError] = useState('');
   const [disabled, setDisabled] = useState(false);
   const apiKeyRef = useRef('');
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     getAppConfig()
@@ -55,18 +61,29 @@ export default function PodcastScreen() {
 
   const search = async () => {
     const q = query.trim();
-    if (!q) return;
+    if (!q || loading) return;
     if (!apiKeyRef.current) {
       setError(t('podcastNoKey'));
       return;
     }
-    setLoading(true);
-    setError('');
+    const cached = await loadSearchCache(q);
+    if (cached) {
+      setResults(cached);
+      setMode('results');
+      setError('');
+    } else {
+      setLoading(true);
+      setError('');
+    }
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&q=${encodeURIComponent(
         q
       )}&key=${encodeURIComponent(apiKeyRef.current)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       const body = await res.json();
       const items: SearchItem[] = (body.items || [])
         .map((it: { id?: { videoId?: string }; snippet?: { title?: string; channelTitle?: string; thumbnails?: Record<string, { url?: string }> } }) => ({
@@ -81,12 +98,26 @@ export default function PodcastScreen() {
         .filter((i: SearchItem) => i.id);
       setResults(items);
       setMode('results');
+      if (items.length > 0) {
+        void saveSearchCache(q, items);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (controller.signal.aborted) {
+        if (!cached) setError(t('podcastSearchTimeout'));
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      searchAbortRef.current?.abort();
+    };
+  }, []);
 
   const openPlayer = (item: SearchItem, url: string) => {
     router.push({
@@ -152,8 +183,16 @@ export default function PodcastScreen() {
                 autoCorrect={false}
               />
             </View>
-            <Pressable style={[styles.searchBtn, { backgroundColor: c.buttonBg }]} onPress={search}>
-              <Text style={{ color: c.buttonText }}>{t('search')}</Text>
+            <Pressable
+              style={[styles.searchBtn, { backgroundColor: c.buttonBg }]}
+              onPress={search}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={c.buttonText} size="small" />
+              ) : (
+                <Text style={{ color: c.buttonText }}>{t('search')}</Text>
+              )}
             </Pressable>
           </View>
           {error ? (
