@@ -26,7 +26,11 @@ import {
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { screen, serif } from '../../lib/ui';
-import { voicesForProvider, type VoiceOption } from '../../lib/voices';
+import {
+  getWebspeechVoices,
+  voicesForProvider,
+  type VoiceOption,
+} from '../../lib/voices';
 
 const PROVIDERS = [
   { key: 'webspeech', labelKey: 'providerWebspeech' },
@@ -44,6 +48,7 @@ export default function SettingsScreen() {
   const [speech, setSpeech] = useState<SpeechSettings | null>(null);
   const [voicePicker, setVoicePicker] = useState<'en' | 'zh' | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [systemVoices, setSystemVoices] = useState<VoiceOption[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem('settings_last_sync')
@@ -53,6 +58,12 @@ export default function SettingsScreen() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (speech?.provider === 'webspeech') {
+      void getWebspeechVoices().then(setSystemVoices);
+    }
+  }, [speech?.provider]);
+
   const currentVoiceValue = (zh: boolean): string => {
     switch (speech?.provider) {
       case 'google':
@@ -61,6 +72,8 @@ export default function SettingsScreen() {
         return zh ? speech.elevenLabsZhVoiceId || '' : speech.elevenLabsVoiceId || '';
       case 'aliyun':
         return zh ? speech.aliyunVoice || '' : speech.aliyunVoice || '';
+      case 'webspeech':
+        return zh ? speech.speech_zh_voice || '' : speech.speech_voice || '';
       default:
         return '';
     }
@@ -69,7 +82,11 @@ export default function SettingsScreen() {
   const currentVoiceName = (zh: boolean): string => {
     const id = currentVoiceValue(zh);
     if (!id) return '—';
-    const found = voicesForProvider(speech?.provider, zh).find((v) => v.id === id);
+    const list =
+      speech?.provider === 'webspeech'
+        ? systemVoices
+        : voicesForProvider(speech?.provider, zh);
+    const found = list.find((v) => v.id === id);
     return found ? found.name : id;
   };
 
@@ -81,6 +98,12 @@ export default function SettingsScreen() {
       updateSpeech(voicePicker === 'zh' ? { elevenLabsZhVoiceId: option.id } : { elevenLabsVoiceId: option.id });
     } else if (speech.provider === 'aliyun') {
       updateSpeech({ aliyunVoice: option.id });
+    } else {
+      updateSpeech(
+        voicePicker === 'zh'
+          ? { speech_zh_voice: option.id }
+          : { speech_voice: option.id }
+      );
     }
     setVoicePicker(null);
   };
@@ -102,6 +125,22 @@ export default function SettingsScreen() {
     const defaults = await resetSpeechSettings();
     setSpeech(defaults);
     toast(t('saved'));
+  };
+
+  const missingKey =
+    speech?.provider === 'google'
+      ? !speech.googleKey
+      : speech?.provider === 'elevenlabs'
+        ? !speech.elevenLabsKey
+        : speech?.provider === 'aliyun'
+          ? !speech.aliyunKey
+          : false;
+
+  const openVoicePicker = (zh: boolean) => {
+    if (speech?.provider === 'webspeech' && systemVoices.length === 0) {
+      void getWebspeechVoices().then(setSystemVoices);
+    }
+    setVoicePicker(zh ? 'zh' : 'en');
   };
 
   const loadSettings = useCallback(async () => {
@@ -303,18 +342,20 @@ export default function SettingsScreen() {
             />
           )}
 
-          {speech?.provider !== 'webspeech' && speech?.provider !== 'aliyun' && (
+          {(speech?.provider === 'google' ||
+            speech?.provider === 'elevenlabs' ||
+            speech?.provider === 'webspeech') && (
             <>
               <Pressable
                 style={styles.row}
-                onPress={() => setVoicePicker('en')}
+                onPress={() => openVoicePicker(false)}
               >
                 <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceEn')}</Text>
                 <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
                   {currentVoiceName(false)}
                 </Text>
               </Pressable>
-              <Pressable style={styles.row} onPress={() => setVoicePicker('zh')}>
+              <Pressable style={styles.row} onPress={() => openVoicePicker(true)}>
                 <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
                 <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
                   {currentVoiceName(true)}
@@ -323,12 +364,18 @@ export default function SettingsScreen() {
             </>
           )}
           {speech?.provider === 'aliyun' && (
-            <Pressable style={styles.row} onPress={() => setVoicePicker('zh')}>
+            <Pressable style={styles.row} onPress={() => openVoicePicker(true)}>
               <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
               <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
                 {currentVoiceName(true)}
               </Text>
             </Pressable>
+          )}
+
+          {missingKey && (
+            <Text style={[styles.keyHint, { color: c.inkMuted }]}>
+              未配置 API Key，测试将使用系统语音
+            </Text>
           )}
 
           <View style={[styles.row, { paddingVertical: 14 }]}>
@@ -439,8 +486,21 @@ export default function SettingsScreen() {
               {voicePicker === 'zh' ? t('voiceZh') : t('voiceEn')}
             </Text>
             <FlatList
-              data={voicesForProvider(speech?.provider, voicePicker === 'zh')}
+              data={
+                speech?.provider === 'webspeech'
+                  ? systemVoices.filter((v) =>
+                      voicePicker === 'zh'
+                        ? /zh|cmn|yue/.test(v.language)
+                        : !/zh|cmn|yue/.test(v.language)
+                    )
+                  : voicesForProvider(speech?.provider, voicePicker === 'zh')
+              }
               keyExtractor={(item) => item.id}
+              ListEmptyComponent={
+                <Text style={[styles.keyHint, { color: c.inkMuted }]}>
+                  无可用{voicePicker === 'zh' ? '中文' : '英文'}系统语音
+                </Text>
+              }
               renderItem={({ item }) => (
                 <Pressable
                   style={[styles.row, currentVoiceValue(voicePicker === 'zh') === item.id && { backgroundColor: c.tagBg }]}
@@ -541,4 +601,5 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
   },
   sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
+  keyHint: { fontSize: 12, paddingHorizontal: 12, paddingBottom: 4 },
 });

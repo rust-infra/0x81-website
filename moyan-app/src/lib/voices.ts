@@ -6,6 +6,55 @@ export interface VoiceOption {
   language: string;
 }
 
+/** 获取系统（webspeech）可用音色：原生走 expo-speech，web 走 speechSynthesis */
+export async function getWebspeechVoices(): Promise<VoiceOption[]> {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    const synth = (window as unknown as {
+      speechSynthesis?: {
+        getVoices?: () => Array<{ voiceURI: string; name: string; lang: string }>;
+        addEventListener?: (ev: string, cb: () => void) => void;
+        removeEventListener?: (ev: string, cb: () => void) => void;
+      };
+    }).speechSynthesis;
+    const mapVoices = () =>
+      (synth?.getVoices?.() || []).map((v) => ({
+        id: v.voiceURI,
+        name: `${v.name} (${v.lang})`,
+        language: v.lang,
+      }));
+    if (!synth || !synth.getVoices) return [];
+    const initial = mapVoices();
+    if (initial.length > 0) return initial;
+    // 浏览器音色异步加载，等待 voiceschanged（超时兜底）
+    return await new Promise<VoiceOption[]>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(mapVoices());
+      };
+      const cleanup = () => {
+        clearTimeout(timer);
+        synth.removeEventListener?.('voiceschanged', finish);
+      };
+      const timer = setTimeout(finish, 3000);
+      synth.addEventListener?.('voiceschanged', finish);
+    });
+  }
+  try {
+    const Speech = await import('expo-speech');
+    const list = await Speech.getAvailableVoicesAsync();
+    return list.map((v: { identifier: string; name: string; language: string }) => ({
+      id: v.identifier,
+      name: `${v.name} (${v.language})`,
+      language: v.language,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export const ELEVENLABS_VOICES: VoiceOption[] = [
   { id: 'XB0fDUnXU5powFXDhCwa', name: 'English Male (Default)', language: 'en' },
   { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', language: 'en' },

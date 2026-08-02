@@ -97,10 +97,53 @@ function splitByLanguage(text: string): LangSegment[] {
   return segments;
 }
 
-function speakWithNative(text: string, rate: number, language?: string) {
+let webVoicesReady: Promise<void> | null = null;
+
+function ensureWebVoices(): Promise<void> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+  const synth = (window as unknown as {
+    speechSynthesis?: {
+      getVoices?: () => unknown[];
+      addEventListener?: (ev: string, cb: () => void) => void;
+      removeEventListener?: (ev: string, cb: () => void) => void;
+    };
+  }).speechSynthesis;
+  if (!synth || !synth.getVoices || (synth.getVoices() || []).length > 0) {
+    return Promise.resolve();
+  }
+  if (!webVoicesReady) {
+    webVoicesReady = new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        synth.removeEventListener?.('voiceschanged', finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, 3000);
+      synth.addEventListener?.('voiceschanged', finish);
+    });
+  }
+  return webVoicesReady;
+}
+
+async function speakWithNative(
+  text: string,
+  rate: number,
+  language?: string,
+  voiceId?: string
+) {
   if (Platform.OS === 'web') {
+    await ensureWebVoices();
     const w = window as unknown as {
-      speechSynthesis?: { cancel: () => void; speak: (u: unknown) => void };
+      speechSynthesis?: {
+        cancel: () => void;
+        speak: (u: unknown) => void;
+        getVoices?: () => Array<{ voiceURI: string; lang: string }>;
+      };
       SpeechSynthesisUtterance?: new (t: string) => { lang: string; rate: number };
     };
     if (w.speechSynthesis && w.SpeechSynthesisUtterance) {
@@ -108,6 +151,18 @@ function speakWithNative(text: string, rate: number, language?: string) {
       const u = new w.SpeechSynthesisUtterance(text);
       u.lang = language || (detectLanguage(text) === 'zh' ? 'zh-CN' : 'en-US');
       u.rate = rate;
+      if (voiceId && w.speechSynthesis.getVoices) {
+        try {
+          const voice = w.speechSynthesis
+            .getVoices()
+            .find((v) => v.voiceURI === voiceId);
+          if (voice) {
+            (u as unknown as { voice?: unknown }).voice = voice;
+          }
+        } catch {
+          // 无效 voice 时忽略，回退到默认音色
+        }
+      }
       w.speechSynthesis.speak(u);
     }
     return;
@@ -116,6 +171,7 @@ function speakWithNative(text: string, rate: number, language?: string) {
   Speech.speak(text, {
     language: language || (detectLanguage(text) === 'zh' ? 'zh-CN' : 'en-US'),
     rate,
+    voice: voiceId || undefined,
   });
 }
 
@@ -253,10 +309,17 @@ export async function speak(
       played = false;
     }
     if (!played) {
-      speakWithNative(
+      const voiceId =
+        settings.provider === 'webspeech'
+          ? segLang === 'zh'
+            ? settings.speech_zh_voice
+            : settings.speech_voice
+          : undefined;
+      await speakWithNative(
         seg.text,
         rate,
-        opts?.language || (segLang === 'zh' ? 'zh-CN' : 'en-US')
+        opts?.language || (segLang === 'zh' ? 'zh-CN' : 'en-US'),
+        voiceId
       );
     }
     await new Promise((r) => setTimeout(r, 250));
