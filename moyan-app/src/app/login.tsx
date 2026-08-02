@@ -177,6 +177,7 @@ export default function LoginScreen() {
               placeholderTextColor={c.inkMuted}
               value={tokenInput}
               onChangeText={setTokenInput}
+              secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
             />

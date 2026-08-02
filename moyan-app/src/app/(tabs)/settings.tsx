@@ -211,6 +211,7 @@ export default function SettingsScreen() {
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
               placeholder={speech?.provider === 'google' ? 'Google API Key' : speech?.provider === 'elevenlabs' ? 'ElevenLabs API Key' : '阿里云 API Key'}
               placeholderTextColor={c.inkMuted}
+              secureTextEntry
               value={
                 speech?.provider === 'google'
                   ? speech.googleKey || ''
@@ -274,9 +275,29 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('account')}</Text>
         <View style={[styles.card, { backgroundColor: c.card }]}>
           {user ? (
-            <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
-              {user.email ? `${user.name} · ${user.email}` : user.name}
-            </Text>
+            <View style={styles.accountRow}>
+              {user.avatar ? (
+                <View style={[styles.avatar, { backgroundColor: c.tagBg }]}>
+                  <Text style={{ fontSize: 16 }}>👤</Text>
+                </View>
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: c.accentLight }]}>
+                  <Text style={[styles.avatarText, { color: c.accent }]}>
+                    {(user.name || '?').slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.accountBody}>
+                <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
+                  {user.name || 'User'}
+                </Text>
+                {user.email ? (
+                  <Text style={[styles.rowDesc, { color: c.inkMuted }]} numberOfLines={1}>
+                    {user.email}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
           ) : null}
           <Pressable style={[styles.logout, { backgroundColor: `${c.accent}18` }]} onPress={signOut}>
             <Text style={{ color: c.accent }}>{t('logout')}</Text>
@@ -343,4 +364,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: { fontSize: 16, fontWeight: '600' },
+  accountBody: { flex: 1 },
 });
