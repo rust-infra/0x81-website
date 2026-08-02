@@ -7,7 +7,8 @@ export type ThemeName =
   | 'zhusha'
   | 'dailan'
   | 'fense'
-  | 'ios';
+  | 'ios'
+  | 'ios-dark';
 
 export interface ThemeColors {
   paper: string;
@@ -232,7 +233,7 @@ export const THEMES: Theme[] = [
   },
   {
     name: 'ios',
-    label: 'iOS 清爽',
+    label: 'iOS 浅色',
     description: '系统蓝，简洁明快',
     preview: '#F2F2F7',
     colors: {
@@ -259,6 +260,37 @@ export const THEMES: Theme[] = [
       divider: '#E5E5EA',
       hoverBg: '#E9E9EB',
       inputBg: '#FFFFFF',
+    },
+  },
+  {
+    name: 'ios-dark',
+    label: 'iOS 深色',
+    description: 'iOS 深色模式，护眼自然',
+    preview: '#000000',
+    colors: {
+      paper: '#000000',
+      paperGradient: '#000000',
+      card: '#1C1C1E',
+      ink: '#FFFFFF',
+      inkLight: '#EBEBF5',
+      inkMuted: '#98989D',
+      accent: '#0A84FF',
+      accentLight: '#0A84FF26',
+      border: '#38383A',
+      navBg: '#1C1C1E',
+      navText: '#EBEBF5',
+      studyBg: '#000000',
+      studyCard: '#1C1C1E',
+      studyText: '#FFFFFF',
+      studyMuted: 'rgba(255, 255, 255, 0.55)',
+      progressBar: '#0A84FF',
+      tagBg: 'rgba(10, 132, 255, 0.12)',
+      tagText: '#EBEBF5',
+      buttonBg: '#0A84FF',
+      buttonText: '#FFFFFF',
+      divider: '#38383A',
+      hoverBg: '#2C2C2E',
+      inputBg: '#1C1C1E',
     },
   },
 ];
