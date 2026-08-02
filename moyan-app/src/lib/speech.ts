@@ -209,18 +209,48 @@ async function cacheFile(
   return file.uri;
 }
 
-async function fetchAndPlay(
-  url: string,
-  init: RequestInit | undefined,
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + chunk))
+    );
+  }
+  return btoa(binary);
+}
+
+async function playBytes(
+  bytes: Uint8Array,
   cacheKey: string,
   cacheEnabled: boolean
 ): Promise<boolean> {
-  const res = await fetch(url, init);
-  if (!res.ok) return false;
-  const buffer = await res.arrayBuffer();
-  const uri = await cacheFile(cacheKey, buffer, cacheEnabled);
-  await playFile(uri);
-  return true;
+  if (Platform.OS === 'web') {
+    try {
+      const audio = new Audio(`data:audio/mpeg;base64,${bytesToBase64(bytes)}`);
+      audio.volume = 1;
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => resolve();
+        audio.onerror = () => reject(new Error('audio playback error'));
+        audio.play().catch(reject);
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const uri = await cacheFile(
+      cacheKey,
+      bytes.buffer as ArrayBuffer,
+      cacheEnabled
+    );
+    await playFile(uri);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function speakWithProvider(
@@ -233,20 +263,31 @@ async function speakWithProvider(
       if (!settings.googleKey) return false;
       const voice = lang === 'zh' ? settings.googleZhVoice || 'cmn-CN-Neural2-D' : settings.googleVoice || 'en-US-Neural2-D';
       const languageCode = lang === 'zh' ? 'cmn-CN' : settings.googleLanguage || 'en-US';
-      return fetchAndPlay(
-        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${settings.googleKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { text },
-            voice: { languageCode, name: voice },
-            audioConfig: { audioEncoding: 'MP3', speakingRate: settings.speech_speed ?? 0.9 },
-          }),
-        },
-        `google-${voice}-${text}`,
-        !!settings.cacheEnabled
-      );
+      try {
+        const res = await fetch(
+          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${settings.googleKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: { text },
+              voice: { languageCode, name: voice },
+              audioConfig: { audioEncoding: 'MP3', speakingRate: settings.speech_speed ?? 0.9 },
+            }),
+          }
+        );
+        if (!res.ok) return false;
+        const data = (await res.json()) as { audioContent?: string };
+        if (!data.audioContent) return false;
+        const binary = atob(data.audioContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return await playBytes(bytes, `google-${voice}-${text}`, !!settings.cacheEnabled);
+      } catch {
+        return false;
+      }
     }
     case 'elevenlabs': {
       if (!settings.elevenLabsKey) return false;
@@ -254,38 +295,53 @@ async function speakWithProvider(
         lang === 'zh'
           ? settings.elevenLabsZhVoiceId || settings.elevenLabsVoiceId
           : settings.elevenLabsVoiceId || 'XB0fDUnXU5powFXDhCwa';
-      return fetchAndPlay(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'xi-api-key': settings.elevenLabsKey,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: settings.elevenLabsModel || 'eleven_turbo_v2_5',
-            voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
-          }),
-        },
-        `eleven-${voiceId}-${text}`,
-        !!settings.cacheEnabled
-      );
+      try {
+        const res = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'xi-api-key': settings.elevenLabsKey,
+            },
+            body: JSON.stringify({
+              text,
+              model_id: settings.elevenLabsModel || 'eleven_turbo_v2_5',
+              voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
+            }),
+          }
+        );
+        if (!res.ok) return false;
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        return await playBytes(bytes, `eleven-${voiceId}-${text}`, !!settings.cacheEnabled);
+      } catch {
+        return false;
+      }
     }
     case 'aliyun': {
       if (!settings.aliyunKey) return false;
-      return fetchAndPlay('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal/multimodal-synthesis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${settings.aliyunKey}`,
-        },
-        body: JSON.stringify({
-          model: settings.aliyunModel || 'qwen-tts',
-          input: { text },
-          parameters: { voice: settings.aliyunVoice || 'Cherry' },
-        }),
-      }, `aliyun-${settings.aliyunVoice || 'Cherry'}-${text}`, !!settings.cacheEnabled);
+      try {
+        const res = await fetch(
+          'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal/multimodal-synthesis',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${settings.aliyunKey}`,
+            },
+            body: JSON.stringify({
+              model: settings.aliyunModel || 'qwen-tts',
+              input: { text },
+              parameters: { voice: settings.aliyunVoice || 'Cherry' },
+            }),
+          }
+        );
+        if (!res.ok) return false;
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        return await playBytes(bytes, `aliyun-${settings.aliyunVoice || 'Cherry'}-${text}`, !!settings.cacheEnabled);
+      } catch {
+        return false;
+      }
     }
     default:
       return false;
