@@ -209,7 +209,14 @@
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
   .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--ink-muted); cursor: pointer; }
-  .nav-item .ic { font-size: 20px; }
+  .nav-item { position: relative; }
+  .nav-item .ic { position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 30px; transition: transform 0.2s; }
+  .nav-item .pill {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 40px; height: 26px; border-radius: 999px; background: transparent;
+  }
+  .nav-item.active .pill { background: var(--accent-soft); }
+  .nav-item.active .ic { transform: scale(1.12); }
   .nav-item.active { color: var(--ink); font-weight: 600; }
   .nav-item.hidden { display: none; }
 </style>
@@ -295,11 +302,53 @@
 
     <!-- 底部导航 -->
     <div class="bottomnav">
-      <div class="nav-item"><span class="ic">🏠</span>首页</div>
-      <div class="nav-item"><span class="ic">📚</span>词库</div>
-      <div class="nav-item active" id="navPodcast"><span class="ic">🎙️</span>播客</div>
-      <div class="nav-item"><span class="ic">📊</span>统计</div>
-      <div class="nav-item"><span class="ic">⚙️</span>设置</div>
+      <div class="nav-item">
+        <span class="ic"><span class="pill"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/>
+            <circle cx="9.2" cy="14.4" r="0.7" fill="currentColor" stroke="none"/><circle cx="14.8" cy="14.4" r="0.7" fill="currentColor" stroke="none"/>
+            <path d="M10.6 17.3c.5.5 2.3.5 2.8 0"/>
+          </svg>
+        </span>首页
+      </div>
+      <div class="nav-item">
+        <span class="ic"><span class="pill"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5.5c3-1.4 6-1.4 8 0v13c-2-1.4-5-1.4-8 0z"/><path d="M20 5.5c-3-1.4-6-1.4-8 0v13c2-1.4 5-1.4 8 0z"/>
+            <circle cx="9.5" cy="11" r="0.7" fill="currentColor" stroke="none"/><circle cx="14.5" cy="11" r="0.7" fill="currentColor" stroke="none"/>
+            <path d="M11 13.6c.6.5 1.4.5 2 0"/>
+          </svg>
+        </span>词库
+      </div>
+      <div class="nav-item active" id="navPodcast">
+        <span class="ic"><span class="pill"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3"/>
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/>
+            <circle cx="10" cy="8.2" r="0.7" fill="currentColor" stroke="none"/><circle cx="14" cy="8.2" r="0.7" fill="currentColor" stroke="none"/>
+            <path d="M10.8 10.4c.8.6 1.6.6 2.4 0"/>
+          </svg>
+        </span>播客
+      </div>
+      <div class="nav-item">
+        <span class="ic"><span class="pill"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="13" width="3.5" height="6" rx="1.5"/><rect x="10.25" y="8" width="3.5" height="11" rx="1.5"/><rect x="15.5" y="11" width="3.5" height="8" rx="1.5"/>
+            <circle cx="12" cy="6.5" r="0.7" fill="currentColor" stroke="none"/><circle cx="16.5" cy="9.5" r="0.7" fill="currentColor" stroke="none"/>
+            <path d="M12.8 8.3c.5.5 1.5.5 2 0"/>
+          </svg>
+        </span>统计
+      </div>
+      <div class="nav-item">
+        <span class="ic"><span class="pill"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>
+            <circle cx="10.6" cy="10.6" r="0.7" fill="currentColor" stroke="none"/><circle cx="13.4" cy="13.4" r="0.7" fill="currentColor" stroke="none"/>
+            <path d="M11.2 13.6c.5.5 1.1.5 1.6 0"/>
+          </svg>
+        </span>设置
+      </div>
     </div>
   </div>
 
