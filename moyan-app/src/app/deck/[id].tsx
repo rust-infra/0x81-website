@@ -28,12 +28,20 @@ import { confirmAsync, useToast } from '../../lib/toast';
 import { serif } from '../../lib/ui';
 import type { Card, Deck, StudyCard } from '../../lib/types';
 
-const STATUS_LABEL: Record<string, string> = {
-  new: '新词',
-  learning: '学习中',
-  review: '复习中',
-  relearning: '再学习',
-};
+function statusLabel(status: string, t: (key: string) => string): string {
+  switch (status) {
+    case 'new':
+      return t('statusNew');
+    case 'learning':
+      return t('statusLearning');
+    case 'review':
+      return t('statusReview');
+    case 'relearning':
+      return t('statusRelearning');
+    default:
+      return status;
+  }
+}
 
 interface CardForm {
   front: string;
@@ -176,7 +184,7 @@ export default function DeckDetailScreen() {
   };
 
   const removeCard = (card: Card) => {
-    void confirmAsync(t('delete'), `确定删除「${card.front}」吗？`).then(async (ok) => {
+    void confirmAsync(t('delete'), t('deleteCardConfirm', { name: card.front })).then(async (ok) => {
       if (!ok) return;
       try {
         await deleteCard(card.id);
@@ -205,7 +213,7 @@ export default function DeckDetailScreen() {
 
   const removeDeck = () => {
     if (!id || !deck) return;
-    void confirmAsync(t('delete'), `确定删除「${deck.name}」及其卡片吗？`).then(async (ok) => {
+    void confirmAsync(t('delete'), t('deleteDeckConfirm', { name: deck.name })).then(async (ok) => {
       if (!ok) return;
       try {
         await deleteDeck(id);
@@ -290,7 +298,7 @@ export default function DeckDetailScreen() {
                   </View>
                   <View style={[styles.badge, { backgroundColor: `${statusColor(status)}18` }]}>
                     <Text style={[styles.badgeText, { color: statusColor(status) }]}>
-                      {status ? STATUS_LABEL[status] || status : t('new')}
+                      {status ? statusLabel(status, t) : t('new')}
                     </Text>
                   </View>
                 </Pressable>

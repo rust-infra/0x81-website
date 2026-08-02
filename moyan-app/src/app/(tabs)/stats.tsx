@@ -26,7 +26,7 @@ export default function StatsScreen() {
       (async () => {
         try {
           const queue = await getStudyQueue();
-          const trendData = await getDailyTrend(7);
+          const trendData = await getDailyTrend(30);
           if (!cancelled) {
             setStats({
               due: queue.due_count,
@@ -62,6 +62,19 @@ export default function StatsScreen() {
             100
         )
       : 0;
+  const reviewedDates = new Set(
+    trend.filter((d) => d.reviews > 0).map((d) => d.date)
+  );
+  let streak = 0;
+  const start = new Date();
+  if (!reviewedDates.has(start.toISOString().slice(0, 10))) {
+    start.setDate(start.getDate() - 1);
+  }
+  const cursor = new Date(start);
+  while (reviewedDates.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
 
   return (
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -80,8 +93,10 @@ export default function StatsScreen() {
               <Text style={styles.streakEmoji}>🔥</Text>
             </View>
             <View>
-              <Text style={[styles.streakValue, { color: c.buttonText }]}>{stats.today}</Text>
-              <Text style={[styles.streakLabel, { color: `${c.buttonText}99` }]}>{t('todayReview')}</Text>
+              <Text style={[styles.streakValue, { color: c.buttonText }]}>{streak}</Text>
+              <Text style={[styles.streakLabel, { color: `${c.buttonText}99` }]}>
+                {t('streakDays', { days: streak })}
+              </Text>
             </View>
           </View>
 

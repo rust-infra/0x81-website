@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,19 +16,23 @@ import { fetchUserSettings, saveUserSettings } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
 import {
+  clearAudioCache,
   getSpeechSettings,
+  resetSpeechSettings,
   saveSpeechSettings,
+  speak,
   type SpeechSettings,
 } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { screen, serif } from '../../lib/ui';
+import { voicesForProvider, type VoiceOption } from '../../lib/voices';
 
 const PROVIDERS = [
-  { key: 'webspeech', label: '浏览器/系统语音' },
-  { key: 'google', label: 'Google Cloud 语音' },
-  { key: 'elevenlabs', label: 'ElevenLabs AI 语音' },
-  { key: 'aliyun', label: '阿里云百炼 TTS' },
+  { key: 'webspeech', labelKey: 'providerWebspeech' },
+  { key: 'google', labelKey: 'providerGoogle' },
+  { key: 'elevenlabs', labelKey: 'providerElevenlabs' },
+  { key: 'aliyun', labelKey: 'providerAliyun' },
 ] as const;
 
 export default function SettingsScreen() {
@@ -36,6 +42,54 @@ export default function SettingsScreen() {
   const toast = useToast();
   const c = theme.colors;
   const [speech, setSpeech] = useState<SpeechSettings | null>(null);
+  const [voicePicker, setVoicePicker] = useState<'en' | 'zh' | null>(null);
+
+  const currentVoiceValue = (zh: boolean): string => {
+    switch (speech?.provider) {
+      case 'google':
+        return zh ? speech.googleZhVoice || '' : speech.googleVoice || '';
+      case 'elevenlabs':
+        return zh ? speech.elevenLabsZhVoiceId || '' : speech.elevenLabsVoiceId || '';
+      case 'aliyun':
+        return zh ? speech.aliyunVoice || '' : speech.aliyunVoice || '';
+      default:
+        return '';
+    }
+  };
+
+  const currentVoiceName = (zh: boolean): string => {
+    const id = currentVoiceValue(zh);
+    if (!id) return '—';
+    const found = voicesForProvider(speech?.provider, zh).find((v) => v.id === id);
+    return found ? found.name : id;
+  };
+
+  const pickVoice = (option: VoiceOption) => {
+    if (!speech) return;
+    if (speech.provider === 'google') {
+      updateSpeech(voicePicker === 'zh' ? { googleZhVoice: option.id } : { googleVoice: option.id });
+    } else if (speech.provider === 'elevenlabs') {
+      updateSpeech(voicePicker === 'zh' ? { elevenLabsZhVoiceId: option.id } : { elevenLabsVoiceId: option.id });
+    } else if (speech.provider === 'aliyun') {
+      updateSpeech({ aliyunVoice: option.id });
+    }
+    setVoicePicker(null);
+  };
+
+  const handleClearCache = async () => {
+    const cleared = await clearAudioCache();
+    toast(t('cacheCleared', { count: cleared }));
+  };
+
+  const handleTestVoice = () => {
+    void speak('Hello, this is a voice test. 你好，这是语音测试。');
+  };
+
+  const handleReset = async () => {
+    const defaults = await resetSpeechSettings();
+    setSpeech(defaults);
+    toast(t('saved'));
+  };
 
   const loadSettings = useCallback(async () => {
     const local = await getSpeechSettings();
@@ -197,7 +251,7 @@ export default function SettingsScreen() {
               style={[styles.row, speech?.provider === p.key && { backgroundColor: c.tagBg }]}
               onPress={() => updateSpeech({ provider: p.key })}
             >
-              <Text style={[styles.rowTitle, { color: c.ink }]}>{p.label}</Text>
+              <Text style={[styles.rowTitle, { color: c.ink }]}>{t(p.labelKey)}</Text>
               <Text
                 style={[styles.check, speech?.provider === p.key ? { color: c.accent } : { color: 'transparent' }]}
               >
@@ -233,6 +287,34 @@ export default function SettingsScreen() {
             />
           )}
 
+          {speech?.provider !== 'webspeech' && speech?.provider !== 'aliyun' && (
+            <>
+              <Pressable
+                style={styles.row}
+                onPress={() => setVoicePicker('en')}
+              >
+                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceEn')}</Text>
+                <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
+                  {currentVoiceName(false)}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.row} onPress={() => setVoicePicker('zh')}>
+                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
+                <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
+                  {currentVoiceName(true)}
+                </Text>
+              </Pressable>
+            </>
+          )}
+          {speech?.provider === 'aliyun' && (
+            <Pressable style={styles.row} onPress={() => setVoicePicker('zh')}>
+              <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
+              <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
+                {currentVoiceName(true)}
+              </Text>
+            </Pressable>
+          )}
+
           <View style={[styles.row, { paddingVertical: 14 }]}>
             <Text style={[styles.rowTitle, { color: c.ink }]}>{t('speechSpeed')}</Text>
             <View style={styles.speedCtrl}>
@@ -242,7 +324,7 @@ export default function SettingsScreen() {
               >
                 <Text style={{ color: c.ink }}>−</Text>
               </Pressable>
-              <Text style={[styles.speedVal, { color: c.ink }]}>{speed.toFixed(1)}</Text>
+              <Text style={[styles.speedVal, { color: c.ink }]}>{speed.toFixed(1)}×</Text>
               <Pressable
                 style={[styles.speedBtn, { borderColor: c.border }]}
                 onPress={() => updateSpeech({ speech_speed: Math.min(1.5, +(speed + 0.1).toFixed(1)) })}
@@ -260,6 +342,24 @@ export default function SettingsScreen() {
               trackColor={{ true: c.accent, false: c.divider }}
             />
           </View>
+
+          <View style={[styles.row, { paddingVertical: 14 }]}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('audioCache')}</Text>
+            <Switch
+              value={speech?.cacheEnabled !== false}
+              onValueChange={(v) => updateSpeech({ cacheEnabled: v })}
+              trackColor={{ true: c.accent, false: c.divider }}
+            />
+          </View>
+          <Pressable style={styles.row} onPress={handleClearCache}>
+            <Text style={{ color: c.accent, fontSize: 14 }}>{t('clearCache')}</Text>
+          </Pressable>
+          <Pressable style={styles.row} onPress={handleTestVoice}>
+            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoice')}</Text>
+          </Pressable>
+          <Pressable style={styles.row} onPress={handleReset}>
+            <Text style={{ color: c.inkMuted, fontSize: 14 }}>{t('resetDefaults')}</Text>
+          </Pressable>
         </View>
 
         <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('sync')}</Text>
@@ -304,6 +404,36 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={voicePicker !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setVoicePicker(null)}
+      >
+        <Pressable style={styles.mask} onPress={() => setVoicePicker(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: c.ink, fontFamily: serif }]}>
+              {voicePicker === 'zh' ? t('voiceZh') : t('voiceEn')}
+            </Text>
+            <FlatList
+              data={voicesForProvider(speech?.provider, voicePicker === 'zh')}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={[styles.row, currentVoiceValue(voicePicker === 'zh') === item.id && { backgroundColor: c.tagBg }]}
+                  onPress={() => pickVoice(item)}
+                >
+                  <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={{ color: c.inkMuted, fontSize: 12 }}>{item.language}</Text>
+                </Pressable>
+              )}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -380,4 +510,13 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 16, fontWeight: '600' },
   accountBody: { flex: 1 },
+  mask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
 });

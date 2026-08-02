@@ -106,7 +106,7 @@ export default function LoginScreen() {
     }
     await signIn(value, {
       id: 'local',
-      name: t('loginToken'),
+      name: '开发用户',
       email: '',
       avatar: '',
       provider: 'local',

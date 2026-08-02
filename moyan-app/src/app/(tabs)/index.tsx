@@ -76,7 +76,10 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={styles.header}>
         <Text style={[styles.greeting, { color: c.ink, fontFamily: serif }]}>
-          {t('greeting')}，{user?.name?.split(' ')[0] || 'User'}。
+          {t('greeting')}
+          {lang === 'zh-CN' ? '，' : ', '}
+          {user?.name?.split(' ')[0] || 'User'}
+          {lang === 'zh-CN' ? '。' : '.'}
         </Text>
         <Text style={[styles.date, { color: c.inkLight }]}>
           {formatDate(lang)} · {t('dailyDue', { count: stats?.due ?? 0 })}
@@ -154,7 +157,7 @@ export default function HomeScreen() {
                 return (
                   <View style={{ marginBottom: 14 }}>
                     {item === '30天' ? (
-                      <Text style={[styles.groupTitle, { color: c.inkLight }]}>30天词汇</Text>
+                      <Text style={[styles.groupTitle, { color: c.inkLight }]}>{t('group30')}</Text>
                     ) : null}
                     {list.map((deck) => (
                       <Pressable

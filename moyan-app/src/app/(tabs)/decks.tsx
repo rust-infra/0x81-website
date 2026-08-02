@@ -89,7 +89,7 @@ export default function DecksScreen() {
   );
 
   const handleDelete = (deck: Deck) => {
-    void confirmAsync(t('delete'), `确定删除「${deck.name}」吗？`).then(async (ok) => {
+    void confirmAsync(t('delete'), t('deleteDeckConfirm', { name: deck.name })).then(async (ok) => {
       if (!ok) return;
       try {
         await deleteDeck(deck.id);
