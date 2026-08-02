@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getApiBase } from '../../lib/config';
 import { resolvePodcast } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
+import { saveRecent } from '../../lib/podcast';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 import type { PodcastResolved, TimedCaption } from '../../lib/types';
@@ -56,6 +57,14 @@ export default function PodcastPlayerScreen() {
         const resolved = await resolvePodcast(params.url!);
         if (cancelled) return;
         setData(resolved);
+        void saveRecent({
+          id: resolved.video_id,
+          title: resolved.title,
+          channel: resolved.channel || params.channel || '',
+          thumbnail: resolved.thumbnail || params.thumbnail || null,
+          url: params.url!,
+          at: Date.now(),
+        });
         await setAudioModeAsync({
           playsInSilentMode: true,
           shouldPlayInBackground: true,

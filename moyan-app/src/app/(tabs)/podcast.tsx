@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAppConfig } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
+import { loadRecent, type RecentItem } from '../../lib/podcast';
 import { useTheme } from '../../lib/theme-context';
 import { screen, serif } from '../../lib/ui';
 
@@ -23,13 +23,6 @@ interface SearchItem {
   channel: string;
   thumbnail: string | null;
 }
-
-interface RecentItem extends SearchItem {
-  url: string;
-  at: number;
-}
-
-const RECENT_KEY = 'podcast_recent';
 
 export default function PodcastScreen() {
   const router = useRouter();
@@ -56,11 +49,7 @@ export default function PodcastScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      AsyncStorage.getItem(RECENT_KEY)
-        .then((v) => {
-          if (v) setRecent(JSON.parse(v));
-        })
-        .catch(() => {});
+      loadRecent().then(setRecent);
     }, [])
   );
 
