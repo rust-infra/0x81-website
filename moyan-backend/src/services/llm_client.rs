@@ -1,6 +1,7 @@
 //! OpenAI-compatible chat completions client for vocabulary extraction.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -13,6 +14,9 @@ use crate::models::{CardExampleInput, DraftCard, LlmSettingsStored};
 /// Keep windows moderate so proxy-buffered LLM responses stay reliable.
 const CHUNK_CHARS: usize = 4_000;
 const CHUNK_OVERLAP: usize = 200;
+const TRANSLATE_CHUNK_CHARS: usize = 1_500;
+const TRANSLATE_MAX_TOKENS: u32 = 8_192;
+const TRANSLATE_MAX_CONCURRENCY: usize = 6;
 
 #[derive(Debug, Deserialize)]
 struct ChatCompletionResponse {
@@ -115,9 +119,205 @@ pub async fn extract_vocabulary_cards(
         title,
         caption_text,
         proxy,
+        0,
+        &[],
         |_cards, _done, _total| async { Ok(()) },
     )
     .await
+}
+
+/// Translate English subtitle lines into Simplified Chinese via the configured
+/// LLM. Lines are chunked so long transcripts stay within a safe window; the
+/// result always has exactly one entry per input line (empty string when the
+/// model omits one).
+pub async fn translate_caption_lines(
+    settings: &LlmSettingsStored,
+    video_id: &str,
+    title: &str,
+    lines: &[String],
+    proxy: Option<&str>,
+) -> Result<Vec<String>, AppError> {
+    if lines.is_empty() {
+        return Ok(vec![]);
+    }
+    if stub_enabled() {
+        return Ok(lines
+            .iter()
+            .map(|l| {
+                if l.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!("【译】{l}")
+                }
+            })
+            .collect::<Vec<_>>());
+    }
+
+    let chunks = translation_chunks(lines);
+    let total = chunks.len();
+    let line_total = lines.len();
+    let mut out: Vec<String> = vec![String::new(); line_total];
+    let mut tasks = tokio::task::JoinSet::new();
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(TRANSLATE_MAX_CONCURRENCY));
+    let video_id_owned = video_id.to_string();
+    let title_owned = title.to_string();
+    for (chunk_index, (offset, chunk)) in chunks.into_iter().enumerate() {
+        let settings = settings.clone();
+        let proxy = proxy.map(str::to_string);
+        let semaphore = Arc::clone(&semaphore);
+        let video_id = video_id_owned.clone();
+        let title = title_owned.clone();
+        tasks.spawn(async move {
+            translate_chunk_with_retry(
+                &settings,
+                &video_id,
+                &title,
+                chunk_index,
+                total,
+                line_total,
+                offset,
+                chunk,
+                proxy.as_deref(),
+                semaphore,
+            )
+            .await
+        });
+    }
+    while let Some(joined) = tasks.join_next().await {
+        let pairs = joined
+            .map_err(|e| AppError::BadRequest(format!("translation task failed: {e}")))??;
+        for (global, zh) in pairs {
+            if global < out.len() {
+                out[global] = zh;
+            }
+        }
+    }
+    Ok(out)
+}
+
+const TRANSLATE_SYSTEM_PROMPT: &str = r#"You translate English subtitle lines into natural, fluent Simplified Chinese.
+Return ONLY a valid JSON object:
+{"translations":[{"i":0,"zh":"..."}]}
+Hard requirements:
+- Translate EVERY line in the given segment, in order, exactly one entry per line.
+- i is the zero-based index of the line within this segment.
+- Keep each translation concise and natural for subtitle reading; do not omit or merge lines.
+- Keep JSON compact, no markdown fences."#;
+
+async fn translate_chunk_with_retry(
+    settings: &LlmSettingsStored,
+    video_id: &str,
+    title: &str,
+    chunk_index: usize,
+    total_chunks: usize,
+    total_lines: usize,
+    offset: usize,
+    chunk: Vec<String>,
+    proxy: Option<&str>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+) -> Result<Vec<(usize, String)>, AppError> {
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back((offset, chunk));
+    let mut pairs = Vec::new();
+    while let Some((off, seg)) = queue.pop_front() {
+        let joined = seg
+            .iter()
+            .enumerate()
+            .map(|(j, l)| format!("{j}\t{l}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let user = format!(
+            "Video id: {video_id}\nTitle: {title}\nSegment {chunk_index}/{total_chunks} of {total_lines} lines\nLines:\n{joined}"
+        );
+        match translate_chunk_attempt(settings, &user, proxy, Arc::clone(&semaphore)).await {
+            Ok(mut p) => {
+                for (i, _) in p.iter_mut() {
+                    *i += off;
+                }
+                pairs.append(&mut p);
+            }
+            Err(_) if seg.len() > 1 => {
+                // The model often truncates or only "thinks" on larger
+                // segments; retry each half separately.
+                let mid = seg.len() / 2;
+                queue.push_back((off, seg[..mid].to_vec()));
+                queue.push_back((off + mid, seg[mid..].to_vec()));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(pairs)
+}
+
+async fn translate_chunk_attempt(
+    settings: &LlmSettingsStored,
+    user: &str,
+    proxy: Option<&str>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+) -> Result<Vec<(usize, String)>, AppError> {
+    let _permit = semaphore.acquire().await.map_err(|e| {
+        AppError::BadRequest(format!("translation concurrency: {e}"))
+    })?;
+    let content = chat_completion(
+        settings,
+        TRANSLATE_SYSTEM_PROMPT,
+        user,
+        proxy,
+        true,
+        Some(TRANSLATE_MAX_TOKENS),
+    )
+    .await?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        AppError::BadRequest(format!(
+            "translation response parse failed: {e}; body={}",
+            content.chars().take(200).collect::<String>()
+        ))
+    })?;
+    let entries = parsed
+        .get("translations")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| AppError::BadRequest("translation missing translations array".into()))?;
+    let mut pairs = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let Some(i) = entry.get("i").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        let Some(zh) = entry.get("zh").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if i >= 0 {
+            pairs.push((i as usize, zh.trim().to_string()));
+        }
+    }
+    if pairs.is_empty() {
+        return Err(AppError::BadRequest(
+            "translation returned no usable entries".into(),
+        ));
+    }
+    Ok(pairs)
+}
+
+/// Split caption lines into (offset, lines) chunks staying under
+/// TRANSLATE_CHUNK_CHARS while keeping whole lines intact.
+fn translation_chunks(lines: &[String]) -> Vec<(usize, Vec<String>)> {
+    let mut chunks: Vec<(usize, Vec<String>)> = Vec::new();
+    let mut offset = 0usize;
+    let mut current: Vec<String> = Vec::new();
+    let mut current_chars = 0usize;
+    for (i, line) in lines.iter().enumerate() {
+        let chars = line.chars().count() + 1;
+        if !current.is_empty() && current_chars + chars > TRANSLATE_CHUNK_CHARS {
+            chunks.push((offset, std::mem::take(&mut current)));
+            offset = i;
+            current_chars = 0;
+        }
+        current.push(line.clone());
+        current_chars += chars;
+    }
+    if !current.is_empty() {
+        chunks.push((offset, current));
+    }
+    chunks
 }
 
 pub async fn extract_vocabulary_cards_with_progress<F, Fut>(
@@ -126,6 +326,8 @@ pub async fn extract_vocabulary_cards_with_progress<F, Fut>(
     title: &str,
     caption_text: &str,
     proxy: Option<&str>,
+    start_chunk: usize,
+    initial_cards: &[DraftCard],
     mut on_progress: F,
 ) -> Result<ExtractOutcome, AppError>
 where
@@ -155,12 +357,21 @@ where
         });
     }
 
-    let mut merged: Vec<DraftCard> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut merged: Vec<DraftCard> = initial_cards.to_vec();
+    let mut seen: HashSet<String> = initial_cards
+        .iter()
+        .filter_map(|c| {
+            let key = normalize_front(&c.front);
+            (!key.is_empty()).then_some(key)
+        })
+        .collect();
     let total_chunks = chunks.len();
     let mut chunk_errors: Vec<String> = Vec::new();
 
     for (index, chunk) in chunks.into_iter().enumerate() {
+        if index < start_chunk {
+            continue;
+        }
         match extract_one_chunk(
             settings,
             video_id,
@@ -252,7 +463,7 @@ Hard requirements:
         "Video id: {video_id}\nTitle: {title}\nSegment: {chunk_index}/{chunk_total}\nTranscript segment:\n{caption}"
     );
 
-    let content = chat_completion(settings, system, &user, proxy).await?;
+    let content = chat_completion(settings, system, &user, proxy, false, None).await?;
     parse_llm_cards(&content, video_id)
 }
 
@@ -261,11 +472,13 @@ async fn chat_completion(
     system: &str,
     user: &str,
     proxy: Option<&str>,
+    direct: bool,
+    max_tokens: Option<u32>,
 ) -> Result<String, AppError> {
     let base = settings.base_url.trim_end_matches('/');
     let url = format!("{base}/chat/completions");
 
-    let body = json!({
+    let mut body = json!({
         "model": settings.model,
         "temperature": settings.temperature,
         "response_format": { "type": "json_object" },
@@ -274,12 +487,18 @@ async fn chat_completion(
             { "role": "user", "content": user }
         ]
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = json!(max_tokens);
+    }
 
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300));
     if let Some(proxy) = crate::services::youtube_captions::normalize_proxy(proxy) {
         let proxy = reqwest::Proxy::all(&proxy)
             .map_err(|e| AppError::BadRequest(format!("Invalid proxy URL: {e}")))?;
         builder = builder.proxy(proxy);
+    } else if direct {
+        // DeepSeek is reachable directly; bypass flaky system proxies.
+        builder = builder.no_proxy();
     }
 
     let client = builder

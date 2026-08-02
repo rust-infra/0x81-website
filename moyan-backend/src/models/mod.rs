@@ -3,12 +3,16 @@
 mod admin;
 mod admin_collect;
 mod learning;
+mod podcast;
+mod typing;
 mod user;
 mod vocabulary;
 
 pub use admin::*;
 pub use admin_collect::*;
 pub use learning::*;
+pub use podcast::*;
+pub use typing::*;
 pub use user::*;
 pub use vocabulary::*;
 

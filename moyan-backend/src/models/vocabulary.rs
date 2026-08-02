@@ -60,6 +60,17 @@ pub struct StudyCard {
     pub progress: Option<CardProgress>,
 }
 
+/// Aggregate study queue across all decks the user can study.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StudyQueue {
+    /// Due cards first (progress due in the past), then new cards, capped by the repo limit.
+    pub cards: Vec<StudyCard>,
+    pub due_count: i64,
+    pub new_count: i64,
+    pub total_cards: i64,
+    pub today_reviewed: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewLog {
     pub id: String,

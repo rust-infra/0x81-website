@@ -26,6 +26,7 @@ coverage/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/podcast/
 
 # Logs
 *.log

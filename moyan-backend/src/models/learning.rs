@@ -2,12 +2,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncData {
     pub decks: Vec<DeckData>,
     pub cards: Vec<CardData>,
+    #[serde(default)]
     pub review_logs: Vec<ReviewLogData>,
+    #[serde(default)]
     pub settings: Option<UserSettings>,
-    pub sync_timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub sync_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,4 +77,12 @@ pub struct UserStats {
     pub cards_count: i64,
     pub decks_count: i64,
     pub reviews_count: i64,
+}
+
+/// Per-day study aggregate for the mobile stats trend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyTrendPoint {
+    pub date: String,
+    pub reviews: i64,
+    pub accuracy: f64,
 }

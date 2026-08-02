@@ -1,6 +1,10 @@
 # Build stage
 ARG RUST_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/rust:latest
-ARG DEBIAN_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/debian:bookworm-slim
+# Runtime image must ship glibc >= what the rust:latest builder links against.
+# rust:latest produces binaries requiring GLIBC_2.39; Debian bookworm only
+# ships glibc 2.36, which caused "GLIBC_2.39 not found" crash loops at startup.
+# Debian trixie ships glibc 2.41 and keeps the same package layout.
+ARG DEBIAN_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/debian:trixie-slim
 FROM ${RUST_IMAGE} AS builder
 
 WORKDIR /app

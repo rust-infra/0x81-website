@@ -6,7 +6,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { db } from '../db';
-import type { Card as LocalCard, Deck as LocalDeck } from '../db';
+import type { Card as LocalCard, Deck as LocalDeck, SRSData } from '../db';
 import { t } from '../i18n/translations';
 import { getCurrentTheme } from '../theme';
 import {
@@ -16,21 +16,49 @@ import {
   getSpeechSettings,
 } from '../services/speechService';
 import {
+  deleteTypeResume,
   hasVocabularyBackend,
-  listCards,
+  getTypeStats,
+  getTypeResume,
   listDecks,
+  listStudyCards,
+  putTypeResume,
+  syncTypePractice,
+  upsertCardProgress,
 } from '../services/vocabularyApi';
-import type { Card as ApiCard, Deck as ApiDeck } from '@/types/vocabulary';
+import type {
+  CardProgress,
+  Deck as ApiDeck,
+  StudyCard,
+  TypeEntry,
+  TypeMastery,
+  TypeResume,
+} from '@/types/vocabulary';
+import {
+  buildTypeResume,
+  buildTypeEntry,
+  buildTypeSession,
+  canResumeAt,
+  egregiousSrsUpdates,
+  newPrefixedId,
+  toAgainUpsertBody,
+  typedStatesFromCharInfos,
+} from '../services/typePractice';
 import { getCurrentUser } from '../services/authService';
 
 /** Unified card shape for typing practice (API or local) */
 interface TypeCard {
   id: string;
+  deckId?: string;
   front: string;
   back: string;
   pronunciation?: string | null;
   /** Sentence example text for typing mode */
   exampleText?: string;
+  /** Chinese translation of the example (display only) */
+  exampleZh?: string;
+  /** Current SRS state (backend mode only) */
+  srs?: SRSData;
   localNumericId?: number;
 }
 
@@ -42,13 +70,42 @@ interface UiDeck {
   cardCount: number;
 }
 
-function mapApiTypeCard(card: ApiCard): TypeCard {
+function defaultSrs(): SRSData {
+  return {
+    interval: 0,
+    repetitions: 0,
+    easeFactor: 2.5,
+    dueDate: new Date(),
+    status: 'new',
+  };
+}
+
+function progressToSrs(progress: CardProgress | null): SRSData {
+  if (!progress) return defaultSrs();
+  return {
+    interval: progress.interval,
+    repetitions: progress.repetitions,
+    easeFactor: progress.ease_factor,
+    dueDate: new Date(progress.due_date),
+    lastReviewed: progress.last_reviewed_at
+      ? new Date(progress.last_reviewed_at)
+      : undefined,
+    status: (progress.srs_status as SRSData['status']) || 'new',
+  };
+}
+
+function mapApiTypeCard(sc: StudyCard): TypeCard {
+  const card = sc.card;
+  const example = card.examples?.[0];
   return {
     id: card.id,
+    deckId: card.deck_id,
     front: card.front,
     back: card.back,
     pronunciation: card.pronunciation,
-    exampleText: card.examples?.[0]?.sentence_en || undefined,
+    exampleText: example?.sentence_en || undefined,
+    exampleZh: example?.translation_zh || undefined,
+    srs: progressToSrs(sc.progress),
   };
 }
 
@@ -85,9 +142,16 @@ function mapLocalDeck(deck: LocalDeck): UiDeck {
 
 // ---- Progress Persistence ----
 const TYPE_PROGRESS_KEY = 'moyan_type_progress';
+const TYPE_SYNC_INTERVAL_MS = 5000;
+const TYPE_AUTOPLAY_KEY = 'moyan_type_autoplay';
 
 interface TypeProgress {
-  [deckId: string]: { currentIndex: number; lastCardId: string; timestamp: number };
+  [deckId: string]: {
+    currentIndex: number;
+    lastCardId: string;
+    timestamp: number;
+    resume?: TypeResume;
+  };
 }
 
 function loadTypeProgress(): TypeProgress {
@@ -98,13 +162,6 @@ function loadTypeProgress(): TypeProgress {
   }
 }
 
-function saveTypeProgressEntry(deckId: string | null, currentIndex: number, cardId: string) {
-  const key = deckId || 'all';
-  const all = loadTypeProgress();
-  all[key] = { currentIndex, lastCardId: cardId, timestamp: Date.now() };
-  localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
-}
-
 function getTypeSavedIndex(deckId: string | null, cards: TypeCard[]): number {
   const key = deckId || 'all';
   const saved = loadTypeProgress()[key];
@@ -112,6 +169,11 @@ function getTypeSavedIndex(deckId: string | null, cards: TypeCard[]): number {
   const idx = cards.findIndex(c => c.id === String(saved.lastCardId));
   if (idx >= 0) return idx;
   return Math.min(saved.currentIndex, cards.length - 1);
+}
+
+function loadLocalResume(deckId: string | null): TypeResume | null {
+  const key = deckId || 'all';
+  return loadTypeProgress()[key]?.resume ?? null;
 }
 
 function clearTypeProgress(deckId: string | null) {
@@ -136,29 +198,6 @@ function splitExample(text: string): ExampleSegment[] {
   if (enPart) segs.push({ text: enPart, lang: 'en' });
   if (zhPart || trailing) segs.push({ text: zhPart + (trailing ? ` ${trailing}` : ''), lang: 'zh' });
   return segs;
-}
-
-async function recordHistory(
-  cardId: number,
-  cardFront: string,
-  mode: 'word' | 'sentence',
-  correctChars: number,
-  wrongChars: number,
-  accuracy: number,
-  wpm: number,
-  durationMs: number
-) {
-  await db.typeHistory.add({
-    cardId,
-    cardFront,
-    mode,
-    correctChars,
-    wrongChars,
-    accuracy,
-    wpm,
-    durationMs,
-    createdAt: new Date(),
-  });
 }
 
 async function clearHistory() {
@@ -192,6 +231,24 @@ async function sortCardsSmart(cards: TypeCard[]): Promise<TypeCard[]> {
     if (wa !== wb) return wb - wa;
     return a.id.localeCompare(b.id);
   });
+}
+
+/**
+ * Backend mode sort: practiced cards come first by mastery score (ascending).
+ * Cards without any typing record keep their original relative order.
+ */
+async function sortByMastery(
+  cards: TypeCard[],
+  mastery: TypeMastery[] | null
+): Promise<TypeCard[]> {
+  if (!mastery || mastery.length === 0) return cards;
+  const score = new Map(mastery.map((m) => [m.card_id, m.score]));
+  // Array#sort is stable: equal keys keep insertion order
+  return [...cards].sort(
+    (a, b) =>
+      (score.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (score.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 type TrainMode = 'word' | 'sentence';
@@ -236,7 +293,11 @@ export default function TypeTraining() {
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [autoPlay, setAutoPlay] = useState(() => getSpeechSettings().autoPlay);
+  const [autoPlay, setAutoPlay] = useState(() => {
+    // typing page defaults to auto-play; header toggle persists the preference
+    const stored = localStorage.getItem(TYPE_AUTOPLAY_KEY);
+    return stored === null ? true : stored === '1';
+  });
   const [deckName, setDeckName] = useState<string>('');
   const [showDeckPicker, setShowDeckPicker] = useState(!deckId);
   const [decks, setDecks] = useState<UiDeck[]>([]);
@@ -245,6 +306,21 @@ export default function TypeTraining() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wordRef = useRef<{
+    cardId: string;
+    correctChars: number;
+    wrongChars: number;
+    startedAt: number;
+  } | null>(null);
+  const entriesRef = useRef<TypeEntry[]>([]);
+  const skippedCountRef = useRef(0);
+  const startTimeRef = useRef(0);
+  const syncedCountRef = useRef(0);
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionCreatedAtRef = useRef('');
+  const sessionFinishedRef = useRef(false);
+  const syncTickRef = useRef<() => void>(() => {});
+  const resumePutChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const currentCard = cards[currentIndex];
 
@@ -308,6 +384,27 @@ export default function TypeTraining() {
     setInputIndex(firstPending >= 0 ? firstPending : 0);
   };
 
+  const initCharInfosFromResume = (
+    card: TypeCard,
+    trainMode: TrainMode,
+    resume: TypeResume
+  ) => {
+    const target = buildTarget(card, trainMode);
+    const infos: CharInfo[] = target.split('').map((char, i) => {
+      const typed = i < resume.char_index ? resume.typed_states[i] : undefined;
+      if (typed) {
+        return { char, state: typed.state, inputChar: typed.input_char ?? undefined };
+      }
+      return { char, state: isTargetChar(card, target, i) ? 'pending' : 'correct' };
+    });
+    setCharInfos(infos);
+    let next = Math.min(resume.char_index, target.length);
+    while (next < target.length && !isTargetChar(card, target, next)) {
+      next++;
+    }
+    setInputIndex(next >= target.length ? target.length : next);
+  };
+
   const speakCurrent = async () => {
     if (!currentCard) return;
     try {
@@ -319,17 +416,8 @@ export default function TypeTraining() {
   };
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (currentCard && !isComplete) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentCard, currentIndex, deckId, isComplete]);
-
-  useEffect(() => {
     if (!deckId && showDeckPicker) return;
+    let cancelled = false;
     const load = async () => {
       try {
         let loaded: TypeCard[];
@@ -339,17 +427,17 @@ export default function TypeTraining() {
             return;
           }
           if (deckId) {
-            const remoteCards = await listCards(deckId);
-            loaded = remoteCards.map(mapApiTypeCard);
+            const studyCards = await listStudyCards(deckId);
+            loaded = studyCards.map(mapApiTypeCard);
             const decksList = await listDecks();
             const d = decksList.find(x => x.id === deckId);
-            if (d) setDeckName(d.name);
+            if (d && !cancelled) setDeckName(d.name);
           } else {
             const decksList = await listDecks();
             const allCards: TypeCard[] = [];
             for (const d of decksList) {
-              const remoteCards = await listCards(d.id);
-              allCards.push(...remoteCards.map(mapApiTypeCard));
+              const studyCards = await listStudyCards(d.id);
+              allCards.push(...studyCards.map(mapApiTypeCard));
             }
             loaded = allCards;
           }
@@ -357,28 +445,77 @@ export default function TypeTraining() {
           const localCards = await db.cards.where('deckId').equals(Number(deckId)).toArray();
           loaded = localCards.map(mapLocalTypeCard);
           const d = await db.decks.get(Number(deckId));
-          if (d) setDeckName(d.name);
+          if (d && !cancelled) setDeckName(d.name);
         } else {
           const localCards = await db.cards.toArray();
           loaded = localCards.map(mapLocalTypeCard);
         }
-        loaded = await sortCardsSmart(loaded);
+        if (backend) {
+          let mastery: TypeMastery[] | null = null;
+          try {
+            mastery = (await getTypeStats()).mastery;
+          } catch {
+            // stats unavailable → keep original order
+          }
+          loaded = await sortByMastery(loaded, mastery);
+        } else {
+          loaded = await sortCardsSmart(loaded);
+        }
+        if (cancelled) return;
         setCards(loaded);
         if (loaded.length > 0) {
-          const savedIdx = getTypeSavedIndex(deckId, loaded);
+          const localResume = loadLocalResume(deckId);
+          let resume: TypeResume | null = null;
+          if (backend) {
+            try {
+              resume = await getTypeResume(deckId);
+            } catch {
+              resume = null;
+            }
+          }
+          // prefer whichever checkpoint is newer (localStorage may be fresher
+          // when the backend PUT failed or the page left before it landed)
+          if (!resume || (localResume && localResume.updated_at > resume.updated_at)) {
+            resume = localResume;
+          }
+          let savedIdx = getTypeSavedIndex(deckId, loaded);
+          if (resume) {
+            const idx = loaded.findIndex((c) => c.id === resume.card_id);
+            if (idx >= 0) savedIdx = idx;
+          }
+          if (cancelled) return;
           setCurrentIndex(savedIdx);
-          initCharInfos(loaded[savedIdx], mode);
+          const firstCard = loaded[savedIdx];
+          if (
+            firstCard &&
+            resume &&
+            canResumeAt(resume, mode, buildTarget(firstCard, mode))
+          ) {
+            initCharInfosFromResume(firstCard, mode, resume);
+            wordRef.current = {
+              cardId: firstCard.id,
+              correctChars: resume.correct_chars,
+              wrongChars: resume.wrong_chars,
+              startedAt: Date.now(),
+            };
+          } else {
+            initCharInfos(firstCard, mode);
+          }
           if (autoPlay) {
-            setTimeout(() => speak(loaded[savedIdx].front).catch(() => {}), 300);
+            setTimeout(() => speak(firstCard.front).catch(() => {}), 300);
           }
         }
       } catch (err) {
+        if (cancelled) return;
         console.error('[Type] load failed:', err);
         setLoadError('Load error: ' + (err instanceof Error ? err.message : String(err)));
       }
     };
     void load();
     preloadWebSpeechVoices();
+    return () => {
+      cancelled = true;
+    };
   }, [deckId, mode, showDeckPicker, backend]);
 
   useEffect(() => {
@@ -411,9 +548,19 @@ export default function TypeTraining() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isStarted) {
       setIsStarted(true);
-      setStats(prev => ({ ...prev, startTime: Date.now() }));
+      const now = Date.now();
+      startTimeRef.current = now;
+      setStats(prev => ({ ...prev, startTime: now }));
     }
     if (isComplete || !currentCard) return;
+    if (!wordRef.current || wordRef.current.cardId !== currentCard.id) {
+      wordRef.current = {
+        cardId: currentCard.id,
+        correctChars: 0,
+        wrongChars: 0,
+        startedAt: Date.now(),
+      };
+    }
 
     const target = buildTarget(currentCard, mode);
 
@@ -470,6 +617,10 @@ export default function TypeTraining() {
       correctChars: prev.correctChars + (isCorrect ? 1 : 0),
       wrongChars: prev.wrongChars + (isCorrect ? 0 : 1),
     }));
+    if (wordRef.current) {
+      wordRef.current.correctChars += isCorrect ? 1 : 0;
+      wordRef.current.wrongChars += isCorrect ? 0 : 1;
+    }
 
     if (!isCorrect) {
       setShakeWrong(true);
@@ -489,21 +640,231 @@ export default function TypeTraining() {
     }
   };
 
+  const buildCurrentResume = (): TypeResume | null => {
+    if (!currentCard) return null;
+    const target = buildTarget(currentCard, mode);
+    const active =
+      wordRef.current?.cardId === currentCard.id ? wordRef.current : null;
+    return buildTypeResume({
+      deckId: deckId ?? '',
+      deckName: deckName || null,
+      mode,
+      cardId: currentCard.id,
+      target,
+      charIndex: inputIndex,
+      correctChars: active?.correctChars ?? 0,
+      wrongChars: active?.wrongChars ?? 0,
+      typedStates: typedStatesFromCharInfos(charInfos, inputIndex),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const persistResume = (resume: TypeResume, index: number) => {
+    const key = deckId || 'all';
+    const all = loadTypeProgress();
+    all[key] = {
+      currentIndex: index,
+      lastCardId: resume.card_id,
+      timestamp: Date.now(),
+      resume,
+    };
+    localStorage.setItem(TYPE_PROGRESS_KEY, JSON.stringify(all));
+    if (backend) {
+      // serialize PUTs so an older checkpoint can never land after a newer one
+      resumePutChainRef.current = resumePutChainRef.current
+        .catch(() => {})
+        .then(() => putTypeResume(resume))
+        .catch(() => {});
+    }
+  };
+
+  const clearResume = () => {
+    if (backend) {
+      deleteTypeResume(deckId).catch(() => {});
+    }
+  };
+
+  const finalizeWord = (card: TypeCard, skipped: boolean) => {
+    const w = wordRef.current;
+    if (backend && w) {
+      entriesRef.current.push(
+        buildTypeEntry({
+          id: newPrefixedId('te_'),
+          cardId: card.id,
+          deckId: card.deckId || deckId || 'all',
+          mode,
+          correctChars: w.correctChars,
+          wrongChars: w.wrongChars,
+          durationMs: Date.now() - w.startedAt,
+          skipped,
+          createdAt: new Date().toISOString(),
+        })
+      );
+      if (skipped) skippedCountRef.current += 1;
+    }
+    wordRef.current = null;
+  };
+
+  const applySrsAgain = async (entries: TypeEntry[]) => {
+    const srsByCard = new Map(
+      cards.filter((c) => c.srs).map((c) => [c.id, c.srs!])
+    );
+    const updates = egregiousSrsUpdates(entries, srsByCard);
+    if (updates.length > 0) {
+      await Promise.allSettled(
+        updates.map(({ cardId, srs }) =>
+          upsertCardProgress(cardId, toAgainUpsertBody(srs))
+        )
+      );
+    }
+  };
+
+  const ensureSessionMeta = () => {
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = newPrefixedId('ts_');
+      sessionCreatedAtRef.current = new Date().toISOString();
+    }
+  };
+
+  /** Upload one batch; the session summary covers all entries so far (idempotent upsert). */
+  const pushSync = async (
+    summaryEntries: TypeEntry[],
+    sendEntries: TypeEntry[]
+  ): Promise<boolean> => {
+    if (sendEntries.length === 0) return true;
+    ensureSessionMeta();
+    const session = buildTypeSession({
+      id: sessionIdRef.current!,
+      deckId,
+      deckName: deckName || null,
+      mode,
+      entries: summaryEntries,
+      totalCards: cards.length,
+      skipped: skippedCountRef.current,
+      durationMs: Math.max(Date.now() - startTimeRef.current, 0),
+      createdAt: sessionCreatedAtRef.current,
+    });
+    try {
+      await syncTypePractice({ session, entries: sendEntries });
+      return true;
+    } catch {
+      // silent: next throttled tick retries unsynced entries
+      return false;
+    }
+  };
+
+  /** Throttled sync of completed words + current checkpoint. */
+  const syncIncremental = async () => {
+    if (!backend || sessionFinishedRef.current) return;
+    const all = entriesRef.current;
+    const pending = all.slice(syncedCountRef.current);
+    if (pending.length === 0) return;
+    if (await pushSync(all, pending)) {
+      syncedCountRef.current = all.length;
+      await applySrsAgain(pending);
+    }
+  };
+
+  /** Final flush: session end or page leave. */
+  const flushSession = async (abandoned: boolean) => {
+    if (!backend || sessionFinishedRef.current) return;
+    const all = [...entriesRef.current];
+    if (abandoned && wordRef.current) {
+      const w = wordRef.current;
+      const card = cards.find((c) => c.id === w.cardId);
+      if (card) {
+        all.push(
+          buildTypeEntry({
+            id: newPrefixedId('te_'),
+            cardId: card.id,
+            deckId: card.deckId || deckId || 'all',
+            mode,
+            correctChars: w.correctChars,
+            wrongChars: w.wrongChars,
+            durationMs: Date.now() - w.startedAt,
+            skipped: true,
+            createdAt: new Date().toISOString(),
+          })
+        );
+      }
+    }
+    if (all.length === 0) {
+      sessionFinishedRef.current = true;
+      return;
+    }
+    const pending = all.slice(syncedCountRef.current);
+    if (await pushSync(all, pending.length > 0 ? pending : all)) {
+      syncedCountRef.current = all.length;
+      await applySrsAgain(pending);
+    }
+    sessionFinishedRef.current = true;
+  };
+
+  useEffect(() => {
+    syncTickRef.current = () => {
+      void syncIncremental();
+      if (wordRef.current || inputIndex > 0) {
+        const resume = buildCurrentResume();
+        if (resume) persistResume(resume, currentIndex);
+      }
+    };
+  });
+
+  useEffect(() => {
+    if (!backend || !isStarted || isComplete) return;
+    const id = setInterval(() => syncTickRef.current(), TYPE_SYNC_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [backend, isStarted, isComplete]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentCard && !isComplete) {
+        const resume = buildCurrentResume();
+        if (resume) persistResume(resume, currentIndex);
+      }
+      void flushSession(true);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentCard, currentIndex, deckId, isComplete, backend, cards, deckName, mode, charInfos, inputIndex]);
+
+  const applySort = async (list: TypeCard[]): Promise<TypeCard[]> => {
+    if (backend) {
+      let mastery: TypeMastery[] | null = null;
+      try {
+        mastery = (await getTypeStats()).mastery;
+      } catch {
+        // stats unavailable → keep original order
+      }
+      return sortByMastery(list, mastery);
+    }
+    return sortCardsSmart(list);
+  };
+
   const goNextCard = (isSkip: boolean) => {
     stopAllAudio();
-    if (!isSkip && currentCard?.localNumericId != null) {
-      recordHistory(
-        currentCard.localNumericId,
-        currentCard.front,
-        mode,
-        0, 0, 0, 0, 0
-      ).catch(() => {});
+    if (currentCard) {
+      finalizeWord(currentCard, isSkip);
     }
     if (currentIndex < cards.length - 1) {
       const nextIndex = currentIndex + 1;
       const nxt = cards[nextIndex];
-      if (currentCard) {
-        saveTypeProgressEntry(deckId, currentIndex, currentCard.id);
+      if (nxt) {
+        persistResume(
+          buildTypeResume({
+            deckId: deckId ?? '',
+            deckName: deckName || null,
+            mode,
+            cardId: nxt.id,
+            target: buildTarget(nxt, mode),
+            charIndex: 0,
+            correctChars: 0,
+            wrongChars: 0,
+            typedStates: [],
+            updatedAt: new Date().toISOString(),
+          }),
+          nextIndex
+        );
       }
       setCurrentIndex(nextIndex);
       if (nxt) {
@@ -517,6 +878,8 @@ export default function TypeTraining() {
       }
     } else {
       clearTypeProgress(deckId);
+      clearResume();
+      void flushSession(false);
       setIsComplete(true);
       setStats(prev => ({ ...prev, endTime: Date.now() }));
     }
@@ -525,6 +888,7 @@ export default function TypeTraining() {
   const toggleAutoPlay = () => {
     const next = !autoPlay;
     setAutoPlay(next);
+    localStorage.setItem(TYPE_AUTOPLAY_KEY, next ? '1' : '0');
     const s = getSpeechSettings();
     s.autoPlay = next;
     localStorage.setItem('speech_settings', JSON.stringify(s));
@@ -535,6 +899,7 @@ export default function TypeTraining() {
 
   const handleRestart = async () => {
     clearTypeProgress(deckId);
+    clearResume();
     setCurrentIndex(0);
     setIsComplete(false);
     setIsStarted(false);
@@ -542,7 +907,15 @@ export default function TypeTraining() {
     setWpm(0);
     setAccuracy(100);
     setElapsedSec(0);
-    const sorted = await sortCardsSmart(cards);
+    wordRef.current = null;
+    entriesRef.current = [];
+    skippedCountRef.current = 0;
+    startTimeRef.current = 0;
+    syncedCountRef.current = 0;
+    sessionIdRef.current = null;
+    sessionCreatedAtRef.current = '';
+    sessionFinishedRef.current = false;
+    const sorted = await applySort(cards);
     setCards(sorted);
     if (sorted.length > 0) {
       initCharInfos(sorted[0], mode);
@@ -724,9 +1097,9 @@ export default function TypeTraining() {
 
   const nextCard = cards[currentIndex + 1];
   const wordProgress = charInfos.length > 0
-    ? Math.round((charInfos.filter(ch => ch.state !== 'pending' || (mode === 'sentence' && ch.state === 'correct' && !ch.inputChar)).length / charInfos.length) * 100)
+    ? Math.round((charInfos.filter(ch => ch.state !== 'pending').length / charInfos.length) * 100)
     : 0;
-  const targetPendingTotal = charInfos.filter((info, i) => {
+  const targetPendingTotal = charInfos.filter((_, i) => {
     if (!currentCard) return false;
     return isTargetChar(currentCard, buildTarget(currentCard, mode), i);
   }).length;
@@ -906,7 +1279,12 @@ export default function TypeTraining() {
 
           {currentCard?.exampleText && mode === 'word' && (
             <div className="mt-6 max-w-lg mx-auto space-y-1 opacity-60">
-              {splitExample(currentCard.exampleText).map((seg, i) => (
+              {[
+                ...splitExample(currentCard.exampleText),
+                ...(currentCard.exampleZh
+                  ? [{ text: currentCard.exampleZh, lang: 'zh' as const }]
+                  : []),
+              ].map((seg, i) => (
                 <div key={i} className="flex items-start justify-center gap-2">
                   <p
                     className={`text-xs flex-1 text-center leading-relaxed ${seg.lang === 'en' ? 'italic' : ''}`}

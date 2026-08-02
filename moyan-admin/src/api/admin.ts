@@ -411,6 +411,16 @@ export interface UpdateLlmSettingsInput {
   clear_api_key?: boolean;
 }
 
+export interface PodcastConfig {
+  enabled: boolean;
+  youtube_api_key: string;
+}
+
+export interface UpdatePodcastConfigInput {
+  enabled: boolean;
+  youtube_api_key?: string;
+}
+
 export interface YoutubeCaptionsResult {
   video_id: string;
   title: string;
@@ -505,6 +515,22 @@ export async function updateLlmSettings(
     body: JSON.stringify(input),
   });
   return parseEnvelope<LlmSettings>(res);
+}
+
+export async function getPodcastConfig(): Promise<PodcastConfig> {
+  const res = await adminFetch("/api/admin/settings/podcast");
+  return parseEnvelope<PodcastConfig>(res);
+}
+
+export async function updatePodcastConfig(
+  input: UpdatePodcastConfigInput,
+): Promise<PodcastConfig> {
+  const res = await adminFetch("/api/admin/settings/podcast", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<PodcastConfig>(res);
 }
 
 export async function collectYoutubeCaptions(

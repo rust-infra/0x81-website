@@ -15,13 +15,14 @@ use async_trait::async_trait;
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
-    ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData, SyncStatusResponse,
+    ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
+    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
     UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, SYSTEM_OWNER_ID,
+    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
-    UserRepository, VocabularyRepository,
+    TypeRepository, UserRepository, VocabularyRepository,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -286,6 +287,11 @@ impl MongoRepositories {
         self.review_logs_v2()
             .delete_many(doc! { "card_id": card_id })
             .await?;
+        // Clean up sync shadow collections; the card may have been synced by users.
+        self.cards().delete_many(doc! { "id": card_id }).await?;
+        self.review_logs()
+            .delete_many(doc! { "data.card_id": card_id })
+            .await?;
         Ok(true)
     }
 }
@@ -505,7 +511,7 @@ impl LearningRepository for MongoRepositories {
             .into_iter()
             .map(|document| document.data)
             .collect();
-        let review_logs = self
+        let mut review_logs: Vec<ReviewLogData> = self
             .review_logs()
             .find(doc! { "user_id": user_id })
             .await?
@@ -514,12 +520,30 @@ impl LearningRepository for MongoRepositories {
             .into_iter()
             .map(|document| document.data)
             .collect();
+        let v2_logs = self
+            .review_logs_v2()
+            .find(doc! { "owner_user_id": user_id })
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        for log in v2_logs {
+            let data = ReviewLogData {
+                id: log.id.clone(),
+                card_id: log.card_id,
+                rating: log.rating,
+                reviewed_at: log.reviewed_at,
+                time_ms: log.time_ms,
+            };
+            if !review_logs.iter().any(|existing| existing.id == data.id) {
+                review_logs.push(data);
+            }
+        }
         Ok(SyncData {
             decks,
             cards,
             review_logs,
             settings: None,
-            sync_timestamp: Utc::now(),
+            sync_timestamp: Some(Utc::now()),
         })
     }
 
@@ -567,8 +591,23 @@ impl LearningRepository for MongoRepositories {
                     .count_documents(doc! { "user_id": user_id })
                     .await?,
                 "reviews count",
+            )? + to_i64(
+                self.review_logs_v2()
+                    .count_documents(doc! { "owner_user_id": user_id })
+                    .await?,
+                "reviews count",
             )?,
         })
+    }
+
+    async fn study_daily_trend(
+        &self,
+        _user_id: &str,
+        _days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "study daily trend requires sqlite backend".into(),
+        ))
     }
 }
 
@@ -746,6 +785,17 @@ impl VocabularyRepository for MongoRepositories {
                 .delete_many(doc! { "deck_id": deck_id })
                 .await?;
         }
+        // Clean up sync shadow collections; the deck and its cards may have been
+        // synced by users and have no reference to the vocabulary catalog.
+        self.decks().delete_many(doc! { "id": deck_id }).await?;
+        self.cards()
+            .delete_many(doc! { "data.deck_id": deck_id })
+            .await?;
+        if !card_ids.is_empty() {
+            self.review_logs()
+                .delete_many(doc! { "data.card_id": { "$in": &card_ids } })
+                .await?;
+        }
         Ok(true)
     }
 
@@ -868,6 +918,88 @@ impl VocabularyRepository for MongoRepositories {
                 StudyCard { card, progress }
             })
             .collect())
+    }
+
+    async fn study_queue(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<StudyQueue, RepositoryError> {
+        let now = Utc::now();
+        let day_start = now
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is a valid time")
+            .and_utc();
+
+        let mut deck_owner: HashMap<String, bool> = HashMap::new();
+        let mut cursor = self
+            .vocab_decks()
+            .find(doc! {
+                "$or": [
+                    { "owner_user_id": SYSTEM_OWNER_ID, "is_active": true },
+                    { "owner_user_id": user_id },
+                ]
+            })
+            .projection(doc! { "id": 1, "owner_user_id": 1 })
+            .await?;
+        while let Some(deck) = cursor.try_next().await? {
+            deck_owner.insert(deck.id, deck.owner_user_id == user_id);
+        }
+
+        let mut all = Vec::new();
+        for deck_id in deck_owner.keys() {
+            all.extend(self.list_study_cards(user_id, deck_id).await?);
+        }
+
+        let is_due = |sc: &StudyCard| {
+            sc.progress
+                .as_ref()
+                .map(|p| p.due_date <= now)
+                .unwrap_or(false)
+        };
+        let due_count = all.iter().filter(|sc| is_due(sc)).count() as i64;
+        let new_count = all.iter().filter(|sc| sc.progress.is_none()).count() as i64;
+        let total_cards = all.len() as i64;
+
+        all.sort_by(|a, b| {
+            let a_due = a
+                .progress
+                .as_ref()
+                .map(|p| p.due_date <= now)
+                .unwrap_or(false);
+            let b_due = b
+                .progress
+                .as_ref()
+                .map(|p| p.due_date <= now)
+                .unwrap_or(false);
+            let a_own = deck_owner.get(&a.card.deck_id).copied().unwrap_or(false);
+            let b_own = deck_owner.get(&b.card.deck_id).copied().unwrap_or(false);
+            b_due
+                .cmp(&a_due)
+                .then_with(|| b_own.cmp(&a_own))
+                .then(a.card.created_at.cmp(&b.card.created_at))
+                .then(a.card.id.cmp(&b.card.id))
+        });
+        all.truncate(limit as usize);
+
+        let today_reviewed = to_i64(
+            self.review_logs_v2()
+                .count_documents(doc! {
+                    "owner_user_id": user_id,
+                    "reviewed_at": { "$gte": day_start },
+                })
+                .await?,
+            "today review count",
+        )?;
+
+        Ok(StudyQueue {
+            cards: all,
+            due_count,
+            new_count,
+            total_cards,
+            today_reviewed,
+        })
     }
 
     async fn upsert_card_progress(
@@ -1297,6 +1429,88 @@ impl VocabularyRepository for MongoRepositories {
     ) -> Result<(Vec<CollectJob>, i64), RepositoryError> {
         Err(RepositoryError::Configuration(
             "collect_jobs requires sqlite backend".into(),
+        ))
+    }
+}
+
+#[async_trait]
+impl TypeRepository for MongoRepositories {
+    async fn type_session_insert(
+        &self,
+        _user_id: &str,
+        _session: &TypeSession,
+    ) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_entries_insert(
+        &self,
+        _user_id: &str,
+        _entries: &[TypeEntry],
+    ) -> Result<usize, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_recent_sessions(
+        &self,
+        _user_id: &str,
+        _limit: i64,
+    ) -> Result<Vec<TypeSession>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_daily_trend(
+        &self,
+        _user_id: &str,
+        _days: i64,
+    ) -> Result<Vec<TypeDailyTrend>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mastery_rows(
+        &self,
+        _user_id: &str,
+    ) -> Result<Vec<TypeMasteryRow>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_upsert(
+        &self,
+        _user_id: &str,
+        _resume: &TypeResume,
+    ) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_get(
+        &self,
+        _user_id: &str,
+        _deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_resume_delete(
+        &self,
+        _user_id: &str,
+        _deck_id: &str,
+    ) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
         ))
     }
 }

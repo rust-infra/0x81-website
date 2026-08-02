@@ -8,13 +8,14 @@ use async_trait::async_trait;
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
-    DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, SyncData,
-    SyncStatusResponse, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, SYSTEM_OWNER_ID,
+    DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
+    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
-    UserRepository, VocabularyRepository,
+    TypeRepository, UserRepository, VocabularyRepository,
 };
 
 #[derive(Clone)]
@@ -670,8 +671,11 @@ impl LearningRepository for SqliteRepositories {
              srs_next_review, srs_interval, srs_ease, created_at, updated_at FROM user_cards WHERE user_id = ?",
         ).bind(user_id).fetch_all(&self.pool).await?.into_iter().map(Into::into).collect();
         let review_logs = sqlx::query_as::<_, ReviewLogRow>(
-            "SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs WHERE user_id = ?",
+            "SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs WHERE user_id = ?
+             UNION
+             SELECT id, card_id, rating, reviewed_at, time_ms FROM review_logs_v2 WHERE owner_user_id = ?",
         )
+        .bind(user_id)
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?
@@ -684,7 +688,7 @@ impl LearningRepository for SqliteRepositories {
             cards,
             review_logs,
             settings: None,
-            sync_timestamp: Utc::now(),
+            sync_timestamp: Some(Utc::now()),
         })
     }
 
@@ -708,8 +712,46 @@ impl LearningRepository for SqliteRepositories {
         Ok(UserStats {
             cards_count: count(&self.pool, "user_cards", user_id).await?,
             decks_count: count(&self.pool, "user_decks", user_id).await?,
-            reviews_count: count(&self.pool, "review_logs", user_id).await?,
+            reviews_count: sqlx::query_scalar(
+                "SELECT COUNT(*) FROM (
+                    SELECT id FROM review_logs WHERE user_id = ?
+                    UNION
+                    SELECT id FROM review_logs_v2 WHERE owner_user_id = ?
+                 )",
+            )
+            .bind(user_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?,
         })
+    }
+
+    async fn study_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError> {
+        let since = Utc::now() - Duration::days(days);
+        let rows = sqlx::query_as::<_, (String, i64, f64)>(
+            "SELECT date(reviewed_at) AS date, COUNT(*) AS reviews,
+                    AVG(CASE WHEN rating IN ('good','easy') THEN 1.0 ELSE 0.0 END) AS accuracy
+             FROM review_logs_v2
+             WHERE owner_user_id = ? AND reviewed_at >= ?
+             GROUP BY date(reviewed_at)
+             ORDER BY date",
+        )
+        .bind(user_id)
+        .bind(since)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(date, reviews, accuracy)| DailyTrendPoint {
+                date,
+                reviews,
+                accuracy,
+            })
+            .collect())
     }
 }
 
@@ -870,7 +912,20 @@ impl VocabularyRepository for SqliteRepositories {
             .bind(user_id)
             .execute(&self.pool)
             .await?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
+        // Clean up sync shadow tables; the deck/card rows there have no FK to the
+        // vocabulary catalog, so they would otherwise survive as orphans.
+        sqlx::query("DELETE FROM user_decks WHERE id = ?")
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM user_cards WHERE deck_id = ?")
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(true)
     }
 
     async fn list_cards(&self, deck_id: &str) -> Result<Vec<Card>, RepositoryError> {
@@ -973,7 +1028,14 @@ impl VocabularyRepository for SqliteRepositories {
             .bind(card_id)
             .execute(&self.pool)
             .await?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
+        sqlx::query("DELETE FROM user_cards WHERE id = ?")
+            .bind(card_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(true)
     }
 
     async fn list_study_cards(
@@ -1006,6 +1068,105 @@ impl VocabularyRepository for SqliteRepositories {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn study_queue(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<StudyQueue, RepositoryError> {
+        let now = Utc::now();
+        let day_start = now
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is a valid time")
+            .and_utc();
+
+        let rows = sqlx::query_as::<_, StudyCardRow>(
+            "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
+                    c.created_at, c.updated_at,
+                    p.id AS progress_id, p.owner_user_id AS progress_owner_user_id,
+                    p.card_id AS progress_card_id, p.srs_status AS progress_srs_status,
+                    p.interval_days AS progress_interval_days, p.repetitions AS progress_repetitions,
+                    p.ease_factor AS progress_ease_factor, p.due_date AS progress_due_date,
+                    p.last_reviewed_at AS progress_last_reviewed_at,
+                    p.created_at AS progress_created_at, p.updated_at AS progress_updated_at
+             FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE (d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?
+             ORDER BY
+               CASE WHEN p.due_date IS NOT NULL AND p.due_date <= ? THEN 0 ELSE 1 END,
+               CASE WHEN d.owner_user_id = ? THEN 0 ELSE 1 END,
+               COALESCE(p.due_date, c.created_at),
+               c.id
+             LIMIT ?",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .bind(now)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        let cards = rows
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<StudyCard>, _>>()?;
+
+        let due_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE ((d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?)
+               AND p.due_date IS NOT NULL AND p.due_date <= ?",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let new_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             LEFT JOIN card_progress p ON p.card_id = c.id AND p.owner_user_id = ?
+             WHERE ((d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?)
+               AND p.id IS NULL",
+        )
+        .bind(user_id)
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let total_cards: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM cards c
+             JOIN decks d ON d.id = c.deck_id
+             WHERE (d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?",
+        )
+        .bind(SYSTEM_OWNER_ID)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let today_reviewed: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM review_logs_v2 WHERE owner_user_id = ? AND reviewed_at >= ?",
+        )
+        .bind(user_id)
+        .bind(day_start)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(StudyQueue {
+            cards,
+            due_count,
+            new_count,
+            total_cards,
+            today_reviewed,
+        })
     }
 
     async fn upsert_card_progress(
@@ -1529,6 +1690,317 @@ impl VocabularyRepository for SqliteRepositories {
 }
 
 #[derive(sqlx::FromRow)]
+struct TypeSessionRow {
+    id: String,
+    deck_id: Option<String>,
+    deck_name: Option<String>,
+    mode: String,
+    total_cards: i64,
+    completed: i64,
+    skipped: i64,
+    egregious_count: i64,
+    avg_accuracy: f64,
+    avg_wpm: f64,
+    duration_ms: i64,
+    created_at: DateTime<Utc>,
+}
+
+impl From<TypeSessionRow> for TypeSession {
+    fn from(row: TypeSessionRow) -> Self {
+        Self {
+            id: row.id,
+            deck_id: row.deck_id,
+            deck_name: row.deck_name,
+            mode: row.mode,
+            total_cards: row.total_cards,
+            completed: row.completed,
+            skipped: row.skipped,
+            egregious_count: row.egregious_count,
+            avg_accuracy: row.avg_accuracy,
+            avg_wpm: row.avg_wpm,
+            duration_ms: row.duration_ms,
+            created_at: row.created_at,
+        }
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct TypeDailyTrendRow {
+    date: String,
+    sessions: i64,
+    avg_accuracy: f64,
+    avg_wpm: f64,
+}
+
+impl From<TypeDailyTrendRow> for TypeDailyTrend {
+    fn from(row: TypeDailyTrendRow) -> Self {
+        Self {
+            date: row.date,
+            sessions: row.sessions,
+            avg_accuracy: row.avg_accuracy,
+            avg_wpm: row.avg_wpm,
+        }
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct TypeMasteryRowDb {
+    card_id: String,
+    correct_chars: i64,
+    wrong_chars: i64,
+    egregious_count: i64,
+    last_practiced_at: Option<DateTime<Utc>>,
+}
+
+impl From<TypeMasteryRowDb> for TypeMasteryRow {
+    fn from(row: TypeMasteryRowDb) -> Self {
+        let total = row.correct_chars + row.wrong_chars;
+        let accuracy = if total > 0 {
+            row.correct_chars as f64 / total as f64
+        } else {
+            1.0
+        };
+        Self {
+            card_id: row.card_id,
+            accuracy,
+            egregious_count: row.egregious_count,
+            last_practiced_at: row.last_practiced_at,
+        }
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct TypeResumeRow {
+    deck_id: String,
+    deck_name: Option<String>,
+    mode: String,
+    card_id: String,
+    target: String,
+    char_index: i64,
+    correct_chars: i64,
+    wrong_chars: i64,
+    typed_states: String,
+    updated_at: DateTime<Utc>,
+}
+
+impl From<TypeResumeRow> for TypeResume {
+    fn from(row: TypeResumeRow) -> Self {
+        Self {
+            deck_id: row.deck_id,
+            deck_name: row.deck_name,
+            mode: row.mode,
+            card_id: row.card_id,
+            target: row.target,
+            char_index: row.char_index,
+            correct_chars: row.correct_chars,
+            wrong_chars: row.wrong_chars,
+            typed_states: serde_json::from_str(&row.typed_states).unwrap_or_default(),
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[async_trait]
+impl TypeRepository for SqliteRepositories {
+    async fn type_session_insert(
+        &self,
+        user_id: &str,
+        session: &TypeSession,
+    ) -> Result<bool, RepositoryError> {
+        let result = sqlx::query(
+            "INSERT INTO type_sessions (
+                id, owner_user_id, deck_id, deck_name, mode, total_cards, completed, skipped,
+                egregious_count, avg_accuracy, avg_wpm, duration_ms, created_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(&session.id)
+        .bind(user_id)
+        .bind(&session.deck_id)
+        .bind(&session.deck_name)
+        .bind(&session.mode)
+        .bind(session.total_cards)
+        .bind(session.completed)
+        .bind(session.skipped)
+        .bind(session.egregious_count)
+        .bind(session.avg_accuracy)
+        .bind(session.avg_wpm)
+        .bind(session.duration_ms)
+        .bind(session.created_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn type_entries_insert(
+        &self,
+        user_id: &str,
+        entries: &[TypeEntry],
+    ) -> Result<usize, RepositoryError> {
+        let mut saved = 0usize;
+        for entry in entries {
+            let result = sqlx::query(
+                "INSERT INTO type_entries (
+                    id, owner_user_id, card_id, deck_id, mode, correct_chars, wrong_chars,
+                    accuracy, wpm, duration_ms, egregious, created_at
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO NOTHING",
+            )
+            .bind(&entry.id)
+            .bind(user_id)
+            .bind(&entry.card_id)
+            .bind(&entry.deck_id)
+            .bind(&entry.mode)
+            .bind(entry.correct_chars)
+            .bind(entry.wrong_chars)
+            .bind(entry.accuracy)
+            .bind(entry.wpm)
+            .bind(entry.duration_ms)
+            .bind(if entry.egregious { 1 } else { 0 })
+            .bind(entry.created_at)
+            .execute(&self.pool)
+            .await?;
+            if result.rows_affected() > 0 {
+                saved += 1;
+            }
+        }
+        Ok(saved)
+    }
+
+    async fn type_recent_sessions(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<Vec<TypeSession>, RepositoryError> {
+        let rows = sqlx::query_as::<_, TypeSessionRow>(
+            "SELECT id, deck_id, deck_name, mode, total_cards, completed, skipped,
+                    egregious_count, avg_accuracy, avg_wpm, duration_ms, created_at
+             FROM type_sessions WHERE owner_user_id = ?
+             ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(TypeSession::from).collect())
+    }
+
+    async fn type_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<TypeDailyTrend>, RepositoryError> {
+        let since = Utc::now() - Duration::days(days);
+        let rows = sqlx::query_as::<_, TypeDailyTrendRow>(
+            "SELECT substr(created_at, 1, 10) AS date,
+                    COUNT(*) AS sessions,
+                    AVG(avg_accuracy) AS avg_accuracy,
+                    AVG(avg_wpm) AS avg_wpm
+             FROM type_sessions
+             WHERE owner_user_id = ? AND created_at >= ?
+             GROUP BY substr(created_at, 1, 10)
+             ORDER BY date",
+        )
+        .bind(user_id)
+        .bind(since)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(TypeDailyTrend::from).collect())
+    }
+
+    async fn type_mastery_rows(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeMasteryRow>, RepositoryError> {
+        let rows = sqlx::query_as::<_, TypeMasteryRowDb>(
+            "SELECT card_id,
+                    SUM(correct_chars) AS correct_chars,
+                    SUM(wrong_chars) AS wrong_chars,
+                    SUM(egregious) AS egregious_count,
+                    MAX(created_at) AS last_practiced_at
+             FROM type_entries
+             WHERE owner_user_id = ?
+             GROUP BY card_id",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(TypeMasteryRow::from).collect())
+    }
+
+    async fn type_resume_upsert(
+        &self,
+        user_id: &str,
+        resume: &TypeResume,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            "INSERT INTO type_resume (
+                owner_user_id, deck_id, deck_name, mode, card_id, target, char_index,
+                correct_chars, wrong_chars, typed_states, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(owner_user_id, deck_id) DO UPDATE SET
+                deck_name = excluded.deck_name,
+                mode = excluded.mode,
+                card_id = excluded.card_id,
+                target = excluded.target,
+                char_index = excluded.char_index,
+                correct_chars = excluded.correct_chars,
+                wrong_chars = excluded.wrong_chars,
+                typed_states = excluded.typed_states,
+                updated_at = excluded.updated_at
+             WHERE excluded.updated_at >= type_resume.updated_at",
+        )
+        .bind(user_id)
+        .bind(&resume.deck_id)
+        .bind(&resume.deck_name)
+        .bind(&resume.mode)
+        .bind(&resume.card_id)
+        .bind(&resume.target)
+        .bind(resume.char_index)
+        .bind(resume.correct_chars)
+        .bind(resume.wrong_chars)
+        .bind(
+            serde_json::to_string(&resume.typed_states)
+                .unwrap_or_else(|_| "[]".to_string()),
+        )
+        .bind(resume.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn type_resume_get(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError> {
+        let row = sqlx::query_as::<_, TypeResumeRow>(
+            "SELECT deck_id, deck_name, mode, card_id, target, char_index,
+                    correct_chars, wrong_chars, typed_states, updated_at
+             FROM type_resume WHERE owner_user_id = ? AND deck_id = ?",
+        )
+        .bind(user_id)
+        .bind(deck_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(TypeResume::from))
+    }
+
+    async fn type_resume_delete(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<bool, RepositoryError> {
+        let result = sqlx::query("DELETE FROM type_resume WHERE owner_user_id = ? AND deck_id = ?")
+            .bind(user_id)
+            .bind(deck_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+}
+
+#[derive(sqlx::FromRow)]
 struct CollectJobRow {
     id: String,
     url: String,
@@ -1923,6 +2395,8 @@ impl HealthRepository for SqliteRepositories {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Timelike;
+    use crate::models::TypedCharState;
 
     #[tokio::test]
     async fn persists_user_learning_data_and_stats() -> Result<(), RepositoryError> {
@@ -1983,7 +2457,7 @@ mod tests {
                 time_ms: Some(1200),
             }],
             settings: None,
-            sync_timestamp: now,
+            sync_timestamp: Some(now),
         };
 
         let counts = repository.upload(&user.id, &data, now).await?;
@@ -1991,6 +2465,240 @@ mod tests {
         assert_eq!(repository.download(&user.id).await?.cards.len(), 1);
         assert_eq!(repository.stats(&user.id).await?.reviews_count, 1);
         assert!(repository.status(&user.id).await?.has_data);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn review_log_created_via_vocabulary_api_is_counted_in_stats_and_download()
+    -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "review-v2-1",
+                name: "Review V2 User",
+                email: "review-v2@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Review Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+        let card_id = card.id.clone();
+        repo.create_review_log(
+            &user.id,
+            &CreateReviewLogRequest {
+                card_id: card.id,
+                deck_id: deck.id,
+                rating: "good".to_string(),
+                time_ms: Some(1200),
+                reviewed_at: None,
+            },
+        )
+        .await?;
+
+        let stats = repo.stats(&user.id).await?;
+        assert_eq!(stats.reviews_count, 1);
+
+        let download = repo.download(&user.id).await?;
+        assert_eq!(download.review_logs.len(), 1);
+        assert_eq!(download.review_logs[0].card_id, card_id);
+        assert_eq!(download.review_logs[0].rating, "good");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_user_deck_cleans_sync_shadow_tables() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "delete-deck-sync-1",
+                name: "Delete Deck Sync",
+                email: "delete-deck-sync@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+
+        let now = Utc::now();
+        repo.upload(
+            &user.id,
+            &SyncData {
+                decks: vec![DeckData {
+                    id: deck.id.clone(),
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    category: None,
+                    card_count: 1,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                cards: vec![CardData {
+                    id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    example: None,
+                    pronunciation: None,
+                    tags: None,
+                    srs_level: 0,
+                    srs_status: "new".to_string(),
+                    srs_next_review: None,
+                    srs_interval: 0.0,
+                    srs_ease: 2.5,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                review_logs: Vec::new(),
+                settings: None,
+                sync_timestamp: Some(now),
+            },
+            now,
+        )
+        .await?;
+
+        assert!(repo.delete_user_deck(&user.id, &deck.id).await?);
+
+        let download = repo.download(&user.id).await?;
+        assert!(
+            download.decks.is_empty(),
+            "download should not return deleted deck"
+        );
+        assert!(
+            download.cards.is_empty(),
+            "download should not return cards of deleted deck"
+        );
+        let stats = repo.stats(&user.id).await?;
+        assert_eq!(stats.decks_count, 0);
+        assert_eq!(stats.cards_count, 0);
+        assert!(!repo.status(&user.id).await?.has_data);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_card_cleans_sync_shadow_table() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "delete-card-sync-1",
+                name: "Delete Card Sync",
+                email: "delete-card-sync@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "world".to_string(),
+                    back: "世界".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+
+        let now = Utc::now();
+        repo.upload(
+            &user.id,
+            &SyncData {
+                decks: vec![DeckData {
+                    id: deck.id.clone(),
+                    name: "Sync Deck".to_string(),
+                    description: None,
+                    category: None,
+                    card_count: 1,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                cards: vec![CardData {
+                    id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    front: "world".to_string(),
+                    back: "世界".to_string(),
+                    example: None,
+                    pronunciation: None,
+                    tags: None,
+                    srs_level: 0,
+                    srs_status: "new".to_string(),
+                    srs_next_review: None,
+                    srs_interval: 0.0,
+                    srs_ease: 2.5,
+                    created_at: now,
+                    updated_at: now,
+                }],
+                review_logs: Vec::new(),
+                settings: None,
+                sync_timestamp: Some(now),
+            },
+            now,
+        )
+        .await?;
+
+        assert!(repo.delete_card(&card.id).await?);
+
+        let download = repo.download(&user.id).await?;
+        assert!(
+            download.cards.is_empty(),
+            "download should not return deleted card"
+        );
+        assert_eq!(repo.stats(&user.id).await?.cards_count, 0);
         Ok(())
     }
 
@@ -2536,6 +3244,151 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn study_queue_returns_due_cards_before_new_with_counts() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "study-queue-1",
+                name: "Queue User",
+                email: "queue@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Queue Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let new_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "alpha".to_string(),
+                    back: "a".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+        let due_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "beta".to_string(),
+                    back: "b".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+        repo.upsert_card_progress(
+            &user.id,
+            &due_card.id,
+            &UpsertCardProgressRequest {
+                srs_status: "review".to_string(),
+                interval: 1.0,
+                repetitions: 1,
+                ease_factor: 2.5,
+                due_date: Utc::now() - Duration::hours(1),
+                last_reviewed_at: Some(Utc::now()),
+            },
+        )
+        .await?;
+
+        let queue = repo.study_queue(&user.id, 50).await?;
+
+        assert_eq!(queue.total_cards, 2);
+        assert_eq!(queue.due_count, 1);
+        assert_eq!(queue.new_count, 1);
+        assert_eq!(queue.cards.len(), 2);
+        assert_eq!(queue.cards[0].card.id, due_card.id);
+        assert_eq!(queue.cards[1].card.id, new_card.id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn study_queue_prioritizes_users_own_decks_before_system_cards() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "study-queue-2",
+                name: "Queue User 2",
+                email: "queue2@example.com",
+                avatar: None,
+            })
+            .await?;
+        let old = Utc::now() - Duration::hours(1);
+        repo.insert_system_deck(&Deck {
+            id: "deck_sys_q".to_string(),
+            owner_user_id: SYSTEM_OWNER_ID.to_string(),
+            source_key: Some("sys-q".to_string()),
+            name: "System Queue Deck".to_string(),
+            description: String::new(),
+            color: None,
+            version: 1,
+            sort_order: 0,
+            is_active: true,
+            card_count: 1,
+            created_at: old,
+            updated_at: old,
+        })
+        .await?;
+        repo.insert_system_card(&Card {
+            id: "card_sys_q".to_string(),
+            deck_id: "deck_sys_q".to_string(),
+            front: "system card".to_string(),
+            back: "s".to_string(),
+            pronunciation: None,
+            tags: vec![],
+            examples: vec![],
+            created_at: old,
+            updated_at: old,
+        })
+        .await?;
+
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "My Queue Deck".to_string(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let my_card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "my card".to_string(),
+                    back: "m".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                vec![],
+            )
+            .await?;
+
+        let queue = repo.study_queue(&user.id, 50).await?;
+
+        assert_eq!(queue.cards[0].card.id, my_card.id);
+        assert_eq!(queue.cards[0].card.deck_id, deck.id);
+        Ok(())
+    }
+
     /// SQLite import apply uses `pool.begin()`/`commit()`; replace_deck delete+insert rolls back together.
     #[tokio::test]
     async fn admin_apply_vocabulary_import_replace_deck_rolls_back_on_failure(
@@ -2617,6 +3470,451 @@ mod tests {
         assert!(remaining.iter().any(|card| card.front == "hello"));
         assert!(remaining.iter().any(|card| card.front == "world"));
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_session_and_entries_are_idempotent() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-dup-1",
+                name: "Type Dup",
+                email: "type-dup@example.com",
+                avatar: None,
+            })
+            .await?;
+        let session = TypeSession {
+            id: "ts_dup".into(),
+            deck_id: None,
+            deck_name: Some("全部词汇".into()),
+            mode: "word".into(),
+            total_cards: 2,
+            completed: 1,
+            skipped: 1,
+            egregious_count: 1,
+            avg_accuracy: 0.7,
+            avg_wpm: 20.0,
+            duration_ms: 60_000,
+            created_at: Utc::now(),
+        };
+        let entry = TypeEntry {
+            id: "te_dup".into(),
+            card_id: "card_x".into(),
+            deck_id: "deck_x".into(),
+            mode: "word".into(),
+            correct_chars: 7,
+            wrong_chars: 3,
+            accuracy: 0.7,
+            wpm: 21.0,
+            duration_ms: 4_000,
+            egregious: true,
+            created_at: Utc::now(),
+        };
+
+        assert!(repo.type_session_insert(&user.id, &session).await?);
+        assert!(!repo.type_session_insert(&user.id, &session).await?);
+        assert_eq!(repo.type_entries_insert(&user.id, &[entry.clone()]).await?, 1);
+        assert_eq!(repo.type_entries_insert(&user.id, &[entry]).await?, 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_stats_aggregate_trend_and_mastery() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-stats-1",
+                name: "Type Stats",
+                email: "type-stats@example.com",
+                avatar: None,
+            })
+            .await?;
+        let day1 = (Utc::now() - Duration::days(1))
+            .with_hour(10)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap();
+        let day2 = Utc::now();
+        let sessions = vec![
+            TypeSession {
+                id: "ts_a".into(),
+                deck_id: Some("deck_a".into()),
+                deck_name: Some("A".into()),
+                mode: "word".into(),
+                total_cards: 2,
+                completed: 2,
+                skipped: 0,
+                egregious_count: 0,
+                avg_accuracy: 0.9,
+                avg_wpm: 30.0,
+                duration_ms: 60_000,
+                created_at: day1,
+            },
+            TypeSession {
+                id: "ts_b".into(),
+                deck_id: None,
+                deck_name: Some("全部词汇".into()),
+                mode: "sentence".into(),
+                total_cards: 3,
+                completed: 2,
+                skipped: 1,
+                egregious_count: 2,
+                avg_accuracy: 0.5,
+                avg_wpm: 15.0,
+                duration_ms: 90_000,
+                created_at: day2,
+            },
+            TypeSession {
+                id: "ts_c".into(),
+                deck_id: None,
+                deck_name: None,
+                mode: "word".into(),
+                total_cards: 1,
+                completed: 1,
+                skipped: 0,
+                egregious_count: 0,
+                avg_accuracy: 0.8,
+                avg_wpm: 25.0,
+                duration_ms: 30_000,
+                created_at: day2,
+            },
+        ];
+        for s in &sessions {
+            repo.type_session_insert(&user.id, s).await?;
+        }
+        let entries = vec![
+            TypeEntry {
+                id: "te_a1".into(),
+                card_id: "card_a".into(),
+                deck_id: "deck_a".into(),
+                mode: "word".into(),
+                correct_chars: 9,
+                wrong_chars: 1,
+                accuracy: 0.9,
+                wpm: 30.0,
+                duration_ms: 4_000,
+                egregious: false,
+                created_at: day1,
+            },
+            TypeEntry {
+                id: "te_b1".into(),
+                card_id: "card_b".into(),
+                deck_id: "deck_a".into(),
+                mode: "word".into(),
+                correct_chars: 5,
+                wrong_chars: 5,
+                accuracy: 0.5,
+                wpm: 15.0,
+                duration_ms: 5_000,
+                egregious: true,
+                created_at: day2,
+            },
+            TypeEntry {
+                id: "te_b2".into(),
+                card_id: "card_b".into(),
+                deck_id: "deck_a".into(),
+                mode: "word".into(),
+                correct_chars: 0,
+                wrong_chars: 0,
+                accuracy: 0.0,
+                wpm: 0.0,
+                duration_ms: 1_000,
+                egregious: true,
+                created_at: day2,
+            },
+        ];
+        repo.type_entries_insert(&user.id, &entries).await?;
+
+        let recent = repo.type_recent_sessions(&user.id, 20).await?;
+        assert_eq!(recent.len(), 3);
+        assert_eq!(recent[0].id, "ts_c"); // newest first
+        assert_eq!(recent[2].id, "ts_a");
+
+        let trend = repo.type_daily_trend(&user.id, 30).await?;
+        assert_eq!(trend.len(), 2);
+        assert_eq!(trend[0].date, day1.date_naive().to_string());
+        assert_eq!(trend[0].sessions, 1);
+        assert_eq!(trend[1].date, day2.date_naive().to_string());
+        assert_eq!(trend[1].sessions, 2);
+
+        let mastery = repo.type_mastery_rows(&user.id).await?;
+        assert_eq!(mastery.len(), 2); // only practiced cards
+        let card_a = mastery.iter().find(|m| m.card_id == "card_a").unwrap();
+        let card_b = mastery.iter().find(|m| m.card_id == "card_b").unwrap();
+        assert!((card_a.accuracy - 0.9).abs() < 1e-9);
+        assert_eq!(card_a.egregious_count, 0);
+        assert!((card_b.accuracy - 0.5).abs() < 1e-9);
+        assert_eq!(card_b.egregious_count, 2);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_data_is_isolated_per_user() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let first = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-iso-1",
+                name: "Iso One",
+                email: "iso-one@example.com",
+                avatar: None,
+            })
+            .await?;
+        let second = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-iso-2",
+                name: "Iso Two",
+                email: "iso-two@example.com",
+                avatar: None,
+            })
+            .await?;
+        repo.type_session_insert(
+            &first.id,
+            &TypeSession {
+                id: "ts_iso".into(),
+                deck_id: None,
+                deck_name: None,
+                mode: "word".into(),
+                total_cards: 1,
+                completed: 1,
+                skipped: 0,
+                egregious_count: 0,
+                avg_accuracy: 1.0,
+                avg_wpm: 20.0,
+                duration_ms: 10_000,
+                created_at: Utc::now(),
+            },
+        )
+        .await?;
+        assert!(repo.type_recent_sessions(&second.id, 20).await?.is_empty());
+        assert!(repo.type_mastery_rows(&second.id).await?.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn study_daily_trend_aggregates_reviews_by_day() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "trend-1",
+                name: "Trend User",
+                email: "trend@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "Trend Deck".into(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".into(),
+                    back: "你好".into(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+        let day1 = (Utc::now() - Duration::days(1))
+            .with_hour(10).unwrap().with_minute(0).unwrap().with_second(0).unwrap();
+        let day2 = Utc::now();
+        for (reviewed_at, rating) in [
+            (day1, "good".to_string()),
+            (day1, "again".to_string()),
+            (day2, "easy".to_string()),
+            (day2, "good".to_string()),
+            (day2, "hard".to_string()),
+        ] {
+            repo.create_review_log(
+                &user.id,
+                &CreateReviewLogRequest {
+                    card_id: card.id.clone(),
+                    deck_id: deck.id.clone(),
+                    rating,
+                    time_ms: Some(1000),
+                    reviewed_at: Some(reviewed_at),
+                },
+            )
+            .await?;
+        }
+
+        let trend = repo.study_daily_trend(&user.id, 30).await?;
+        assert_eq!(trend.len(), 2);
+        assert_eq!(trend[0].date, day1.date_naive().to_string());
+        assert_eq!(trend[0].reviews, 2);
+        assert!((trend[0].accuracy - 0.5).abs() < 1e-9);
+        assert_eq!(trend[1].date, day2.date_naive().to_string());
+        assert_eq!(trend[1].reviews, 3);
+        assert!((trend[1].accuracy - 2.0 / 3.0).abs() < 1e-9);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_upsert_get_delete_round_trip() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-1",
+                name: "Resume User",
+                email: "resume@example.com",
+                avatar: None,
+            })
+            .await?;
+        let resume = TypeResume {
+            deck_id: "deck_r".into(),
+            deck_name: Some("Rust语言核心".into()),
+            mode: "word".into(),
+            card_id: "card_r".into(),
+            target: "hello".into(),
+            char_index: 3,
+            correct_chars: 2,
+            wrong_chars: 1,
+            typed_states: vec![
+                TypedCharState {
+                    state: "correct".into(),
+                    input_char: Some("h".into()),
+                },
+                TypedCharState {
+                    state: "wrong".into(),
+                    input_char: Some("x".into()),
+                },
+                TypedCharState {
+                    state: "correct".into(),
+                    input_char: Some("l".into()),
+                },
+            ],
+            updated_at: Utc::now(),
+        };
+
+        repo.type_resume_upsert(&user.id, &resume).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_r").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_r");
+        assert_eq!(loaded.char_index, 3);
+        assert_eq!(loaded.typed_states.len(), 3);
+        assert_eq!(loaded.typed_states[1].state, "wrong");
+        assert_eq!(loaded.typed_states[1].input_char.as_deref(), Some("x"));
+
+        // upsert replaces the previous checkpoint for the same deck
+        let mut updated = resume;
+        updated.char_index = 5;
+        repo.type_resume_upsert(&user.id, &updated).await?;
+        assert_eq!(repo.type_resume_get(&user.id, "deck_r").await?.unwrap().char_index, 5);
+
+        assert!(repo.type_resume_delete(&user.id, "deck_r").await?);
+        assert!(repo.type_resume_get(&user.id, "deck_r").await?.is_none());
+        assert!(!repo.type_resume_delete(&user.id, "deck_r").await?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_upsert_keeps_newer_checkpoint() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-newest-1",
+                name: "Newest Resume",
+                email: "newest-resume@example.com",
+                avatar: None,
+            })
+            .await?;
+        let older: DateTime<Utc> = Utc::now() - Duration::hours(1);
+        let now = Utc::now();
+        let newer: DateTime<Utc> = Utc::now() + Duration::hours(1);
+        let make = |id: &str, card: &str, at: DateTime<Utc>| TypeResume {
+            deck_id: "deck_newest".into(),
+            deck_name: None,
+            mode: "word".into(),
+            card_id: card.into(),
+            target: "hello".into(),
+            char_index: 1,
+            correct_chars: 1,
+            wrong_chars: 0,
+            typed_states: vec![TypedCharState {
+                state: "correct".into(),
+                input_char: Some("h".into()),
+            }],
+            updated_at: at,
+        };
+
+        // newest first
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_new", newer)).await?;
+        // an older checkpoint must NOT overwrite the newer one
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_stale", older)).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_newest").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_new");
+
+        // a newer checkpoint DOES overwrite
+        let even_newer: DateTime<Utc> = Utc::now() + Duration::hours(2);
+        repo.type_resume_upsert(&user.id, &make("resume_id", "card_fresh", even_newer)).await?;
+        let loaded = repo.type_resume_get(&user.id, "deck_newest").await?.unwrap();
+        assert_eq!(loaded.card_id, "card_fresh");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_resume_is_isolated_per_user_and_deck() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let first = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-iso-1",
+                name: "Resume One",
+                email: "resume-one@example.com",
+                avatar: None,
+            })
+            .await?;
+        let second = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-resume-iso-2",
+                name: "Resume Two",
+                email: "resume-two@example.com",
+                avatar: None,
+            })
+            .await?;
+        let resume = |deck_id: &str| TypeResume {
+            deck_id: deck_id.into(),
+            deck_name: None,
+            mode: "word".into(),
+            card_id: "card_x".into(),
+            target: "hello".into(),
+            char_index: 1,
+            correct_chars: 1,
+            wrong_chars: 0,
+            typed_states: vec![TypedCharState {
+                state: "correct".into(),
+                input_char: Some("h".into()),
+            }],
+            updated_at: Utc::now(),
+        };
+        repo.type_resume_upsert(&first.id, &resume("deck_a")).await?;
+        repo.type_resume_upsert(&first.id, &resume("deck_b")).await?;
+        repo.type_resume_upsert(&second.id, &resume("deck_a")).await?;
+
+        assert!(repo.type_resume_get(&first.id, "deck_a").await?.is_some());
+        assert!(repo.type_resume_get(&first.id, "deck_b").await?.is_some());
+        assert!(repo.type_resume_get(&first.id, "deck_c").await?.is_none());
+        assert!(repo.type_resume_get(&second.id, "deck_a").await?.is_some());
+        assert!(repo.type_resume_get(&second.id, "deck_b").await?.is_none());
         Ok(())
     }
 }

@@ -77,13 +77,91 @@ pub async fn google_callback(
     State(state): State<AppState>,
     Query(params): Query<GoogleCallbackQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let (_, user_info) = exchange_google_code(
+        &state.google_client_id,
+        &state.google_client_secret,
+        &state.google_redirect_url,
+        &params.code,
+    )
+    .await?;
+
+    let user = find_or_create_user(
+        &state,
+        "google",
+        &user_info.sub,
+        &user_info.name,
+        &user_info.email,
+        user_info.picture.as_deref(),
+    )
+    .await?;
+
+    let token = generate_jwt(&state, &user)?;
+
+    Ok(success(AuthResponse {
+        token,
+        user: user.into(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GoogleMobileLoginRequest {
+    pub code: String,
+}
+
+/// Exchange a Google auth code obtained on mobile (expo-auth-session) using the
+/// mobile OAuth client config. Requires GOOGLE_MOBILE_CLIENT_ID / _SECRET /
+/// _REDIRECT_URL to be configured.
+pub async fn google_mobile_login(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<GoogleMobileLoginRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if state.google_mobile_client_id.is_empty()
+        || state.google_mobile_client_secret.is_empty()
+        || state.google_mobile_redirect_url.is_empty()
+    {
+        return Err(AppError::BadRequest(
+            "Google mobile OAuth is not configured on the server".into(),
+        ));
+    }
+    let (_, user_info) = exchange_google_code(
+        &state.google_mobile_client_id,
+        &state.google_mobile_client_secret,
+        &state.google_mobile_redirect_url,
+        &req.code,
+    )
+    .await?;
+
+    let user = find_or_create_user(
+        &state,
+        "google",
+        &user_info.sub,
+        &user_info.name,
+        &user_info.email,
+        user_info.picture.as_deref(),
+    )
+    .await?;
+
+    let token = generate_jwt(&state, &user)?;
+
+    Ok(success(AuthResponse {
+        token,
+        user: user.into(),
+    }))
+}
+
+async fn exchange_google_code(
+    client_id: &str,
+    client_secret: &str,
+    redirect_uri: &str,
+    code: &str,
+) -> Result<(String, GoogleUserInfo), AppError> {
     let token_response = reqwest::Client::new()
         .post("https://oauth2.googleapis.com/token")
         .form(&[
-            ("code", params.code.as_str()),
-            ("client_id", state.google_client_id.as_str()),
-            ("client_secret", state.google_client_secret.as_str()),
-            ("redirect_uri", state.google_redirect_url.as_str()),
+            ("code", code),
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+            ("redirect_uri", redirect_uri),
             ("grant_type", "authorization_code"),
         ])
         .send()
@@ -113,22 +191,7 @@ pub async fn google_callback(
         .await
         .map_err(|e| AppError::Internal(format!("Failed to parse user info: {}", e)))?;
 
-    let user = find_or_create_user(
-        &state,
-        "google",
-        &user_info.sub,
-        &user_info.name,
-        &user_info.email,
-        user_info.picture.as_deref(),
-    )
-    .await?;
-
-    let token = generate_jwt(&state, &user)?;
-
-    Ok(success(AuthResponse {
-        token,
-        user: user.into(),
-    }))
+    Ok((access_token.to_string(), user_info))
 }
 
 // ==================== Kimi OAuth (Device Flow) ====================

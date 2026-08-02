@@ -5,13 +5,14 @@ use uuid::Uuid;
 use crate::middleware::error::AppError;
 use crate::models::{
     Card, CardExample, CardExampleInput, CardProgress, CreateCardRequest, CreateDeckRequest,
-    CreateReviewLogRequest, Deck, ReviewLog, StudyCard, UpdateCardRequest, UpdateDeckRequest,
-    UpsertCardProgressRequest, SYSTEM_OWNER_ID,
+    CreateReviewLogRequest, DailyTrendPoint, Deck, ReviewLog, StudyCard, StudyQueue,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, SYSTEM_OWNER_ID,
 };
 use crate::repositories::Repository;
 
 const VALID_RATINGS: &[&str] = &["again", "hard", "good", "easy"];
 const VALID_SRS_STATUSES: &[&str] = &["new", "learning", "review", "relearning"];
+const STUDY_QUEUE_LIMIT: i64 = 50;
 
 #[derive(Clone)]
 pub struct VocabularyService {
@@ -153,6 +154,21 @@ impl VocabularyService {
     ) -> Result<Vec<StudyCard>, AppError> {
         self.require_readable_deck(user_id, deck_id).await?;
         Ok(self.repository.list_study_cards(user_id, deck_id).await?)
+    }
+
+    pub async fn study_queue(&self, user_id: &str) -> Result<StudyQueue, AppError> {
+        Ok(self
+            .repository
+            .study_queue(user_id, STUDY_QUEUE_LIMIT)
+            .await?)
+    }
+
+    pub async fn daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, AppError> {
+        Ok(self.repository.study_daily_trend(user_id, days).await?)
     }
 
     pub async fn upsert_progress(

@@ -6,9 +6,11 @@ mod admin_excel;
 mod auth;
 mod health;
 mod llm_client;
+mod podcast;
 mod settings;
 mod sync;
 mod system_decks;
+mod typing;
 mod vocabulary;
 mod youtube_captions;
 
@@ -20,9 +22,11 @@ pub use admin::AdminService;
 pub use admin_collect::AdminCollectService;
 pub use auth::AuthService;
 pub use health::HealthService;
+pub use podcast::PodcastService;
 pub use settings::SettingsService;
 pub use sync::SyncService;
 pub use system_decks::SystemDecksService;
+pub use typing::TypeService;
 pub use vocabulary::VocabularyService;
 
 #[derive(Clone)]
@@ -35,6 +39,8 @@ pub struct Services {
     pub system_decks: SystemDecksService,
     pub admin: AdminService,
     pub admin_collect: AdminCollectService,
+    pub podcast: PodcastService,
+    pub typing: TypeService,
 }
 
 impl Services {
@@ -50,6 +56,8 @@ impl Services {
             system_decks: SystemDecksService::new(Arc::clone(&repository)),
             admin,
             admin_collect,
+            podcast: PodcastService::new(Arc::clone(&repository)),
+            typing: TypeService::new(Arc::clone(&repository)),
         }
     }
 }

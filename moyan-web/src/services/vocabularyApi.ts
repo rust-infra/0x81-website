@@ -6,6 +6,11 @@ import type {
   Deck,
   ReviewLog,
   StudyCard,
+  StudyQueue,
+  TypeStats,
+  TypeResume,
+  TypeSyncRequest,
+  TypeSyncResponse,
   UpdateCardRequest,
   UpdateDeckRequest,
   UpsertCardProgressRequest,
@@ -125,6 +130,10 @@ export async function listStudyCards(deckId: string): Promise<StudyCard[]> {
   );
 }
 
+export async function getStudyQueue(): Promise<StudyQueue> {
+  return apiRequest<StudyQueue>("/api/study/queue");
+}
+
 export async function upsertCardProgress(
   cardId: string,
   body: UpsertCardProgressRequest
@@ -145,4 +154,40 @@ export async function createReviewLog(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export async function syncTypePractice(
+  body: TypeSyncRequest
+): Promise<TypeSyncResponse> {
+  return apiRequest<TypeSyncResponse>("/api/type/sync", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getTypeStats(): Promise<TypeStats> {
+  return apiRequest<TypeStats>("/api/type/stats");
+}
+
+export async function putTypeResume(body: TypeResume): Promise<void> {
+  await apiRequest<{ saved: boolean }>("/api/type/resume", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getTypeResume(
+  deckId: string | null
+): Promise<TypeResume | null> {
+  const data = await apiRequest<{ resume: TypeResume | null }>(
+    `/api/type/resume?deck_id=${encodeURIComponent(deckId ?? "")}`
+  );
+  return data.resume;
+}
+
+export async function deleteTypeResume(deckId: string | null): Promise<void> {
+  await apiRequest<{ deleted: boolean }>(
+    `/api/type/resume?deck_id=${encodeURIComponent(deckId ?? "")}`,
+    { method: "DELETE" }
+  );
 }

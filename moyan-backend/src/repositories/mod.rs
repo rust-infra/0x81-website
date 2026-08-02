@@ -15,8 +15,10 @@ use thiserror::Error;
 use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
-    ImportResult, ReviewLog, StudyCard, SyncData, SyncStatusResponse, UpdateCardRequest,
-    UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats,
+    ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
+    DailyTrendPoint, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
+    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
+    UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -101,6 +103,12 @@ pub trait LearningRepository: Send + Sync {
     async fn download(&self, user_id: &str) -> Result<SyncData, RepositoryError>;
     async fn status(&self, user_id: &str) -> Result<SyncStatusResponse, RepositoryError>;
     async fn stats(&self, user_id: &str) -> Result<UserStats, RepositoryError>;
+    /// Daily review counts + accuracy over the last N days (UTC dates).
+    async fn study_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<DailyTrendPoint>, RepositoryError>;
 }
 
 #[async_trait]
@@ -155,6 +163,12 @@ pub trait VocabularyRepository: Send + Sync {
         user_id: &str,
         deck_id: &str,
     ) -> Result<Vec<StudyCard>, RepositoryError>;
+    /// Aggregate study queue across every deck the user can study.
+    async fn study_queue(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<StudyQueue, RepositoryError>;
     async fn upsert_card_progress(
         &self,
         user_id: &str,
@@ -238,6 +252,52 @@ pub trait VocabularyRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait TypeRepository: Send + Sync {
+    /// Insert a session; returns false when the id already exists (idempotent).
+    async fn type_session_insert(
+        &self,
+        user_id: &str,
+        session: &TypeSession,
+    ) -> Result<bool, RepositoryError>;
+    /// Insert entries, skipping ids that already exist; returns number inserted.
+    async fn type_entries_insert(
+        &self,
+        user_id: &str,
+        entries: &[TypeEntry],
+    ) -> Result<usize, RepositoryError>;
+    async fn type_recent_sessions(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<Vec<TypeSession>, RepositoryError>;
+    async fn type_daily_trend(
+        &self,
+        user_id: &str,
+        days: i64,
+    ) -> Result<Vec<TypeDailyTrend>, RepositoryError>;
+    async fn type_mastery_rows(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeMasteryRow>, RepositoryError>;
+    /// Upsert the typing resume checkpoint for (user, deck_id).
+    async fn type_resume_upsert(
+        &self,
+        user_id: &str,
+        resume: &TypeResume,
+    ) -> Result<(), RepositoryError>;
+    async fn type_resume_get(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<Option<TypeResume>, RepositoryError>;
+    async fn type_resume_delete(
+        &self,
+        user_id: &str,
+        deck_id: &str,
+    ) -> Result<bool, RepositoryError>;
+}
+
+#[async_trait]
 pub trait HealthRepository: Send + Sync {
     async fn is_healthy(&self) -> bool;
     fn backend_name(&self) -> &'static str;
@@ -248,6 +308,7 @@ pub trait Repository:
     + LearningRepository
     + SettingsRepository
     + VocabularyRepository
+    + TypeRepository
     + HealthRepository
 {
 }
@@ -257,6 +318,7 @@ impl<T> Repository for T where
         + LearningRepository
         + SettingsRepository
         + VocabularyRepository
+        + TypeRepository
         + HealthRepository
 {
 }

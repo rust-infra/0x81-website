@@ -41,6 +41,10 @@ pub fn routes() -> Router<AppState> {
             get(admin::get_llm_settings).put(admin::update_llm_settings),
         )
         .route(
+            "/settings/podcast",
+            get(admin::get_podcast_config).put(admin::update_podcast_config),
+        )
+        .route(
             "/collect/youtube/captions",
             axum::routing::post(admin::collect_youtube_captions),
         )

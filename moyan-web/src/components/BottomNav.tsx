@@ -14,7 +14,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40">
       <div
         className="rounded-full px-6 py-3 flex items-center gap-8"
         style={{

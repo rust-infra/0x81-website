@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createDeck, listDecks } from "./vocabularyApi";
+import {
+  createDeck,
+  deleteTypeResume,
+  getTypeResume,
+  getStudyQueue,
+  getTypeStats,
+  listDecks,
+  putTypeResume,
+  syncTypePractice,
+} from "./vocabularyApi";
 
 class MemoryStorage {
   private data = new Map<string, string>();
@@ -72,6 +81,135 @@ describe("vocabularyApi", () => {
         method: "POST",
         body: JSON.stringify({ name: "Mine", description: "d" }),
       })
+    );
+  });
+
+  it("fetches the aggregated study queue", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          cards: [],
+          due_count: 2,
+          new_count: 5,
+          total_cards: 7,
+          today_reviewed: 1,
+        },
+      }),
+    });
+
+    const queue = await getStudyQueue();
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/study\/queue$/),
+      expect.anything()
+    );
+    expect(queue.due_count).toBe(2);
+    expect(queue.total_cards).toBe(7);
+  });
+
+  it("syncs type practice with JSON body", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { saved_session: true, saved_entries: 1 },
+      }),
+    });
+
+    const result = await syncTypePractice({
+      session: {
+        id: "ts_1",
+        deck_id: null,
+        deck_name: "全部词汇",
+        mode: "word",
+        total_cards: 1,
+        completed: 1,
+        skipped: 0,
+        egregious_count: 0,
+        avg_accuracy: 1,
+        avg_wpm: 20,
+        duration_ms: 10_000,
+        created_at: "2026-08-01T08:00:00Z",
+      },
+      entries: [],
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/sync$/),
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(result.saved_entries).toBe(1);
+  });
+
+  it("fetches type stats", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { recent_sessions: [], daily_trend: [], mastery: [] },
+      }),
+    });
+
+    const stats = await getTypeStats();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/stats$/),
+      expect.anything()
+    );
+    expect(stats.mastery).toEqual([]);
+  });
+
+  it("puts a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { saved: true } }),
+    });
+
+    await putTypeResume({
+      deck_id: "deck_a",
+      deck_name: null,
+      mode: "word",
+      card_id: "card_a",
+      target: "hello",
+      char_index: 3,
+      correct_chars: 2,
+      wrong_chars: 1,
+      typed_states: [{ state: "correct", input_char: "h" }],
+      updated_at: "2026-08-01T08:30:00Z",
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume$/),
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
+  it("fetches a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { resume: { card_id: "card_a", char_index: 3 } },
+      }),
+    });
+
+    const resume = await getTypeResume("deck_a");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume\?deck_id=deck_a$/),
+      expect.anything()
+    );
+    expect(resume?.char_index).toBe(3);
+  });
+
+  it("deletes a type resume checkpoint", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { deleted: true } }),
+    });
+
+    await deleteTypeResume("deck_a");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/type\/resume\?deck_id=deck_a$/),
+      expect.objectContaining({ method: "DELETE" })
     );
   });
 });
