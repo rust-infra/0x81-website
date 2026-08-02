@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::models::AppConfigResponse;
+use crate::models::PodcastConfig;
 use serde_json::json;
 
 use crate::middleware::error::{success, AppError, AppState};
@@ -193,18 +193,20 @@ pub struct PodcastConfigUpdate {
 pub async fn get_podcast_config(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    Ok(success(state.services.podcast.config().await?))
+    let cfg = state.services.podcast.config().await?;
+    Ok(success(cfg.podcast))
 }
 
 pub async fn update_podcast_config(
     State(state): State<AppState>,
     axum::Json(req): axum::Json<PodcastConfigUpdate>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let cfg: AppConfigResponse = state
+    let cfg = state
         .services
         .podcast
         .set_config(req.enabled, req.youtube_api_key.as_deref().unwrap_or(""))
         .await?;
+    let cfg: PodcastConfig = cfg.podcast;
     Ok(success(cfg))
 }
 

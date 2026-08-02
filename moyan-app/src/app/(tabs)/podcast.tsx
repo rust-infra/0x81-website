@@ -42,12 +42,14 @@ export default function PodcastScreen() {
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [disabled, setDisabled] = useState(false);
   const apiKeyRef = useRef('');
 
   useEffect(() => {
     getAppConfig()
       .then((cfg) => {
         apiKeyRef.current = cfg.podcast?.youtube_api_key || '';
+        setDisabled(cfg.podcast ? !cfg.podcast.enabled : false);
       })
       .catch(() => {});
   }, []);
@@ -135,7 +137,11 @@ export default function PodcastScreen() {
 
   return (
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
-      {mode === 'home' ? (
+      {disabled ? (
+        <View style={styles.center}>
+          <Text style={[styles.empty, { color: c.inkMuted }]}>{t('podcastDisabled')}</Text>
+        </View>
+      ) : mode === 'home' ? (
         <>
           <View style={screen.header}>
             <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
@@ -158,7 +164,7 @@ export default function PodcastScreen() {
               />
             </View>
             <Pressable style={[styles.searchBtn, { backgroundColor: c.buttonBg }]} onPress={search}>
-              <Text style={{ color: c.buttonText }}>搜索</Text>
+              <Text style={{ color: c.buttonText }}>{t('search')}</Text>
             </Pressable>
           </View>
           {error ? (
@@ -172,7 +178,7 @@ export default function PodcastScreen() {
             renderItem={({ item }) => renderCard(item, item.url)}
             ListEmptyComponent={
               <Text style={[styles.empty, { color: c.inkMuted }]}>
-                搜索后点击播放，这里会保留最近记录
+                {t('podcastRecentEmpty')}
               </Text>
             }
           />
@@ -204,7 +210,9 @@ export default function PodcastScreen() {
                 renderCard(item, `https://www.youtube.com/watch?v=${item.id}`)
               }
               ListEmptyComponent={
-                <Text style={[styles.empty, { color: c.inkMuted }]}>暂无结果</Text>
+                <Text style={[styles.empty, { color: c.inkMuted }]}>
+                  {t('podcastNoResults')}
+                </Text>
               }
             />
           )}

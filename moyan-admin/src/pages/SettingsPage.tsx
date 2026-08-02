@@ -1,10 +1,23 @@
 import {
   getLlmSettings,
+  getPodcastConfig,
   updateLlmSettings,
+  updatePodcastConfig,
   type LlmSettings,
+  type PodcastConfig,
   type UpdateLlmSettingsInput,
 } from "@/api/admin";
-import { Button, Card, Form, Input, InputNumber, Space, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Space,
+  Switch,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
@@ -12,6 +25,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<LlmSettings | null>(null);
+  const [podcast, setPodcast] = useState<PodcastConfig | null>(null);
+  const [podcastEnabled, setPodcastEnabled] = useState(false);
+  const [podcastKey, setPodcastKey] = useState("");
+  const [podcastSaving, setPodcastSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -33,7 +50,36 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void load();
+    void loadPodcast();
   }, []);
+
+  const loadPodcast = async () => {
+    try {
+      const data = await getPodcastConfig();
+      setPodcast(data);
+      setPodcastEnabled(data.enabled);
+      setPodcastKey("");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "加载播客配置失败");
+    }
+  };
+
+  const handleSavePodcast = async () => {
+    try {
+      setPodcastSaving(true);
+      const data = await updatePodcastConfig({
+        enabled: podcastEnabled === true,
+        ...(podcastKey.trim() ? { youtube_api_key: podcastKey.trim() } : {}),
+      });
+      setPodcast(data);
+      setPodcastKey("");
+      message.success("播客配置已保存");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setPodcastSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -76,6 +122,46 @@ export default function SettingsPage() {
   return (
     <div>
       <Typography.Title level={3}>设置</Typography.Title>
+      <Card
+        title="播客"
+        style={{ maxWidth: 640, marginBottom: 16 }}
+        extra={
+          <Button
+            type="primary"
+            loading={podcastSaving}
+            onClick={() => void handleSavePodcast()}
+          >
+            保存播客配置
+          </Button>
+        }
+      >
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Space align="center">
+            <span>移动端显示播客入口</span>
+            <Switch
+              checked={podcastEnabled}
+              onChange={setPodcastEnabled}
+              checkedChildren="开"
+              unCheckedChildren="关"
+            />
+          </Space>
+          <Input.Password
+            placeholder={
+              podcast?.youtube_api_key
+                ? "已配置（留空保持不变）"
+                : "输入 YouTube Data API Key"
+            }
+            value={podcastKey}
+            onChange={(e) => setPodcastKey(e.target.value)}
+            autoComplete="new-password"
+          />
+          {podcast?.enabled && !podcast.youtube_api_key && (
+            <Typography.Text type="warning">
+              已开启但未配置 Key，移动端搜索将不可用
+            </Typography.Text>
+          )}
+        </Space>
+      </Card>
       <Typography.Paragraph type="secondary">
         配置 OpenAI 兼容接口（base_url / api_key / model），供数据采集页调用。
       </Typography.Paragraph>
