@@ -176,6 +176,8 @@ async function speakWithNative(
 }
 
 let player: import('expo-audio').AudioPlayer | null = null;
+let currentWebAudio: HTMLAudioElement | null = null;
+let speakToken = 0;
 
 async function playFile(uri: string): Promise<void> {
   const { createAudioPlayer, setAudioModeAsync } = await import('expo-audio');
@@ -224,15 +226,26 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function playBytes(
   bytes: Uint8Array,
   cacheKey: string,
-  cacheEnabled: boolean
+  cacheEnabled: boolean,
+  token: number
 ): Promise<boolean> {
+  if (token !== speakToken) return false;
   if (Platform.OS === 'web') {
     try {
+      currentWebAudio?.pause();
+      currentWebAudio = null;
       const audio = new Audio(`data:audio/mpeg;base64,${bytesToBase64(bytes)}`);
       audio.volume = 1;
+      currentWebAudio = audio;
       await new Promise<void>((resolve, reject) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => reject(new Error('audio playback error'));
+        audio.onended = () => {
+          if (currentWebAudio === audio) currentWebAudio = null;
+          resolve();
+        };
+        audio.onerror = () => {
+          if (currentWebAudio === audio) currentWebAudio = null;
+          reject(new Error('audio playback error'));
+        };
         audio.play().catch(reject);
       });
       return true;
@@ -241,11 +254,13 @@ async function playBytes(
     }
   }
   try {
+    if (token !== speakToken) return false;
     const uri = await cacheFile(
       cacheKey,
       bytes.buffer as ArrayBuffer,
       cacheEnabled
     );
+    if (token !== speakToken) return false;
     await playFile(uri);
     return true;
   } catch {
@@ -256,7 +271,8 @@ async function playBytes(
 async function speakWithProvider(
   text: string,
   settings: SpeechSettings,
-  lang: 'en' | 'zh'
+  lang: 'en' | 'zh',
+  token: number
 ): Promise<boolean> {
   switch (settings.provider) {
     case 'google': {
@@ -284,7 +300,7 @@ async function speakWithProvider(
         for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
-        return await playBytes(bytes, `google-${voice}-${text}`, !!settings.cacheEnabled);
+        return await playBytes(bytes, `google-${voice}-${text}`, !!settings.cacheEnabled, token);
       } catch {
         return false;
       }
@@ -313,7 +329,7 @@ async function speakWithProvider(
         );
         if (!res.ok) return false;
         const bytes = new Uint8Array(await res.arrayBuffer());
-        return await playBytes(bytes, `eleven-${voiceId}-${text}`, !!settings.cacheEnabled);
+        return await playBytes(bytes, `eleven-${voiceId}-${text}`, !!settings.cacheEnabled, token);
       } catch {
         return false;
       }
@@ -338,7 +354,7 @@ async function speakWithProvider(
         );
         if (!res.ok) return false;
         const bytes = new Uint8Array(await res.arrayBuffer());
-        return await playBytes(bytes, `aliyun-${settings.aliyunVoice || 'Cherry'}-${text}`, !!settings.cacheEnabled);
+        return await playBytes(bytes, `aliyun-${settings.aliyunVoice || 'Cherry'}-${text}`, !!settings.cacheEnabled, token);
       } catch {
         return false;
       }
@@ -355,15 +371,17 @@ export async function speak(
   if (!text.trim()) return;
   const settings = await getSpeechSettings();
   const rate = opts?.rate ?? settings.speech_speed ?? 0.9;
+  const token = ++speakToken;
   const segments = splitByLanguage(text);
   for (const seg of segments) {
     const segLang = seg.lang;
     let played = false;
     try {
-      played = await speakWithProvider(seg.text, settings, segLang);
+      played = await speakWithProvider(seg.text, settings, segLang, token);
     } catch {
       played = false;
     }
+    if (token !== speakToken) return;
     if (!played) {
       const voiceId =
         settings.provider === 'webspeech'
@@ -383,9 +401,12 @@ export async function speak(
 }
 
 export async function stopSpeaking(): Promise<void> {
+  speakToken += 1;
   if (Platform.OS === 'web') {
     const w = window as unknown as { speechSynthesis?: { cancel: () => void } };
     w.speechSynthesis?.cancel();
+    currentWebAudio?.pause();
+    currentWebAudio = null;
   }
   Speech.stop();
   if (player) {
