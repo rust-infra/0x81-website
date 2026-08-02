@@ -1,10 +1,4 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  createAudioPlayer,
-  setAudioModeAsync,
-  type AudioPlayer,
-  type AudioStatus,
-} from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,8 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getApiBase } from '../../lib/config';
-import { resolvePodcast } from '../../lib/api';
+import { resolvePodcast, translatePodcast } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
+import { podcastPlayer } from '../../lib/podcast-player';
 import { saveRecent } from '../../lib/podcast';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
@@ -42,7 +37,9 @@ export default function PodcastPlayerScreen() {
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [activeIdx, setActiveIdx] = useState(0);
-  const playerRef = useRef<AudioPlayer | null>(null);
+  const [translations, setTranslations] = useState<string[]>([]);
+  const [showTrans, setShowTrans] = useState(true);
+  const [resumeMs, setResumeMs] = useState(0);
   const listRef = useRef<FlatList<TimedCaption>>(null);
 
   useEffect(() => {
@@ -65,33 +62,24 @@ export default function PodcastPlayerScreen() {
           url: params.url!,
           at: Date.now(),
         });
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          shouldPlayInBackground: true,
-          interruptionMode: 'doNotMix',
+        const startMs = await podcastPlayer.ensure({
+          videoId: resolved.video_id,
+          url: `${getApiBase()}${resolved.audio_url}`,
+          youtubeUrl: params.url!,
+          title: resolved.title,
+          channel: resolved.channel || params.channel || '',
+          captions: resolved.captions,
         });
-        const player = createAudioPlayer(
-          `${getApiBase()}${resolved.audio_url}`
-        );
-        playerRef.current = player;
-        player.addListener('playbackStatusUpdate', (status: AudioStatus) => {
-          if (typeof status.currentTime === 'number') {
-            setCurrentMs(status.currentTime * 1000);
-          }
-          if (typeof status.duration === 'number') {
-            setDurationMs(status.duration * 1000);
-          }
-          setPlaying(!!status.playing);
-        });
-        try {
-          player.setActiveForLockScreen(true, {
-            title: resolved.title,
-            artist: resolved.channel || 'YouTube',
+        if (!cancelled) setResumeMs(startMs);
+        translatePodcast(resolved.video_id)
+          .then((tr) => {
+            const list = tr?.translations || [];
+            if (!cancelled) setTranslations(list);
+            podcastPlayer.setTranslations(list);
+          })
+          .catch(() => {
+            // translations are optional; fall back to English only
           });
-        } catch {
-          // lock screen controls unavailable on this platform
-        }
-        player.play();
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
@@ -100,15 +88,16 @@ export default function PodcastPlayerScreen() {
         if (!cancelled) setLoading(false);
       }
     })();
+    const unsub = podcastPlayer.subscribe(() => {
+      const s = podcastPlayer.getSnapshot();
+      setPlaying(s.playing);
+      setCurrentMs(s.currentMs);
+      setDurationMs(s.durationMs);
+      setSpeed(s.speed);
+    });
     return () => {
       cancelled = true;
-      playerRef.current?.pause();
-      try {
-        playerRef.current?.release();
-      } catch {
-        // ignore
-      }
-      playerRef.current = null;
+      unsub();
     };
   }, [params.url, t]);
 
@@ -128,23 +117,19 @@ export default function PodcastPlayerScreen() {
   }, [currentMs, data, activeIdx]);
 
   const togglePlay = () => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (playing) player.pause();
-    else player.play();
+    podcastPlayer.togglePlay();
   };
 
   const jumpTo = (idx: number) => {
     const cap = data?.captions[idx];
     if (!cap) return;
     setActiveIdx(idx);
-    playerRef.current?.seekTo(Math.max(cap.start_ms / 1000, 0));
+    podcastPlayer.seekTo(cap.start_ms);
   };
 
   const cycleSpeed = () => {
     const next = speed === 1 ? 1.25 : speed === 1.25 ? 1.5 : speed === 1.5 ? 2 : 1;
-    setSpeed(next);
-    playerRef.current?.setPlaybackRate(next);
+    podcastPlayer.setSpeed(next);
   };
 
   const fmt = (ms: number) => {
@@ -190,9 +175,22 @@ export default function PodcastPlayerScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Text style={{ color: c.inkMuted, fontSize: 18 }}>‹ {t('back')}</Text>
         </Pressable>
-        <Pressable style={[styles.speedBtn, { borderColor: c.border }]} onPress={cycleSpeed}>
-          <Text style={{ color: c.inkLight, fontSize: 12 }}>{speed.toFixed(2).replace(/0$/, '')}×</Text>
-        </Pressable>
+        <View style={styles.topActions}>
+          <Pressable
+            style={[
+              styles.speedBtn,
+              { borderColor: showTrans ? c.accent : c.border },
+            ]}
+            onPress={() => setShowTrans((v) => !v)}
+          >
+            <Text style={{ color: showTrans ? c.accent : c.inkLight, fontSize: 12 }}>
+              {t('podcastTranslate')}
+            </Text>
+          </Pressable>
+          <Pressable style={[styles.speedBtn, { borderColor: c.border }]} onPress={cycleSpeed}>
+            <Text style={{ color: c.inkLight, fontSize: 12 }}>{speed.toFixed(2).replace(/0$/, '')}×</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.titleBlock}>
@@ -201,6 +199,11 @@ export default function PodcastPlayerScreen() {
         </Text>
         {data.channel ? (
           <Text style={[styles.channel, { color: c.inkMuted }]}>{data.channel}</Text>
+        ) : null}
+        {resumeMs > 0 ? (
+          <Text style={[styles.resumeBadge, { color: c.accent }]}>
+            {t('podcastResumed', { time: fmt(resumeMs) })}
+          </Text>
         ) : null}
         <View style={[styles.bgBadge, { backgroundColor: `${c.accent}18` }]}>
           <Text style={{ color: c.accent, fontSize: 11 }}>{t('podcastBackground')}</Text>
@@ -261,15 +264,22 @@ export default function PodcastPlayerScreen() {
               onPress={() => jumpTo(index)}
             >
               <Text style={[styles.subTime, { color: c.inkMuted }]}>{fmt(item.start_ms)}</Text>
-              <Text
-                style={[
-                  styles.subText,
-                  { color: active ? c.ink : c.inkLight },
-                  active && { fontWeight: '600' },
-                ]}
-              >
-                {item.text}
-              </Text>
+              <View style={styles.subBody}>
+                <Text
+                  style={[
+                    styles.subText,
+                    { color: active ? c.ink : c.inkLight },
+                    active && { fontWeight: '600' },
+                  ]}
+                >
+                  {item.text}
+                </Text>
+                {showTrans && translations[index] ? (
+                  <Text style={[styles.subTrans, { color: c.inkMuted }]}>
+                    {translations[index]}
+                  </Text>
+                ) : null}
+              </View>
             </Pressable>
           );
         }}
@@ -290,9 +300,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   speedBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  topActions: { flexDirection: 'row', gap: 8 },
   titleBlock: { paddingHorizontal: 20, paddingTop: 10 },
   title: { fontSize: 19, fontWeight: '700', lineHeight: 26 },
   channel: { fontSize: 12, marginTop: 4 },
+  resumeBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 11,
+    marginTop: 8,
+  },
   bgBadge: {
     alignSelf: 'flex-start',
     borderRadius: 999,
@@ -328,5 +344,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   subTime: { fontSize: 11, marginTop: 2, fontVariant: ['tabular-nums'] },
-  subText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  subBody: { flex: 1 },
+  subText: { fontSize: 14, lineHeight: 20 },
+  subTrans: { fontSize: 12, lineHeight: 17, marginTop: 2 },
 });

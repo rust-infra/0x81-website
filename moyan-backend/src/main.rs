@@ -93,6 +93,10 @@ mod tests {
     use crate::repositories::SqliteRepositories;
     use crate::services::Services;
 
+    /// Serializes tests that mutate process-global env vars (cache dir, stub
+    /// flags) so parallel runs cannot clobber each other.
+    static TEST_ENV_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[test]
     fn default_allowed_origins_include_local_frontend_hosts() {
         unsafe {
@@ -457,6 +461,7 @@ mod tests {
 
     #[tokio::test]
     async fn podcast_resolve_caches_audio_and_captions() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
         let cache = std::env::temp_dir().join(format!(
             "moyan-podcast-test-{}",
             uuid::Uuid::new_v4()
@@ -510,6 +515,74 @@ mod tests {
         assert_eq!(audio.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(audio.into_body(), usize::MAX).await?;
         assert_eq!(bytes.as_ref(), b"stub-audio");
+
+        unsafe {
+            std::env::remove_var("PODCAST_CACHE_DIR");
+            std::env::remove_var("MOYAN_COLLECT_STUB");
+        }
+        let _ = std::fs::remove_dir_all(&cache);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn podcast_translate_returns_translations_for_cached_video() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let cache = std::env::temp_dir().join(format!(
+            "moyan-podcast-translate-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        unsafe {
+            std::env::set_var("PODCAST_CACHE_DIR", &cache);
+            std::env::set_var("MOYAN_COLLECT_STUB", "1");
+        }
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let payload = serde_json::json!({
+            "url": "https://www.youtube.com/watch?v=LqG1q5NpOBE"
+        });
+        let resolve = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/podcast/resolve")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await?;
+        assert_eq!(resolve.status(), StatusCode::OK);
+
+        let translate = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/podcast/translate/LqG1q5NpOBE")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(translate.status(), StatusCode::OK);
+        let body = read_json(translate).await?;
+        let translations = body["data"]["translations"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("translations should be an array"))?;
+        assert!(
+            translations.len() >= 3,
+            "stub translations should cover every caption line"
+        );
+        assert!(translations.iter().all(|t| t.as_str().unwrap_or("").len() > 0));
+
+        // cached translation request still succeeds
+        let second = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/podcast/translate/LqG1q5NpOBE")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(second.status(), StatusCode::OK);
 
         unsafe {
             std::env::remove_var("PODCAST_CACHE_DIR");

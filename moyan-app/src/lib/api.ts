@@ -12,6 +12,7 @@ import type {
   DailyTrendPoint,
   Deck,
   PodcastResolved,
+  PodcastTranslate,
   ReviewLog,
   StudyCard,
   StudyQueue,
@@ -207,6 +208,14 @@ export async function getAppConfig(): Promise<AppConfig> {
 
 export async function resolvePodcast(url: string): Promise<PodcastResolved> {
   return publicPost<PodcastResolved>('/api/podcast/resolve', { url });
+}
+
+export async function translatePodcast(
+  videoId: string
+): Promise<PodcastTranslate> {
+  return publicGet<PodcastTranslate>(
+    `/api/podcast/translate/${encodeURIComponent(videoId)}`
+  );
 }
 
 // ==================== Kimi Device Flow 登录 ====================

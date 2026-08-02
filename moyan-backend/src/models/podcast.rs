@@ -19,6 +19,14 @@ pub struct PodcastResolveResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PodcastTranslateResponse {
+    pub video_id: String,
+    pub translations: Vec<String>,
+    #[serde(default)]
+    pub caption_hash: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodcastConfig {
     pub enabled: bool,
     pub youtube_api_key: String,

@@ -36,3 +36,17 @@ pub async fn audio(
         .map_err(|e| AppError::Internal(format!("read audio: {e}")))?;
     Ok(([(header::CONTENT_TYPE, "audio/mpeg")], bytes).into_response())
 }
+
+pub async fn translate(
+    State(state): State<AppState>,
+    Path(video_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.admin_collect.llm_settings().await?;
+    Ok(success(
+        state
+            .services
+            .podcast
+            .translate(&video_id, &settings)
+            .await?,
+    ))
+}

@@ -10,4 +10,5 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/resolve", post(podcast::resolve))
         .route("/audio/{video_id}", get(podcast::audio))
+        .route("/translate/{video_id}", get(podcast::translate))
 }

@@ -516,6 +516,12 @@ impl AdminCollectService {
         }
         Ok(fill_from_env_if_empty(LlmSettingsStored::default()))
     }
+
+    /// Expose the configured LLM settings (admin DB + env fallback) to other
+    /// services such as podcast subtitle translation.
+    pub async fn llm_settings(&self) -> Result<LlmSettingsStored, AppError> {
+        self.load_llm_settings().await
+    }
 }
 
 struct ResumePlan {

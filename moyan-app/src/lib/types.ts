@@ -172,6 +172,11 @@ export interface PodcastResolved {
   captions: TimedCaption[];
 }
 
+export interface PodcastTranslate {
+  video_id: string;
+  translations: string[];
+}
+
 export interface AppConfig {
   podcast: {
     enabled: boolean;
