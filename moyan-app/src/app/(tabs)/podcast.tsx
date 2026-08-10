@@ -321,13 +321,16 @@ export default function PodcastScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   search: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingHorizontal: 20 },
-  searchField: { flex: 1, position: 'relative' },
-  searchIcon: { position: 'absolute', left: 14, top: 14, fontSize: 15, zIndex: 1 },
+  searchField: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  // 🔍 作为普通行内兄弟节点渲染（不再 absolute + zIndex），
+  // 避免被后面带不透明背景的 TextInput 盖住而"看不见"。
+  searchIcon: { fontSize: 15, marginLeft: 14, marginRight: 8 },
   input: {
+    flex: 1,
     borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 12,
-    paddingLeft: 38,
+    paddingLeft: 14,
     paddingRight: 14,
     fontSize: 14,
   },
