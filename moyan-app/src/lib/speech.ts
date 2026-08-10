@@ -130,6 +130,24 @@ function ensureWebVoices(): Promise<void> {
   return webVoicesReady;
 }
 
+let nativeVoiceIds: Set<string> | null = null;
+
+/**
+ * 原生平台可用音色 identifier 集合（首次调用后缓存）。
+ * iOS 的 expo-speech 对不存在的 voice identifier 会直接抛 InvalidVoiceException，
+ * Android 则静默忽略；因此统一先校验，音色无效时丢弃、交给 language 选默认音色。
+ */
+async function getNativeVoiceIds(): Promise<Set<string>> {
+  if (nativeVoiceIds) return nativeVoiceIds;
+  try {
+    const voices = await Speech.getAvailableVoicesAsync();
+    nativeVoiceIds = new Set(voices.map((v) => v.identifier));
+  } catch {
+    nativeVoiceIds = new Set();
+  }
+  return nativeVoiceIds;
+}
+
 async function speakWithNative(
   text: string,
   rate: number,
@@ -167,11 +185,18 @@ async function speakWithNative(
     }
     return;
   }
+  // 校验音色：iOS 上无效 identifier 会让 expo-speech 抛异常导致完全无声，
+  // 这里只传入真实存在的系统音色，否则回退到 language 默认音色。
+  let resolvedVoice = voiceId;
+  if (resolvedVoice) {
+    const ids = await getNativeVoiceIds();
+    if (!ids.has(resolvedVoice)) resolvedVoice = undefined;
+  }
   Speech.stop();
   Speech.speak(text, {
     language: language || (detectLanguage(text) === 'zh' ? 'zh-CN' : 'en-US'),
     rate,
-    voice: voiceId || undefined,
+    voice: resolvedVoice,
   });
 }
 
@@ -389,12 +414,16 @@ export async function speak(
             ? settings.speech_zh_voice
             : settings.speech_voice
           : undefined;
-      await speakWithNative(
-        seg.text,
-        rate,
-        opts?.language || (segLang === 'zh' ? 'zh-CN' : 'en-US'),
-        voiceId
-      );
+      try {
+        await speakWithNative(
+          seg.text,
+          rate,
+          opts?.language || (segLang === 'zh' ? 'zh-CN' : 'en-US'),
+          voiceId
+        );
+      } catch {
+        // 原生 TTS 失败时静默跳过，不中断后续 segment
+      }
     }
     await new Promise((r) => setTimeout(r, 250));
   }
