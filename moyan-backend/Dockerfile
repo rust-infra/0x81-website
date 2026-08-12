@@ -41,6 +41,7 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g; s/security.debian.org/mirrors
     ca-certificates \
     libsqlite3-0 \
     wget \
+    ffmpeg \
     python3 \
     python3-pip \
     && pip3 install --break-system-packages --no-cache-dir yt-dlp \

@@ -204,6 +204,30 @@ let player: import('expo-audio').AudioPlayer | null = null;
 let currentWebAudio: HTMLAudioElement | null = null;
 let speakToken = 0;
 
+// iOS 上 expo-speech 不配置 AVAudioSession：app 未设置时默认是 soloAmbient
+// 类别，朗读会跟随实体静音拨片（静音时无声）。这里把 audio session 切到
+// playback 类别（playsInSilentMode: true），与播客播放器行为一致。
+let audioModeReady: Promise<void> | null = null;
+
+function ensurePlaybackAudioMode(): Promise<void> {
+  if (Platform.OS === 'web') return Promise.resolve();
+  if (!audioModeReady) {
+    audioModeReady = (async () => {
+      try {
+        const { setAudioModeAsync } = await import('expo-audio');
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          interruptionMode: 'doNotMix',
+        });
+      } catch {
+        // audio mode is best-effort
+      }
+    })();
+  }
+  return audioModeReady;
+}
+
 async function playFile(uri: string): Promise<void> {
   const { createAudioPlayer, setAudioModeAsync } = await import('expo-audio');
   await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false });
@@ -394,6 +418,7 @@ export async function speak(
   opts?: { language?: string; rate?: number }
 ): Promise<void> {
   if (!text.trim()) return;
+  await ensurePlaybackAudioMode();
   const settings = await getSpeechSettings();
   const rate = opts?.rate ?? settings.speech_speed ?? 0.9;
   const token = ++speakToken;
