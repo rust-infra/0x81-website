@@ -1,18 +1,16 @@
 :5000 {
-    # 静态文件根目录
     root * /usr/share/caddy/html
-
-    # 启用文件服务器
-    file_server
-
-    # 启用 gzip 压缩
     encode gzip
 
-    # ── API 反向代理到后端 ──────────────────────────────
-    handle_path /api/* {
+    # API 反向代理到后端（保留 /api 前缀，后端路由均挂在 /api 下；
+    # 必须放在 SPA 回退之前，否则 try_files 会把 /api/* 重写为 /index.html）
+    handle /api/* {
         reverse_proxy moyan-backend:4323
     }
 
-    # ── SPA 路由回退 ─────────────────────────────────────
-    try_files {path} /index.html
+    # SPA 路由回退（仅非 /api 路径）
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
 }

@@ -1,9 +1,16 @@
 :5001 {
     root * /usr/share/caddy/html
-    file_server
     encode gzip
+
+    # API 反向代理到后端（必须放在 SPA 回退之前，
+    # 否则 try_files 会把 /api/* 重写为 /index.html）
     handle /api/* {
         reverse_proxy moyan-backend:4323
     }
-    try_files {path} /index.html
+
+    # SPA 路由回退（仅非 /api 路径）
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
 }
