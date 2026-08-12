@@ -33,8 +33,26 @@ services:
       - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
       - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
+      # Local HTTP proxy (e.g. Clash on the host, port 7890) for data collection.
+      # 127.0.0.1 inside the container is the container itself, so we use the
+      # host gateway (host.docker.internal -> 172.24.0.1 for this project).
+      # The host Clash listens ONLY on 127.0.0.1:7890 (no Allow LAN), which
+      # containers cannot reach; socat on the host forwards
+      # 172.24.0.1:17890 -> 127.0.0.1:7890 (see docs, started via setsid/systemd).
+      # MOYAN_YTDLP_PROXY has the highest priority in normalize_proxy(); the
+      # standard vars also cover reqwest clients (Google OAuth, etc.).
+      - MOYAN_YTDLP_PROXY=${MOYAN_YTDLP_PROXY:-http://host.docker.internal:17890}
+      - HTTP_PROXY=${HTTP_PROXY:-http://host.docker.internal:17890}
+      - HTTPS_PROXY=${HTTPS_PROXY:-http://host.docker.internal:17890}
+      - ALL_PROXY=${ALL_PROXY:-http://host.docker.internal:17890}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
+    extra_hosts:
+      # Maps host.docker.internal to the docker bridge gateway (172.17.0.1).
+      - "host.docker.internal:host-gateway"
     volumes:
-      - ./moyan-backend/data:/data
+      # :Z relabels the bind mount to container_file_t so the container can
+      # write the SQLite DB on SELinux-enforcing hosts (SQLITE_CANTOPEN otherwise)
+      - ./moyan-backend/data:/data:Z
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4323/api/health"]
