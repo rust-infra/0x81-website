@@ -891,7 +891,35 @@ impl VocabularyRepository for MongoRepositories {
         user_id: &str,
         deck_id: &str,
     ) -> Result<Vec<StudyCard>, RepositoryError> {
-        let cards = self.list_cards(deck_id).await?;
+        let cards = if deck_id == "all" {
+            // "全部"模式：与日常练习词库一致（系统词库 + 用户启用的 deck）
+            let deck_ids: Vec<String> = self
+                .vocab_decks()
+                .find(doc! {
+                    "$or": [
+                        { "owner_user_id": SYSTEM_OWNER_ID, "is_active": true },
+                        { "owner_user_id": user_id },
+                    ]
+                })
+                .projection(doc! { "id": 1 })
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?
+                .into_iter()
+                .map(|deck| deck.id)
+                .collect();
+            if deck_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.vocab_cards()
+                .find(doc! { "deck_id": { "$in": deck_ids } })
+                .sort(doc! { "created_at": 1, "id": 1 })
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?
+        } else {
+            self.list_cards(deck_id).await?
+        };
         if cards.is_empty() {
             return Ok(Vec::new());
         }
