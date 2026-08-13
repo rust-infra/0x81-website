@@ -12,6 +12,8 @@ import Settings from './pages/Settings';
 import Login from "./pages/Login"
 import NotFound from "./pages/NotFound"
 import TypeTraining from './pages/TypeTraining';
+import Podcast from './pages/Podcast';
+import PodcastPlayer from './pages/PodcastPlayer';
 import { getLanguage, type Language } from './i18n/translations';
 
 export default function App() {
@@ -39,6 +41,8 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/login" element={<Login />} />
               <Route path="/type" element={<TypeTraining />} />
+              <Route path="/podcast" element={<Podcast />} />
+              <Route path="/podcast/player" element={<PodcastPlayer />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
