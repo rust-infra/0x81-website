@@ -68,19 +68,20 @@ export async function initVocabularyDecks(): Promise<void> {
     }
   }
 
-  // 检查是否还有其他旧数据（不在vocabulary.json中的牌组）
-  const hasOtherOldData = existingDecks.some(d => {
-    // 已经被处理过的旧30天和30天词汇不算
-    if (d.name.match(/^第\d+天$/)) return false;
-    if (d.name === '30天词汇') return false;
-    return !vocabDeckNames.has(d.name);
-  });
-
-  if (hasOtherOldData) {
-    // 有外部数据，清空重来
-    await db.decks.clear();
-    await db.cards.clear();
-    await db.reviewLogs.clear();
+  // 2026-08 词库同步：旧版内置词库（13 个中文技术词库）已被线上系统词库
+  // （4 个 YouTube 采集 deck）取代。只移除这批旧种子词库及其卡片，
+  // 保留用户自建词库与复习记录，避免静默清空用户数据。
+  const OLD_SEEDED_DECK_NAMES = new Set([
+    '编程基础词汇', 'Go语言核心', 'Rust语言核心', '数据结构与算法',
+    '系统设计面试', '数据库与缓存', '网络与协议', 'DevOps与云原生',
+    '代码审查与协作', '远程工作沟通', '技术面试表达', '软技能与职业发展',
+    '30天词汇',
+  ]);
+  for (const deck of existingDecks) {
+    if (OLD_SEEDED_DECK_NAMES.has(deck.name) && !vocabDeckNames.has(deck.name)) {
+      await db.cards.where('deckId').equals(deck.id!).delete();
+      await db.decks.delete(deck.id!);
+    }
   }
 
   // 创建不存在的牌组
@@ -104,9 +105,9 @@ export async function initVocabularyDecks(): Promise<void> {
     }
   }
 
-  // 检查是否已有卡片
+  // 检查是否已有卡片（用户自建词库的卡片保留，新种子卡片按 front 去重补充）
   const hasCards = (await db.cards.count()) > 0;
-  if (hasCards && !hasOtherOldData) {
+  if (hasCards) {
     // 只补充新卡片
     const existingFronts = new Set((await db.cards.toArray()).map(c => `${c.deckId}:${c.front}`));
     const newCards: Omit<Card, 'id'>[] = [];
