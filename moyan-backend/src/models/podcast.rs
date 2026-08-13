@@ -28,7 +28,8 @@ pub struct PodcastTranslateResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodcastConfig {
-    pub enabled: bool,
+    pub app_enabled: bool,
+    pub web_enabled: bool,
     pub youtube_api_key: String,
 }
 

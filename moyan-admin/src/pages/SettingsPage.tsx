@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<LlmSettings | null>(null);
   const [podcast, setPodcast] = useState<PodcastConfig | null>(null);
   const [podcastEnabled, setPodcastEnabled] = useState(false);
+  const [podcastWebEnabled, setPodcastWebEnabled] = useState(false);
   const [podcastKey, setPodcastKey] = useState("");
   const [podcastSaving, setPodcastSaving] = useState(false);
 
@@ -57,7 +58,8 @@ export default function SettingsPage() {
     try {
       const data = await getPodcastConfig();
       setPodcast(data);
-      setPodcastEnabled(data.enabled);
+      setPodcastEnabled(data.app_enabled);
+      setPodcastWebEnabled(data.web_enabled);
       setPodcastKey("");
     } catch (err) {
       message.error(err instanceof Error ? err.message : "加载播客配置失败");
@@ -68,7 +70,8 @@ export default function SettingsPage() {
     try {
       setPodcastSaving(true);
       const data = await updatePodcastConfig({
-        enabled: podcastEnabled === true,
+        app_enabled: podcastEnabled === true,
+        web_enabled: podcastWebEnabled === true,
         ...(podcastKey.trim() ? { youtube_api_key: podcastKey.trim() } : {}),
       });
       setPodcast(data);
@@ -145,6 +148,15 @@ export default function SettingsPage() {
               unCheckedChildren="关"
             />
           </Space>
+          <Space align="center">
+            <span>Web 端显示播客入口</span>
+            <Switch
+              checked={podcastWebEnabled}
+              onChange={setPodcastWebEnabled}
+              checkedChildren="开"
+              unCheckedChildren="关"
+            />
+          </Space>
           <Input.Password
             placeholder={
               podcast?.youtube_api_key
@@ -155,7 +167,7 @@ export default function SettingsPage() {
             onChange={(e) => setPodcastKey(e.target.value)}
             autoComplete="new-password"
           />
-          {podcast?.enabled && !podcast.youtube_api_key && (
+          {(podcast?.app_enabled || podcast?.web_enabled) && !podcast.youtube_api_key && (
             <Typography.Text type="warning">
               已开启但未配置 Key，移动端搜索将不可用
             </Typography.Text>

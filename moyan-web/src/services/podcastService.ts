@@ -2,7 +2,8 @@
 // 与 moyan-app 的 podcast 模块对齐；搜索直接调 YouTube Data API v3。
 
 export interface PodcastConfig {
-  enabled: boolean;
+  app_enabled: boolean;
+  web_enabled: boolean;
   youtube_api_key: string;
 }
 

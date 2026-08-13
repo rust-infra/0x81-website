@@ -412,12 +412,14 @@ export interface UpdateLlmSettingsInput {
 }
 
 export interface PodcastConfig {
-  enabled: boolean;
+  app_enabled: boolean;
+  web_enabled: boolean;
   youtube_api_key: string;
 }
 
 export interface UpdatePodcastConfigInput {
-  enabled: boolean;
+  app_enabled?: boolean;
+  web_enabled?: boolean;
   youtube_api_key?: string;
 }
 

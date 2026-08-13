@@ -37,7 +37,7 @@ export default function Podcast() {
     getAppConfig()
       .then((cfg) => {
         apiKeyRef.current = cfg.podcast?.youtube_api_key || "";
-        setDisabled(cfg.podcast ? !cfg.podcast.enabled : false);
+        setDisabled(cfg.podcast ? !cfg.podcast.web_enabled : false);
       })
       .catch(() => {});
     setRecent(loadRecent());

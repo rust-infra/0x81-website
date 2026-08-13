@@ -454,7 +454,8 @@ mod tests {
             .await?;
         assert_eq!(response.status(), StatusCode::OK);
         let body = read_json(response).await?;
-        assert_eq!(body["data"]["podcast"]["enabled"], false);
+        assert_eq!(body["data"]["podcast"]["app_enabled"], false);
+        assert_eq!(body["data"]["podcast"]["web_enabled"], false);
         assert_eq!(body["data"]["podcast"]["youtube_api_key"], "");
         Ok(())
     }

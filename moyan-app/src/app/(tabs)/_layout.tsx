@@ -29,7 +29,7 @@ export default function TabsLayout() {
     let cancelled = false;
     getAppConfig()
       .then((cfg) => {
-        if (!cancelled) setPodcastEnabled(!!cfg.podcast?.enabled);
+        if (!cancelled) setPodcastEnabled(!!cfg.podcast?.app_enabled);
       })
       .catch(() => {
         if (!cancelled) setPodcastEnabled(false);

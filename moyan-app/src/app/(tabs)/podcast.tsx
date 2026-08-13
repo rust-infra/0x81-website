@@ -52,7 +52,7 @@ export default function PodcastScreen() {
     getAppConfig()
       .then((cfg) => {
         apiKeyRef.current = cfg.podcast?.youtube_api_key || '';
-        setDisabled(cfg.podcast ? !cfg.podcast.enabled : false);
+        setDisabled(cfg.podcast ? !cfg.podcast.app_enabled : false);
       })
       .catch(() => {});
   }, []);

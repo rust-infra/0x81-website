@@ -14,6 +14,7 @@ use crate::services::youtube_captions::{
 };
 
 const FEATURE_PODCAST_ENABLED: &str = "feature_podcast_enabled";
+const FEATURE_PODCAST_WEB_ENABLED: &str = "feature_podcast_web_enabled";
 const YOUTUBE_API_KEY: &str = "youtube_api_key";
 
 #[derive(Clone)]
@@ -34,6 +35,12 @@ impl PodcastService {
             .await?
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
+        let web_enabled = self
+            .repository
+            .admin_get_setting(FEATURE_PODCAST_WEB_ENABLED)
+            .await?
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         let youtube_api_key = self
             .repository
             .admin_get_setting(YOUTUBE_API_KEY)
@@ -41,7 +48,8 @@ impl PodcastService {
             .unwrap_or_default();
         Ok(AppConfigResponse {
             podcast: PodcastConfig {
-                enabled,
+                app_enabled: enabled,
+                web_enabled,
                 youtube_api_key,
             },
         })
@@ -50,11 +58,15 @@ impl PodcastService {
     /// Admin: toggle the podcast entry and set the YouTube search key.
     pub async fn set_config(
         &self,
-        enabled: bool,
+        app_enabled: bool,
+        web_enabled: bool,
         youtube_api_key: &str,
     ) -> Result<AppConfigResponse, AppError> {
         self.repository
-            .admin_put_setting(FEATURE_PODCAST_ENABLED, if enabled { "1" } else { "0" })
+            .admin_put_setting(FEATURE_PODCAST_ENABLED, if app_enabled { "1" } else { "0" })
+            .await?;
+        self.repository
+            .admin_put_setting(FEATURE_PODCAST_WEB_ENABLED, if web_enabled { "1" } else { "0" })
             .await?;
         self.repository
             .admin_put_setting(YOUTUBE_API_KEY, youtube_api_key)
