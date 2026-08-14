@@ -22,6 +22,7 @@ pub struct AppState {
     pub google_mobile_client_secret: String,
     pub google_mobile_redirect_url: String,
     pub admin_token: String,
+    pub telegram_bot_token: String,
 }
 
 /// Application-wide error type

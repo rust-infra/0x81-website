@@ -379,3 +379,254 @@ pub async fn stats(
 ) -> Result<Json<serde_json::Value>, AppError> {
     Ok(success(state.services.auth.user_stats(&claims.sub).await?))
 }
+
+// ==================== Telegram Mini App ====================
+
+#[derive(Debug, Deserialize)]
+pub struct TelegramLoginRequest {
+    pub init_data: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramInitUser {
+    id: i64,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    username: Option<String>,
+    photo_url: Option<String>,
+    language_code: Option<String>,
+}
+
+/// Minimal percent-decode for URL-encoded values (e.g. the `user` JSON field
+/// inside Telegram initData). Enough for JSON payloads; not a full form decoder.
+fn percent_decode(s: &str) -> String {
+    fn hex_val(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
+                out.push(h * 16 + l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Validate Telegram WebApp initData (official HMAC-SHA256 algorithm):
+/// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+fn validate_telegram_init_data(
+    bot_token: &str,
+    init_data: &str,
+) -> Result<TelegramInitUser, AppError> {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    if init_data.is_empty() {
+        return Err(AppError::BadRequest("Empty initData".into()));
+    }
+
+    // Parse as query string. Values are kept RAW (URL-encoded) for the check
+    // string — that is exactly what Telegram signs.
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut hash: Option<String> = None;
+    for item in init_data.split('&') {
+        let Some(eq) = item.find('=') else { continue };
+        let key = &item[..eq];
+        let value = item[eq + 1..].to_string();
+        if key == "hash" {
+            hash = Some(value);
+        } else {
+            pairs.push((key.to_string(), value));
+        }
+    }
+
+    let hash = hash.ok_or_else(|| AppError::BadRequest("initData missing hash".into()))?;
+
+    // data_check_string: keys sorted alphabetically, joined as "k=v\nk=v"
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    let data_check_string = pairs
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // secret_key = HMAC_SHA256(key=bot_token, msg="WebAppData")
+    let mut mac = HmacSha256::new_from_slice(bot_token.as_bytes())
+        .map_err(|_| AppError::Internal("HMAC init failed".into()))?;
+    mac.update(b"WebAppData");
+    let secret_key = mac.finalize().into_bytes();
+
+    // expected = HMAC_SHA256(key=secret_key, msg=data_check_string)
+    let mut mac2 = HmacSha256::new_from_slice(&secret_key)
+        .map_err(|_| AppError::Internal("HMAC init failed".into()))?;
+    mac2.update(data_check_string.as_bytes());
+    let computed = hex::encode(mac2.finalize().into_bytes());
+
+    // Constant-time comparison
+    if computed.len() != hash.len()
+        || !computed
+            .as_bytes()
+            .iter()
+            .zip(hash.as_bytes().iter())
+            .all(|(a, b)| a == b)
+    {
+        return Err(AppError::BadRequest("initData hash mismatch".into()));
+    }
+
+    // Replay protection: auth_date must be recent (< 24h in either direction).
+    if let Some((_, auth_date)) = pairs.iter().find(|(k, _)| k == "auth_date") {
+        if let Ok(ts) = auth_date.parse::<i64>() {
+            let now = Utc::now().timestamp();
+            if (now - ts).abs() > 24 * 3600 {
+                return Err(AppError::BadRequest("initData expired".into()));
+            }
+        }
+    }
+
+    // Extract the user object (URL-encoded JSON).
+    let user_json = pairs
+        .iter()
+        .find(|(k, _)| k == "user")
+        .map(|(_, v)| percent_decode(v))
+        .ok_or_else(|| AppError::BadRequest("initData missing user".into()))?;
+    let user: TelegramInitUser = serde_json::from_str(&user_json)
+        .map_err(|_| AppError::BadRequest("initData user parse failed".into()))?;
+
+    Ok(user)
+}
+
+/// Telegram Mini App login (免密登录 / 绑定)
+/// POST /api/auth/telegram  { "init_data": "<tg.WebApp.initData>" }
+pub async fn telegram_login(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<TelegramLoginRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if state.telegram_bot_token.is_empty() {
+        return Err(AppError::ServiceUnavailable(
+            "TELEGRAM_BOT_TOKEN not configured on the server".into(),
+        ));
+    }
+
+    let tg_user = validate_telegram_init_data(&state.telegram_bot_token, &req.init_data)?;
+
+    let provider_id = tg_user.id.to_string();
+
+    // Telegram has no verified email — use a stable synthetic address.
+    let email = format!("tg{provider_id}@telegram.local");
+
+    let name = tg_user
+        .first_name
+        .clone()
+        .map(|f| {
+            tg_user
+                .last_name
+                .clone()
+                .map(|l| format!("{f} {l}"))
+                .unwrap_or(f)
+        })
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "Telegram User".to_string());
+
+    let user = find_or_create_user(
+        &state,
+        "telegram",
+        &provider_id,
+        &name,
+        &email,
+        tg_user.photo_url.as_deref(),
+    )
+    .await?;
+
+    let token = generate_jwt(&state, &user)?;
+
+    Ok(success(AuthResponse {
+        token,
+        user: user.into(),
+    }))
+}
+
+#[cfg(test)]
+mod telegram_tests {
+    use super::*;
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    fn build_init_data(bot_token: &str, user_json: &str, auth_date: i64) -> String {
+        type HmacSha256 = Hmac<Sha256>;
+
+        let mut mac = HmacSha256::new_from_slice(bot_token.as_bytes()).unwrap();
+        mac.update(b"WebAppData");
+        let secret = mac.finalize().into_bytes();
+
+        let check = format!("auth_date={auth_date}\nuser={user_json}");
+        let mut mac2 = HmacSha256::new_from_slice(&secret).unwrap();
+        mac2.update(check.as_bytes());
+        let hash = hex::encode(mac2.finalize().into_bytes());
+
+        format!("auth_date={auth_date}&user={user_json}&hash={hash}")
+    }
+
+    #[test]
+    fn accepts_valid_init_data() {
+        let bot_token = "123456:TESTTOKEN";
+        let user = r#"{"id":123456789,"first_name":"Test","username":"tester","language_code":"en"}"#;
+        let init = build_init_data(bot_token, user, Utc::now().timestamp());
+        let parsed = validate_telegram_init_data(bot_token, &init).unwrap();
+        assert_eq!(parsed.id, 123456789);
+        assert_eq!(parsed.first_name.as_deref(), Some("Test"));
+    }
+
+    #[test]
+    fn accepts_url_encoded_user() {
+        let bot_token = "123456:TESTTOKEN";
+        let raw = r#"{"id":123456789,"first_name":"Test","username":"tester"}"#;
+        let encoded = raw
+            .replace('{', "%7B")
+            .replace('}', "%7D")
+            .replace('"', "%22")
+            .replace(':', "%3A")
+            .replace(',', "%2C");
+        let init = build_init_data(bot_token, &encoded, Utc::now().timestamp());
+        let parsed = validate_telegram_init_data(bot_token, &init).unwrap();
+        assert_eq!(parsed.id, 123456789);
+        assert_eq!(parsed.first_name.as_deref(), Some("Test"));
+    }
+
+    #[test]
+    fn rejects_tampered_init_data() {
+        let bot_token = "123456:TESTTOKEN";
+        let user = r#"{"id":123456789,"first_name":"Test","username":"tester"}"#;
+        let init = build_init_data(bot_token, user, Utc::now().timestamp());
+        let tampered = init.replace("Test", "Evil");
+        assert!(validate_telegram_init_data(bot_token, &tampered).is_err());
+    }
+
+    #[test]
+    fn rejects_expired_init_data() {
+        let bot_token = "123456:TESTTOKEN";
+        let user = r#"{"id":123456789,"first_name":"Test"}"#;
+        let init = build_init_data(bot_token, user, Utc::now().timestamp() - 2 * 24 * 3600);
+        assert!(validate_telegram_init_data(bot_token, &init).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_hash() {
+        assert!(validate_telegram_init_data("t", "auth_date=1&user=%7B%7D").is_err());
+    }
+}

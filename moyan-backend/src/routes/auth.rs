@@ -15,6 +15,8 @@ pub fn routes() -> Router<AppState> {
         .route("/kimi/device", post(auth::kimi_device))
         .route("/kimi/token", post(auth::kimi_token_poll))
         .route("/kimi", post(auth::kimi_login))
+        // Telegram Mini App
+        .route("/telegram", post(auth::telegram_login))
         // Authenticated endpoints
         .route(
             "/me",

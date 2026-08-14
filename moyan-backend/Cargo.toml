@@ -31,6 +31,9 @@ serde_json = "1.0"
 
 # Authentication
 jsonwebtoken = "9.3"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
 oauth2 = "5.0"
 reqwest = { version = "0.12", features = ["json"] }
 

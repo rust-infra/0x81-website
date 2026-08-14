@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { KimiLoginButton } from "@/components/KimiLoginButton";
 import {
   getCurrentUser,
@@ -114,6 +115,7 @@ export default function Login() {
 
           {/* Login buttons */}
           <div className="space-y-3">
+            <TelegramLoginButton />
             <KimiLoginButton />
             <GoogleLoginButton />
 

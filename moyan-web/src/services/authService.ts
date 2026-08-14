@@ -7,7 +7,7 @@ export interface User {
   name: string;
   email: string;
   avatar: string;
-  provider: "google" | "kimi" | "local";
+  provider: "google" | "kimi" | "local" | "telegram";
 }
 
 let currentUser: User | null = null;
@@ -394,4 +394,50 @@ export async function getUserFromRustBackend(): Promise<User | null> {
   } catch {
     return null;
   }
+}
+
+
+// ========== Telegram Mini App ==========
+
+/** Telegram 环境检测（window.Telegram.WebApp 由 telegram-web-app.js 注入） */
+export function isTelegramWebApp(): boolean {
+  return typeof window !== "undefined" && !!(window as any).Telegram?.WebApp;
+}
+
+/** 获取 Telegram initData（优先 SDK，兜底之前缓存的 sessionStorage） */
+export function getTelegramInitData(): string {
+  const tg = (window as any).Telegram?.WebApp;
+  if (tg?.initData) return tg.initData as string;
+  return sessionStorage.getItem("tg_init_data") || "";
+}
+
+/**
+ * Telegram Mini App 登录（免密登录/绑定）
+ * 前端把 initData 交给后端，后端用 bot token 做 HMAC 校验后签发 JWT。
+ */
+export async function loginWithTelegram(initData: string): Promise<User> {
+  if (!API_BASE) {
+    throw new Error("后端未配置（VITE_API_URL 为空），Telegram 登录不可用");
+  }
+  const res = await fetch(`${API_BASE}/api/auth/telegram`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ init_data: initData }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Telegram 登录失败: ${err}`);
+  }
+  const data = await res.json();
+  const { token, user } = data.data;
+  localStorage.setItem("moyan_token", token);
+  const u: User = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar || "",
+    provider: "telegram",
+  };
+  setUser(u);
+  return u;
 }

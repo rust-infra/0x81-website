@@ -153,6 +153,7 @@ mod tests {
             google_mobile_client_secret: String::new(),
             google_mobile_redirect_url: String::new(),
             admin_token: String::new(),
+            telegram_bot_token: String::new(),
         }
     }
 
@@ -630,6 +631,7 @@ async fn main() -> anyhow::Result<()> {
         google_mobile_client_secret: std::env::var("GOOGLE_MOBILE_CLIENT_SECRET").unwrap_or_default(),
         google_mobile_redirect_url: std::env::var("GOOGLE_MOBILE_REDIRECT_URL").unwrap_or_default(),
         admin_token: std::env::var("ADMIN_TOKEN").unwrap_or_default(),
+        telegram_bot_token: std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default(),
     };
 
     match state
