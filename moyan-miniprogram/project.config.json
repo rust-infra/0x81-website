@@ -1,0 +1,13 @@
+{
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "libVersion": "3.4.0",
+  "projectname": "moyan-miniprogram",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": true,
+    "coverView": true
+  },
+  "condition": {}
+}
