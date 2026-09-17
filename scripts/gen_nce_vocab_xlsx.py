@@ -18,7 +18,9 @@
 
 用法：
     python3 scripts/gen_nce_vocab_xlsx.py [--out PATH] [--cache DIR] [--no-examples]
-默认输出到 moyan-backend/data/nce-vocabulary-import.xlsx（该目录已被 .gitignore 忽略）。
+默认输出到 moyan-backend/data/nce-vocabulary-import.xlsx。该目录整体被 .gitignore 忽略，
+但这个 xlsx 是**故意提交进仓库**的（和 system_vocabulary.json 一样），所以重新生成后要用
+`git add -f` 才会被跟踪。
 """
 
 from __future__ import annotations
