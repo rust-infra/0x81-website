@@ -208,6 +208,13 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 - 两个 Dockerfile 都拆成 `runtime`（仅运行时依赖）与 `full`（把二进制 COPY 进镜像）两段。
   compose 用 `build.target: runtime` + 挂载 `./bin/<service>`；
   `docker build ./website-rs` 的默认行为仍是 `full`，不受影响。
+- `0x81/website-rs-runtime:local` / `0x81/moyan-backend-runtime:local` 这两个镜像**只存在于
+  本机**（本机构建产物，不在任何 registry）。compose 里给了 `pull_policy: build`，所以它不会
+  去 registry 找它们：`docker compose pull` 会把这 7 个服务全报成
+  `Skipped` / `No image to be pulled`（这是正常的），`up` 则在镜像缺失时自动补建。
+  如果看到 `pull access denied for 0x81/website-rs-runtime, repository does not exist or may
+  require 'docker login'`，说明 compose 版本较旧或镜像还没构建过 —— 别把 `docker compose pull`
+  放进部署流程，用 `docker compose up -d`（需要时加 `--build`）即可。
 - 编译复用各项目 Dockerfile 的 `builder` 段，以保证工具链与 glibc 匹配
   （`moyan-backend` 的二进制要求 GLIBC ≥ 2.39，只能跑在 trixie runtime 上）；CI 与本地
   跑的是同一条命令，所以产物一致。

@@ -23,6 +23,11 @@ services:
     # Dockerfile 的 runtime stage（仅运行时依赖：ffmpeg/python3/yt-dlp），
     # 再把它挂载进容器。
     image: 0x81/moyan-backend-runtime:local
+    # 这个镜像只含运行时依赖，是 compose 在本机构建出来的产物，**不存在于任何 registry**：
+    # pull_policy: build 告诉 compose 不要试图 pull（否则在尚未构建过该镜像的机器上会打出
+    # "pull access denied for 0x81/moyan-backend-runtime" 之类的告警，docker compose pull
+    # 更会直接报错），镜像不在本地缓存时才构建。
+    pull_policy: build
     build:
       context: ./moyan-backend
       target: runtime
@@ -91,6 +96,8 @@ services:
   website-rs:
     # 同上：runtime stage 只装 ca-certificates/curl，二进制由 fetch-rust.sh 拉取后挂载。
     image: 0x81/website-rs-runtime:local
+    # 同 moyan-backend：本机构建产物，不来自 registry，故不尝试 pull。
+    pull_policy: build
     build:
       context: ./website-rs
       target: runtime
