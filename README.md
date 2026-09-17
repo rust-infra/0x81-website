@@ -75,10 +75,21 @@ Compose 环境变量：
 
 1. Cloudflare → SSL/TLS → **Origin Server** → Create Certificate，覆盖 `0x81.uk, *.0x81.uk`
 2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）
-3. `scripts/fetch-rust.sh <tag> && docker compose up -d` 后网关同时监听 80/443
-4. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
+3. 放上服务器（证书是**唯一仍需手工放置**的部署件——私钥不进 git，也不进 release 资产）：
+   ```bash
+   scp certs/origin.pem certs/origin-key.pem <server>:/opt/moyan/certs/
+   ssh <server> 'chmod 600 /opt/moyan/certs/origin-key.pem'
+   ```
+4. `docker compose up -d` 后网关同时监听 80/443，然后**跑一次自检**：`scripts/check-tls.sh`
+   （本地开发不需要证书，用 `--allow-http` 让它只告警）
+5. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
 
-缺少证书文件时网关自动退回仅 HTTP（本地开发无需证书）。
+Cloudflare Origin Certificate 有效期最长 15 年，**不需要续期自动化**，只有换证书时才走上面第 3 步。
+
+⚠️ 缺证书时网关**只 warn 不报错**，静默退回仅 HTTP（443 直接连不上）；更阴的是 compose 挂载
+一个不存在的宿主目录时 docker 会自己建一个 root 所有的空目录，所以"`certs/` 目录存在"**不代表**
+"证书在里面"。证书内容坏了（例如 scp 传了一半）是另一种表现：加载失败会 panic，容器反复重启。
+`scripts/check-tls.sh` 把这两种情况分开指出，并给出对应的修法。
 
 ## 前端应用
 
@@ -186,8 +197,9 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| **首次部署** | `git clone` → `.env` 里写 `GH_TOKEN` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d --build` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录 |
-| **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build` |
+| **首次部署** | `git clone` → `.env` 里写 `GH_TOKEN` → `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。自检不通过就是证书没就位或没生效 |
+| **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build`。证书没换就不用动 |
+| **换证书** | `scp` 新证书到 `<server>:/opt/moyan/certs/` → `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是唯一不进 git / 不进 release 的部署件；Cloudflare Origin 证书最长 15 年，无需续期自动化 |
 | **回滚** | `scripts/fetch-rust.sh <旧 tag> && docker compose up -d` | 版本锚点是 tag，不用碰 git 历史 |
 
 后备手段（CI 挂了 / 服务器连不上 GitHub）：在开发机 `scripts/build-rust.sh` 编出**同样的两个
@@ -226,6 +238,9 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
   所以下载中断、校验失败或磁盘写满都不会让 compose 挂上半个二进制，旧版本仍可跑。
 - `bin/<service>.rev` 记录该二进制的来源提交、编译时间与架构，是判断"它是哪版源码编的"
   的依据；`cat bin/*.rev` 可查。
+- 与二进制无关但同样要就位的是 TLS 证书：`./certs:/certs:ro,Z`（`:Z` 与其它挂载一致；SELinux
+  enforcing 的机器上不加会读不到，而网关只 warn 并退回仅 HTTP）。部署后用
+  `scripts/check-tls.sh` 断言 443 真的在服务，别只看容器"起来了"。
 
 ## 本地运行
 

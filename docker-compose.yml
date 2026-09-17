@@ -114,7 +114,9 @@ services:
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
-      - ./certs:/certs:ro
+      - ./certs:/certs:ro,Z
+      # ^ :Z 与其它挂载一致（SELinux enforcing 的主机上不加会导致容器读不到证书，
+      #   而网关对此只 warn 并退回仅 HTTP——见 scripts/check-tls.sh）
       # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑 scripts/build-rust.sh）
       - ./bin/website-rs:/app/website-rs:ro,Z
     depends_on:
