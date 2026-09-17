@@ -74,12 +74,20 @@ Compose 环境变量：
 ### HTTPS（Cloudflare Full (strict)）
 
 1. Cloudflare → SSL/TLS → **Origin Server** → Create Certificate，覆盖 `0x81.uk, *.0x81.uk`
-2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）
-3. 放上服务器（证书是**唯一仍需手工放置**的部署件——私钥不进 git，也不进 release 资产）：
+2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）。
+   Cloudflare 下载页给的两个文件默认叫 `example.com.pem` / `example.com.key`，要**按内容**改名：
+   `example.com.pem` → `certs/origin.pem`，`example.com.key` → `certs/origin-key.pem`
+   （私钥以 `-----BEGIN PRIVATE KEY-----` 开头；**别把 pem 改名成 key**）
+3. 放上服务器（证书是**唯一仍需手工放置**的部署件——私钥不进 git，也不进 release 资产）。
+   本仓库在这台服务器上的部署目录就是 `/root/Projects/0x81-website`，compose 只挂它的
+   `./certs`，所以证书必须落在**那个**目录的 `certs/` 里：
    ```bash
-   scp certs/origin.pem certs/origin-key.pem <server>:/opt/moyan/certs/
-   ssh <server> 'chmod 600 /opt/moyan/certs/origin-key.pem'
+   scp certs/origin.pem certs/origin-key.pem <server>:/root/Projects/0x81-website/certs/
+   ssh <server> 'chmod 600 /root/Projects/0x81-website/certs/origin-key.pem'
+   ssh <server> 'cd /root/Projects/0x81-website && docker compose restart website-rs'
    ```
+   ⚠️ 路径写错**不会**报错：docker 会把不存在的宿主目录新建出来，证书静静躺在没人挂载的地方。
+   只重启 `docker compose up -d` 也不够——挂载内容变化不触发重建，要 `restart website-rs`。
 4. `docker compose up -d` 后网关同时监听 80/443，然后**跑一次自检**：`scripts/check-tls.sh`
    （本地开发不需要证书，用 `--allow-http` 让它只告警）
 5. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
@@ -88,8 +96,10 @@ Cloudflare Origin Certificate 有效期最长 15 年，**不需要续期自动�
 
 ⚠️ 缺证书时网关**只 warn 不报错**，静默退回仅 HTTP（443 直接连不上）；更阴的是 compose 挂载
 一个不存在的宿主目录时 docker 会自己建一个 root 所有的空目录，所以"`certs/` 目录存在"**不代表**
-"证书在里面"。证书内容坏了（例如 scp 传了一半）是另一种表现：加载失败会 panic，容器反复重启。
-`scripts/check-tls.sh` 把这两种情况分开指出，并给出对应的修法。
+"证书在里面"。第三种是"两个文件都在、内容却不对"——例如把 `origin.pem` 复制成了
+`origin-key.pem`（换证书时极易发生），或只换了配对中的一个：内容是坏/错的情况下网关直接
+panic 重启，而不是退回 HTTP。`scripts/check-tls.sh` 把这三件事分开指出（宿主侧文件是否存在 →
+`openssl` 校验确实是私钥且与证书配对 → 容器状态 → 启动日志 → 容器内 https 探针），并给出对应修法。
 
 ## 前端应用
 
@@ -163,7 +173,8 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 ### 服务器上的落盘与容器拓扑
 
 ```text
- /opt/moyan/                    ← git pull 只更新到这里
+ /root/Projects/0x81-website/   ← 服务器上的部署目录（既是开发 checkout 也是 compose 目录；
+                                    git pull 只更新到这里）
  ├── docker-compose.yml
  ├── scripts/{build-rust.sh, fetch-rust.sh, lib/elf-arch.py}
  ├── .env                       ← GH_TOKEN=github_pat_xxx（fine-grained，Contents: Read）
@@ -199,7 +210,7 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 |------|------|------|
 | **首次部署** | `git clone` → `.env` 里写 `GH_TOKEN` → `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。自检不通过就是证书没就位或没生效 |
 | **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build`。证书没换就不用动 |
-| **换证书** | `scp` 新证书到 `<server>:/opt/moyan/certs/` → `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是唯一不进 git / 不进 release 的部署件；Cloudflare Origin 证书最长 15 年，无需续期自动化 |
+| **换证书** | `scp` 新证书到 `<server>:/root/Projects/0x81-website/certs/`（两个文件都换，别只换一个）→ `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是唯一不进 git / 不进 release 的部署件；Cloudflare Origin 证书最长 15 年，无需续期自动化。自检会校验"确实是私钥且与证书配对"，配错文件当场报错 |
 | **回滚** | `scripts/fetch-rust.sh <旧 tag> && docker compose up -d` | 版本锚点是 tag，不用碰 git 历史 |
 
 后备手段（CI 挂了 / 服务器连不上 GitHub）：在开发机 `scripts/build-rust.sh` 编出**同样的两个

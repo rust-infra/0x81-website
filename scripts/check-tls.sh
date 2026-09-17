@@ -4,7 +4,10 @@
 # 为什么需要它：缺证书时网关**只 warn 不报错**，静默退回"仅 HTTP"，443 直接连不上
 # （Cloudflare Full (strict) 下表现为握手失败/5xx）。更阴的是 compose 挂载一个不存在
 # 的宿主目录时 docker 会自己建一个 root 所有的空目录，于是"certs/ 存在"并不代表
-# "证书在里面"。这个脚本把这几条都查一遍。
+# "证书在里面"。第三种是"两个文件都在、但内容不对"——最典型的是把 origin.pem 复制成了
+# origin-key.pem（换证书时极易发生），宿主侧光看文件名/大小永远看不出来，容器则直接
+# panic 重启。这个脚本把这三条都查一遍：文件在不在 → 内容是不是私钥、与证书配不配对
+# （需要宿主有 openssl，没有则降级为只查日志）→ 容器状态 → 启动日志 → 容器内 https 探针。
 #
 # 用法：
 #   scripts/check-tls.sh                 # 证书没就位即失败（exit 1）——部署后用这个
@@ -49,11 +52,13 @@ if [ -n "$missing" ]; then
     cat >&2 <<EOF
 ✗ 证书文件缺失或为空：$missing
 
-  网关会静默退回"仅 HTTP"。从开发机放证书：
+  网关会静默退回"仅 HTTP"。证书必须放进**本机当前这套 compose 目录的 certs/**，
+  也就是：$(pwd)/certs/  （compose 只挂 ./certs，放到别处容器根本看不到）
 
-    scp certs/origin.pem certs/origin-key.pem <server>:/opt/moyan/certs/
-    ssh <server> 'chmod 600 /opt/moyan/certs/origin-key.pem'
-    ssh <server> 'cd /opt/moyan && docker compose restart website-rs'
+  从开发机传（<server> 换成目标机，路径用上面那一行）：
+    scp certs/origin.pem certs/origin-key.pem <server>:$(pwd)/certs/
+    ssh <server> 'chmod 600 $(pwd)/certs/origin-key.pem'
+    ssh <server> 'cd $(pwd) && docker compose restart website-rs'
 
   注意：certs/ 是 gitignore 的，docker 自动建的空目录也算"目录存在"，
   所以别只看目录，要看里面有没有文件。
@@ -62,7 +67,33 @@ EOF
 fi
 ok "宿主侧证书文件存在（$cert, $key）"
 
-# 2) 容器在跑吗
+# 2) 内容校验：非空 ≠ 能用。换证书时最容易把 origin.pem 顺手复制成 origin-key.pem，
+#    这种"文件都在、内容错位"宿主侧只有 openssl 看得出来，否则要到容器 panic 才发现。
+if command -v openssl >/dev/null 2>&1; then
+    if ! openssl pkey -in "$key" -noout >/dev/null 2>&1; then
+        if openssl x509 -in "$key" -noout >/dev/null 2>&1; then
+            bad "$key 里装的是**证书**，不是私钥（多半是把 origin.pem 复制/改名成了它）。
+  Cloudflare 下载包里两个文件是一起给的：certificate 存成 $cert，private key 存成 $key。
+  私钥以 -----BEGIN PRIVATE KEY----- 开头；放好后 docker compose restart website-rs。"
+        fi
+        bad "$key 不是能解析的 PEM 私钥（内容坏了、被截断，或根本不是 PEM）。
+  重新从 Cloudflare → SSL/TLS → Origin Server 下载一次私钥，不要手工拼改内容。"
+    fi
+    if ! openssl x509 -in "$cert" -noout >/dev/null 2>&1; then
+        bad "$cert 不是能解析的 PEM 证书（内容坏了、被截断，或根本不是 PEM）。
+  重新从 Cloudflare → SSL/TLS → Origin Server 下载一次证书。"
+    fi
+    if [ "$(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null)" \
+        != "$(openssl pkey -in "$key" -pubout 2>/dev/null)" ]; then
+        bad "证书与私钥不是一对（公钥不匹配）：$cert ↔ $key。
+  常见于换证书时只换了其中一个文件；两者必须来自同一次签发（同一张下载页）。"
+    fi
+    ok "证书与私钥可解析且配对（openssl 校验通过）"
+else
+    warn "宿主没有 openssl，跳过内容/配对校验（容器起来后由日志分支兜底）"
+fi
+
+# 3) 容器在跑吗
 cid=$(docker compose ps -q "$service" 2>/dev/null || true)
 if [ -z "$cid" ]; then
     bad "找不到 $service 容器——先在仓库目录里 docker compose up -d"
@@ -80,7 +111,7 @@ case "$state" in
         ;;
 esac
 
-# 3) 启动日志必须报 HTTPS listening
+# 4) 启动日志必须报 HTTPS listening
 logs=$(docker logs "$cid" 2>&1 || true)
 if grep -q "HTTPS listening" <<<"$logs"; then
     ok "日志：HTTPS listening on 0.0.0.0:443"
@@ -103,7 +134,7 @@ else
     warn "日志里既没有 'HTTPS listening' 也没有 'serving HTTP only'——容器可能刚启动完，稍后重跑"
 fi
 
-# 4) 容器内探针（runtime 镜像自带 curl）
+# 5) 容器内探针（runtime 镜像自带 curl）
 if docker exec "$cid" sh -c 'command -v curl >/dev/null 2>&1'; then
     code=$(docker exec "$cid" sh -c \
         'curl -sk -o /dev/null -w "%{http_code}" --max-time 5 https://localhost/health' || true)
