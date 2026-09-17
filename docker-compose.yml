@@ -43,7 +43,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
       - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
-      - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin.moyan.0x81.uk}
+      - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
       # Local HTTP proxy (e.g. Clash on the host, port 7890) for data collection.
       # 127.0.0.1 inside the container is the container itself, so we use the

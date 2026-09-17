@@ -8,7 +8,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `tact.0x81.uk` | `website` | tact 产品落地页 |
 | `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
-| `admin.moyan.0x81.uk` | `moyan-admin` | 墨言管理后台 |
+| `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（`admin.moyan.0x81.uk` 也仍被网关接受，但那个名字是两层子域，**过不了 Cloudflare**：见「细节与约束」） |
 
 ## 架构
 
@@ -21,7 +21,8 @@ website-rs :80/:443     Axum 网关
       ├─ Host: tact.0x81.uk           →  website :4321
       ├─ Host: crab.0x81.uk           →  crab-web :4322
       ├─ Host: moyan.0x81.uk          →  moyan-web :5000（/api → moyan-backend :4323）
-      ├─ Host: admin.moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
+      ├─ Host: admin-moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
+      │  （admin.moyan.0x81.uk 同样路由到 5001，但这个两层子域没有证书可用）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -64,7 +65,7 @@ Compose 环境变量：
 
 | 能力 | 说明 |
 |------|------|
-| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin.moyan` → 5001 |
+| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
 | TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
@@ -138,10 +139,10 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 ### `moyan-web` / `moyan-admin` / `moyan-backend`（墨言）
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
-- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin.moyan.0x81.uk`；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin-moyan.0x81.uk`（网关也认 `admin.moyan.0x81.uk`，但两层子域没有证书，别用）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
-- CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin.moyan.0x81.uk`）
+- CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk`、`https://admin-moyan.0x81.uk` 与旧名 `https://admin.moyan.0x81.uk`）
 
 ## Rust 服务的构建与部署（CI 编译，服务器只运行）
 
@@ -252,6 +253,16 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 - 与二进制无关但同样要就位的是 TLS 证书：`./certs:/certs:ro,Z`（`:Z` 与其它挂载一致；SELinux
   enforcing 的机器上不加会读不到，而网关只 warn 并退回仅 HTTP）。部署后用
   `scripts/check-tls.sh` 断言 443 真的在服务，别只看容器"起来了"。
+- **网关取主机名要同时看 `Host` 头与 URI authority**：HTTP/2 **没有 `Host` 头**（authority 在
+  `:authority`，hyper 把它放进 URI，URI 成绝对形式 `https://host/path`），而 Cloudflare 回源默认
+  走 h2；HTTP/1.1 则反过来只有 `Host` 头、URI 是 origin-form。只读其一的后果很阴：h2 请求匹配
+  不到任何上游，直接落到网关自己的占位路由（`/`、`/health` 返回 200 的 `{"status":"ok"}`），
+  表现成"整站变成一段 JSON 但处处 200"。`website-rs` 的 `request_host()` 同时处理两种形式，
+  没匹配上上游时还会打 `no upstream configured for host ...` 告警——看到这条就说明有请求打到了
+  没配置的 Host 名。
+- `admin.moyan.0x81.uk` 是**两层子域**，Cloudflare 的 Universal SSL（`*.0x81.uk` 只覆盖一层）
+  与我们的 Origin 证书都不含它：边缘握手直接失败，即便放行也会在 Full (strict) 下 526。
+  管理后台请用 `admin-moyan.0x81.uk`（网关两个名字都接受，换名只需加一条 DNS 记录）。
 
 ## 本地运行
 
@@ -272,7 +283,7 @@ docker compose up -d --build
 | `moyan-web` | `5000` | 墨言前端（Caddy；`/api` 反代到 backend） |
 | `moyan-admin` | `5001` | 墨言管理后台（Caddy；`/api` 反代到 backend） |
 
-本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` / `admin.moyan.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
+本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` / `admin-moyan.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
 
 单独开发前端：
 

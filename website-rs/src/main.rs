@@ -99,16 +99,43 @@ async fn root() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))
 }
 
+/// 解析请求的目标主机名（小写、去掉端口）。
+///
+/// **为什么不能只看 `Host` 头**：HTTP/2 里没有 `Host` 头，authority 在 `:authority`，
+/// hyper 会把它放进请求 URI 的 authority（URI 呈绝对形式 `https://host/path`），
+/// 于是 `Host` 头为空。Cloudflare 回源默认走 h2，只读 `Host` 头会让**所有 HTTPS 请求**
+/// 都匹配不到上游，静默落到本服务的占位路由（`/`、`/health`）——那里返回 200 的
+/// `{"status":"ok"}`，看起来像成功，实际整站都变成了这段 JSON。h1 请求则相反：
+/// URI 是 origin-form（`/path`，没有 authority），只能靠 `Host` 头。
+fn request_host(req: &Request) -> String {
+    if let Some(host) = req.uri().host() {
+        return host.to_ascii_lowercase();
+    }
+
+    let raw = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    // h1 的 Host 可能带端口（如 localhost:4321）；只有纯数字端口才剥掉，
+    // 免得把 IPv6 字面量（[::1]）切坏。
+    match raw.rsplit_once(':') {
+        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => {
+            host.to_ascii_lowercase()
+        }
+        _ => raw.to_ascii_lowercase(),
+    }
+}
+
 async fn log_request(req: Request, next: middleware::Next) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
     let start = std::time::Instant::now();
-    let host = req
-        .headers()
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("-")
-        .to_string();
+    let host = {
+        let host = request_host(&req);
+        if host.is_empty() { "-".to_string() } else { host }
+    };
 
     let response = next.run(req).await;
 
@@ -128,16 +155,8 @@ static PROXY_CLIENT: std::sync::LazyLock<reqwest::Client> =
     std::sync::LazyLock::new(reqwest::Client::new);
 
 async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
-    let host_header = req
-        .headers()
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_lowercase();
-    let host = host_header
-        .rsplit_once(':')
-        .map(|(host, _port)| host)
-        .unwrap_or(&host_header);
+    let host = request_host(&req);
+    let host = host.as_str();
 
     if host == "tact.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_TACT");
@@ -148,13 +167,23 @@ async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
     } else if host == "moyan.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN");
         proxy_request(req, &upstream, 5000).await
-    } else if host == "admin.moyan.0x81.uk" {
+    } else if host == "admin.moyan.0x81.uk" || host == "admin-moyan.0x81.uk" {
+        // 两个名字都收：`admin.moyan.0x81.uk` 是两层子域，既不被 Universal SSL 的
+        // *.0x81.uk 覆盖（边缘直接握手失败），也不在 Origin 证书 SAN 里（Full (strict)
+        // 下会 526）。`admin-moyan.0x81.uk` 只有一层，现成的证书就能覆盖——过渡期两个
+        // 都保留，换到新名字只需加一条 DNS 记录。
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN_ADMIN");
         proxy_request(req, &upstream, 5001).await
     } else if host == "0x81.uk" || host == "www.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_INDEX");
         proxy_request(req, &upstream, 4320).await
     } else {
+        // 没匹配上任何上游 = 有请求打到了没配置的 Host（或主机名解析又漏了一种情况）。
+        // 必须告警：下面落到本服务的占位路由时会返回 200 的 {"status":"ok"}，
+        // 表现为"站点打不开但一切正常"，最费时间。健康检查走 localhost，不吵它。
+        if !matches!(host, "" | "localhost" | "127.0.0.1" | "[::1]") {
+            tracing::warn!("no upstream configured for host {host:?}; falling through to local routes");
+        }
         next.run(req).await
     }
 }
