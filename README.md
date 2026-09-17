@@ -84,7 +84,9 @@ Compose 环境变量：
 
 构建模式相同：**Docker 多阶段 = `npm install` → `astro build` → Caddy 直接托管 `dist/`**。
 
-Dockerfile 默认使用官方镜像名（如 `node:20-alpine`、`caddy:2-alpine`、`rust:latest`、`debian:bookworm-slim`）。如果本机 Docker 已配置阿里云等镜像加速器，会自动生效；如需指定自定义镜像源，也可通过 build args 覆盖。
+Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpine`，Rust 服务 `rust:latest` + 对应的 Debian：`website-rs` 是 `debian:bookworm-slim`、`moyan-backend` 是 `debian:trixie-slim`）。如果本机 Docker 已配置阿里云等镜像加速器，会自动生效；如需指定自定义镜像源，也可通过 build args 覆盖。
+
+⚠️ `DEBIAN_IMAGE` 不要跨服务统一覆盖：`moyan-backend` 用 `rust:latest` 编出的二进制要求 **GLIBC ≥ 2.39**，而 `bookworm` 只有 2.36 —— 镜像能构建成功，一启动就 `version 'GLIBC_2.39' not found`。`.github/workflows/docker-build.yml` 因此是按服务分别传这个参数的。
 
 ### `0xindex`（产品索引）
 
