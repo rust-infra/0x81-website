@@ -18,8 +18,9 @@ services:
     restart: unless-stopped
 
   moyan-backend:
-    # 服务器不编译：二进制由 scripts/build-rust.sh 在本地编好放进 ./bin/，
-    # 这里只用 Dockerfile 的 runtime stage（仅运行时依赖：ffmpeg/python3/yt-dlp），
+    # 服务器不编译：二进制由 CI（release workflow，打 tag 触发）编好并以 release
+    # 资产发布，服务器用 scripts/fetch-rust.sh <tag> 拉到 ./bin/；这里只用
+    # Dockerfile 的 runtime stage（仅运行时依赖：ffmpeg/python3/yt-dlp），
     # 再把它挂载进容器。
     image: 0x81/moyan-backend-runtime:local
     build:
@@ -59,8 +60,9 @@ services:
       # :Z relabels the bind mount to container_file_t so the container can
       # write the SQLite DB on SELinux-enforcing hosts (SQLITE_CANTOPEN otherwise)
       - ./moyan-backend/data:/data:Z
-      # 本地编译好的二进制（scripts/build-rust.sh 产出）。:Z 同上，SELinux 下可读可执行。
-      # 注意：先跑 scripts/build-rust.sh，否则 compose 会把不存在的路径建成空目录。
+      # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑
+      # scripts/build-rust.sh）。:Z 同上，SELinux 下可读可执行。
+      # 注意：先跑 scripts/fetch-rust.sh，否则 compose 会把不存在的路径建成空目录。
       - ./bin/moyan-backend:/app/moyan-backend:ro,Z
     restart: unless-stopped
     healthcheck:
@@ -87,7 +89,7 @@ services:
     restart: unless-stopped
 
   website-rs:
-    # 同上：runtime stage 只装 ca-certificates/curl，二进制由本地编译后挂载。
+    # 同上：runtime stage 只装 ca-certificates/curl，二进制由 fetch-rust.sh 拉取后挂载。
     image: 0x81/website-rs-runtime:local
     build:
       context: ./website-rs
@@ -106,7 +108,7 @@ services:
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
       - ./certs:/certs:ro
-      # 本地编译好的二进制（scripts/build-rust.sh 产出）
+      # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑 scripts/build-rust.sh）
       - ./bin/website-rs:/app/website-rs:ro,Z
     depends_on:
       - website

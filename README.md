@@ -75,7 +75,7 @@ Compose 环境变量：
 
 1. Cloudflare → SSL/TLS → **Origin Server** → Create Certificate，覆盖 `0x81.uk, *.0x81.uk`
 2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）
-3. `scripts/build-rust.sh && docker compose up -d` 后网关同时监听 80/443
+3. `scripts/fetch-rust.sh <tag> && docker compose up -d` 后网关同时监听 80/443
 4. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
 
 缺少证书文件时网关自动退回仅 HTTP（本地开发无需证书）。
@@ -120,32 +120,103 @@ Dockerfile 默认使用官方镜像名（如 `node:20-alpine`、`caddy:2-alpine`
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin.moyan.0x81.uk`）
 
-## Rust 服务的构建与部署（本地编译，服务器只运行）
+## Rust 服务的构建与部署（CI 编译，服务器只运行）
 
-`website-rs` 与 `moyan-backend` 的镜像**只含运行时依赖**，二进制在本地编译后挂载进容器，
-服务器上不再出现 cargo / Rust 工具链；二进制本身随仓库提交，服务器 `git pull` 即得：
+`website-rs` 与 `moyan-backend` 的镜像**只含运行时依赖**：二进制在 CI 里编译成 GitHub Release
+资产，服务器按 tag 下载后挂载进容器。服务器上没有 cargo / Rust 工具链，`git pull` 也不再搬运
+二进制（历史提交里还有旧的，git 不会回收，也不会自动删除）。
 
-```bash
-scripts/build-rust.sh          # 本地/CI 编译，产出 bin/website-rs、bin/moyan-backend
-git add bin/ && git commit ... # 二进制与源码一起进版本控制
-# 服务器上：
-git pull && docker compose up -d   # 只构建 runtime 层（apt/pip），不跑 cargo
+### 一次发布 + 一次部署
+
+```text
+[开发机]  git tag v0.1.0 && git push origin v0.1.0
+      │
+      ▼
+[GitHub Actions]  Release Rust Binaries（ubuntu-latest，tag 触发）
+      ├─ PLATFORM=linux/amd64 scripts/build-rust.sh
+      │    ├ 两个服务各自 Dockerfile 的 builder 段编译（工具链/glibc 与本地一致）
+      │    ├ docker cp 提取 ELF → elf-arch.py 校验架构 → 写 bin/<service>.rev
+      │    └ cd bin && sha256sum website-rs moyan-backend > SHA256SUMS
+      └─ 发布 release 资产：website-rs · moyan-backend · *.rev · SHA256SUMS
+      │
+      ▼
+[服务器]  git pull                        ← 只更新源码 + compose + scripts，不含二进制
+      ├─ scripts/fetch-rust.sh v0.1.0      ← 需要 GH_TOKEN，走 api.github.com
+      │    └ 下到临时目录 → 校验 sha256 + ELF 架构 → bin/x.new → rename 覆盖
+      └─ docker compose up -d              ← 只建 runtime 层（apt/pip，之后走缓存）
+           └ 7 个容器起来：2 个 Rust 服务挂载 bin/，5 个前端照常构建
 ```
 
+### 服务器上的落盘与容器拓扑
+
+```text
+ /opt/moyan/                    ← git pull 只更新到这里
+ ├── docker-compose.yml
+ ├── scripts/{build-rust.sh, fetch-rust.sh, lib/elf-arch.py}
+ ├── .env                       ← GH_TOKEN=github_pat_xxx（fine-grained，Contents: Read）
+ ├── certs/{origin.pem, origin-key.pem}
+ └── bin/                       ← 唯一由 fetch-rust.sh 填充，不在版本控制里
+      ├── website-rs        10.3 MB / 0755   →  挂进 /app/website-rs（:ro,Z）
+      ├── website-rs.rev    git 50adf90 · built 2026-09-17T… · linux/amd64
+      ├── moyan-backend     18.2 MB / 0755   →  挂进 /app/moyan-backend（:ro,Z）
+      └── moyan-backend.rev
+
+ docker compose up -d 之后的容器：
+
+   website-rs      :80 :443   0x81/website-rs-runtime:local（只装 ca-certificates, curl）
+                     ├ /app/website-rs  ← bin/website-rs
+                     ├ /certs           ← ./certs
+                     └ healthcheck GET /health
+
+   moyan-backend   :4323      0x81/moyan-backend-runtime:local（另加 ffmpeg python3 yt-dlp libsqlite3-0）
+                     ├ /app/moyan-backend ← bin/moyan-backend
+                     ├ /data              ← ./moyan-backend/data（SQLite）
+                     └ healthcheck GET /api/health
+
+   前端 5 个      0xindex:4320 · website:4321 · crab-web:4322 · moyan-web:5000 · moyan-admin:5001
+                     └ 常规多阶段构建（node 构建 → Caddy 托管 dist），与 Rust 二进制无关
+
+ 流量：Cloudflare → website-rs:80/443 →（按 Host 反代，规则见上面「架构」）→ 5 个前端
+                                                            └ /api → moyan-backend:4323
+```
+
+### 三条常用路径
+
+| 场景 | 命令 | 说明 |
+|------|------|------|
+| **首次部署** | `git clone` → `.env` 里写 `GH_TOKEN` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d --build` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录 |
+| **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build` |
+| **回滚** | `scripts/fetch-rust.sh <旧 tag> && docker compose up -d` | 版本锚点是 tag，不用碰 git 历史 |
+
+后备手段（CI 挂了 / 服务器连不上 GitHub）：在开发机 `scripts/build-rust.sh` 编出**同样的两个
+文件**，`scp` 到服务器 `bin/`，再 `docker compose up -d`。compose 只关心 `bin/<service>` 里
+是什么，不关心它怎么来的。
+
+> **从"二进制随仓库提交"切到本流程时的第一次部署**：`bin/*` 之前是被跟踪的，删除它们的那个
+> `git pull` 会**连带删掉服务器工作区里的旧二进制**。所以这次必须
+> `git pull` → `scripts/fetch-rust.sh <tag>`（或先从开发机 scp）→ 才能 `docker compose up -d`，
+> 不能只 `git pull`。缺失时 compose 会把 `./bin/<service>` 建成的空目录挂进容器，表现为
+> 容器起不来、日志里全是 exec 失败。
+
+### 细节与约束
+
+- `GH_TOKEN` 需要 fine-grained PAT、权限 `Contents: Read`（仓库是 private，release 资产
+  必须走 API 下载；`github.com/.../releases/download/...` 直链在私有仓库下不带凭证会 404）。
+  可放在仓库根 `.env` 的 `GH_TOKEN=` 一行里，脚本不会把它写进任何产物。
 - 两个 Dockerfile 都拆成 `runtime`（仅运行时依赖）与 `full`（把二进制 COPY 进镜像）两段。
   compose 用 `build.target: runtime` + 挂载 `./bin/<service>`；
   `docker build ./website-rs` 的默认行为仍是 `full`，不受影响。
 - 编译复用各项目 Dockerfile 的 `builder` 段，以保证工具链与 glibc 匹配
-  （`moyan-backend` 的二进制要求 GLIBC ≥ 2.39，只能跑在 trixie runtime 上）。
-- 产出的都是 **Linux 二进制**，架构固定为 `linux/amd64`（在 arm64 机器上构建时，
-  脚本会显式要求 amd64，避免编出服务器跑不了的 aarch64 二进制）；脚本提取后会校验 ELF 架构。
-  服务器是 arm64 时用 `PLATFORM=linux/arm64 scripts/build-rust.sh`，并保证 runtime 层也是同架构。
-- `bin/<service>` 随仓库提交，每个版本给仓库增加约 28MB（两个二进制之和，且不可压缩）。
-  另有一个 `bin/<service>.rev` 记录该二进制的来源提交、编译时间与架构 —— 提交二进制后，
-  这是唯一能判断"它是哪版源码编的"的依据。
-- 更新部署：本地跑脚本 → **把二进制和源码一起提交** → 服务器 `git pull && docker compose up -d`。
-  只有改动过 Dockerfile 的依赖列表时，才需要加 `--build` 重建 runtime 层。
-- 回滚：`git checkout <旧提交> -- bin/<service>` 然后 `docker compose up -d`。
+  （`moyan-backend` 的二进制要求 GLIBC ≥ 2.39，只能跑在 trixie runtime 上）；CI 与本地
+  跑的是同一条命令，所以产物一致。
+- 产出的都是 **Linux 二进制**，发布 workflow 固定 `linux/amd64`；`scripts/fetch-rust.sh`
+  下载后会校验 sha256 与 ELF 架构，不符直接失败（避免部署时才 `Exec format error`）。
+  服务器是 arm64 时，改 workflow 的 `PLATFORM` 与服务器侧 `PLATFORM=linux/arm64`，并保证
+  runtime 层也是同架构。
+- 落盘是"先下到临时目录 → 校验 sha256 与 ELF 架构 → 在 `bin/` 内写 `.new` 再 rename 覆盖"，
+  所以下载中断、校验失败或磁盘写满都不会让 compose 挂上半个二进制，旧版本仍可跑。
+- `bin/<service>.rev` 记录该二进制的来源提交、编译时间与架构，是判断"它是哪版源码编的"
+  的依据；`cat bin/*.rev` 可查。
 
 ## 本地运行
 
