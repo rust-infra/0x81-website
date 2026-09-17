@@ -29,8 +29,11 @@ COPY data ./data
 # Build release binary
 RUN cargo build --release
 
-# Runtime stage
-FROM ${DEBIAN_IMAGE}
+# Runtime stage — 只装运行时依赖（ffmpeg / python3 / yt-dlp 等），不含源码、
+# 不含 Rust 工具链。部署时由 scripts/build-rust.sh 在本地编译出二进制，
+# compose 把它挂载到 /app/moyan-backend，服务器不跑 cargo：
+#   docker build --target runtime ./moyan-backend
+FROM ${DEBIAN_IMAGE} AS runtime
 
 WORKDIR /app
 
@@ -46,12 +49,6 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g; s/security.debian.org/mirrors
     python3-pip \
     && pip3 install --break-system-packages --no-cache-dir yt-dlp \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy binary from builder
-COPY --from=builder /app/target/release/moyan-backend /app/moyan-backend
-
-# Copy migrations
-COPY --from=builder /app/migrations /app/migrations
 
 # Create data directory
 RUN mkdir -p /data
@@ -70,3 +67,12 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Run
 CMD ["/app/moyan-backend"]
+
+# 一体化镜像（二进制 COPY 进镜像），保留给不使用挂载的场景。
+# 默认 stage 仍是它，因此 `docker build ./moyan-backend` 行为不变。
+FROM runtime AS full
+
+COPY --from=builder /app/target/release/moyan-backend /app/moyan-backend
+
+# Copy migrations（运行时并不需要：sqlx::migrate! 已在编译期内嵌进二进制，保留以兼容旧路径）
+COPY --from=builder /app/migrations /app/migrations

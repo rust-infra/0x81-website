@@ -75,7 +75,7 @@ Compose 环境变量：
 
 1. Cloudflare → SSL/TLS → **Origin Server** → Create Certificate，覆盖 `0x81.uk, *.0x81.uk`
 2. 证书存为 `certs/origin.pem`，私钥存为 `certs/origin-key.pem`（`certs/` 已 gitignore，不入库）
-3. `docker compose up -d --build` 后网关同时监听 80/443
+3. `scripts/build-rust.sh && docker compose up -d` 后网关同时监听 80/443
 4. Cloudflare SSL/TLS 加密模式切到 **Full (strict)**，并开启 **Always Use HTTPS**
 
 缺少证书文件时网关自动退回仅 HTTP（本地开发无需证书）。
@@ -120,9 +120,37 @@ Dockerfile 默认使用官方镜像名（如 `node:20-alpine`、`caddy:2-alpine`
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin.moyan.0x81.uk`）
 
+## Rust 服务的构建与部署（本地编译，服务器只运行）
+
+`website-rs` 与 `moyan-backend` 的镜像**只含运行时依赖**，二进制在本地编译后挂载进容器，
+服务器上不再出现 cargo / Rust 工具链；二进制本身随仓库提交，服务器 `git pull` 即得：
+
+```bash
+scripts/build-rust.sh          # 本地/CI 编译，产出 bin/website-rs、bin/moyan-backend
+git add bin/ && git commit ... # 二进制与源码一起进版本控制
+# 服务器上：
+git pull && docker compose up -d   # 只构建 runtime 层（apt/pip），不跑 cargo
+```
+
+- 两个 Dockerfile 都拆成 `runtime`（仅运行时依赖）与 `full`（把二进制 COPY 进镜像）两段。
+  compose 用 `build.target: runtime` + 挂载 `./bin/<service>`；
+  `docker build ./website-rs` 的默认行为仍是 `full`，不受影响。
+- 编译复用各项目 Dockerfile 的 `builder` 段，以保证工具链与 glibc 匹配
+  （`moyan-backend` 的二进制要求 GLIBC ≥ 2.39，只能跑在 trixie runtime 上）。
+- 产出的都是 **Linux 二进制**，架构固定为 `linux/amd64`（在 arm64 机器上构建时，
+  脚本会显式要求 amd64，避免编出服务器跑不了的 aarch64 二进制）；脚本提取后会校验 ELF 架构。
+  服务器是 arm64 时用 `PLATFORM=linux/arm64 scripts/build-rust.sh`，并保证 runtime 层也是同架构。
+- `bin/<service>` 随仓库提交，每个版本给仓库增加约 28MB（两个二进制之和，且不可压缩）。
+  另有一个 `bin/<service>.rev` 记录该二进制的来源提交、编译时间与架构 —— 提交二进制后，
+  这是唯一能判断"它是哪版源码编的"的依据。
+- 更新部署：本地跑脚本 → **把二进制和源码一起提交** → 服务器 `git pull && docker compose up -d`。
+  只有改动过 Dockerfile 的依赖列表时，才需要加 `--build` 重建 runtime 层。
+- 回滚：`git checkout <旧提交> -- bin/<service>` 然后 `docker compose up -d`。
+
 ## 本地运行
 
 ```bash
+scripts/build-rust.sh     # 首次需要：生成 bin/ 下的两个二进制（Rust 服务挂载用）
 docker compose up -d --build
 ```
 

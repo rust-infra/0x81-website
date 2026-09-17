@@ -18,7 +18,13 @@ services:
     restart: unless-stopped
 
   moyan-backend:
-    build: ./moyan-backend
+    # 服务器不编译：二进制由 scripts/build-rust.sh 在本地编好放进 ./bin/，
+    # 这里只用 Dockerfile 的 runtime stage（仅运行时依赖：ffmpeg/python3/yt-dlp），
+    # 再把它挂载进容器。
+    image: 0x81/moyan-backend-runtime:local
+    build:
+      context: ./moyan-backend
+      target: runtime
     ports:
       - "4323:4323"
     environment:
@@ -53,6 +59,9 @@ services:
       # :Z relabels the bind mount to container_file_t so the container can
       # write the SQLite DB on SELinux-enforcing hosts (SQLITE_CANTOPEN otherwise)
       - ./moyan-backend/data:/data:Z
+      # 本地编译好的二进制（scripts/build-rust.sh 产出）。:Z 同上，SELinux 下可读可执行。
+      # 注意：先跑 scripts/build-rust.sh，否则 compose 会把不存在的路径建成空目录。
+      - ./bin/moyan-backend:/app/moyan-backend:ro,Z
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4323/api/health"]
@@ -78,7 +87,11 @@ services:
     restart: unless-stopped
 
   website-rs:
-    build: ./website-rs
+    # 同上：runtime stage 只装 ca-certificates/curl，二进制由本地编译后挂载。
+    image: 0x81/website-rs-runtime:local
+    build:
+      context: ./website-rs
+      target: runtime
     ports:
       - "80:80"
       - "443:443"
@@ -93,6 +106,8 @@ services:
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
       - ./certs:/certs:ro
+      # 本地编译好的二进制（scripts/build-rust.sh 产出）
+      - ./bin/website-rs:/app/website-rs:ro,Z
     depends_on:
       - website
       - 0xindex
