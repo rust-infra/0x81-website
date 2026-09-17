@@ -306,24 +306,49 @@ fn row_is_empty(row: &[calamine::Data]) -> bool {
     row.iter().all(|cell| cell_to_string(cell).trim().is_empty())
 }
 
+/// 例句单元格的格式：一条例句一行，多条例句用换行分隔。
+/// 每行是 `英文` 或 `英文|中文`；没有中文译文时（含历史文件）按占位符处理。
 pub fn examples_to_excel_text(examples: &[CardExample]) -> String {
     examples
         .iter()
-        .map(|example| example.sentence_en.as_str())
+        .map(|example| {
+            let sentence_en = example.sentence_en.trim();
+            let translation_zh = example.translation_zh.trim();
+            if translation_zh.is_empty() || translation_zh == EXAMPLE_TRANSLATION_PLACEHOLDER {
+                sentence_en.to_string()
+            } else {
+                format!("{sentence_en}|{translation_zh}")
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-pub fn example_from_import_text(text: &str) -> Option<CardExample> {
-    let sentence_en = text.trim();
-    if sentence_en.is_empty() {
-        return None;
-    }
-    Some(CardExample {
-        id: format!("ex_{}", Uuid::new_v4().simple()),
-        sentence_en: sentence_en.to_string(),
-        translation_zh: EXAMPLE_TRANSLATION_PLACEHOLDER.to_string(),
-    })
+pub fn examples_from_import_text(text: &str) -> Vec<CardExample> {
+    text.split('\n')
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() {
+                return None;
+            }
+            let (sentence_en, translation_zh) = match line.split_once('|') {
+                Some((sentence_en, translation_zh)) => (sentence_en.trim(), translation_zh.trim()),
+                None => (line, ""),
+            };
+            if sentence_en.is_empty() {
+                return None;
+            }
+            Some(CardExample {
+                id: format!("ex_{}", Uuid::new_v4().simple()),
+                sentence_en: sentence_en.to_string(),
+                translation_zh: if translation_zh.is_empty() {
+                    EXAMPLE_TRANSLATION_PLACEHOLDER.to_string()
+                } else {
+                    translation_zh.to_string()
+                },
+            })
+        })
+        .collect()
 }
 
 pub fn build_template_xlsx() -> Result<Vec<u8>, AppError> {
@@ -533,10 +558,49 @@ mod tests {
     }
 
     #[test]
-    fn example_from_import_text_uses_placeholder_translation() {
-        let example = example_from_import_text("Hello world.")
-            .expect("example should be created");
-        assert_eq!(example.translation_zh, EXAMPLE_TRANSLATION_PLACEHOLDER);
-        assert!(example.id.starts_with("ex_"));
+    fn examples_from_import_text_pairs_english_and_chinese() {
+        let examples = examples_from_import_text("Excuse me!|打扰一下！");
+        assert_eq!(examples.len(), 1);
+        assert_eq!(examples[0].sentence_en, "Excuse me!");
+        assert_eq!(examples[0].translation_zh, "打扰一下！");
+        assert!(examples[0].id.starts_with("ex_"));
+    }
+
+    #[test]
+    fn examples_from_import_text_handles_multiple_lines_and_missing_translation() {
+        let examples = examples_from_import_text("Is this your handbag?|这是你的手提包吗？\n\n Thank you very much. \n");
+        assert_eq!(examples.len(), 2);
+        assert_eq!(examples[0].translation_zh, "这是你的手提包吗？");
+        assert_eq!(examples[1].sentence_en, "Thank you very much.");
+        assert_eq!(examples[1].translation_zh, EXAMPLE_TRANSLATION_PLACEHOLDER);
+    }
+
+    #[test]
+    fn examples_from_import_text_returns_empty_for_blank_cell() {
+        assert!(examples_from_import_text("   ").is_empty());
+        assert!(examples_from_import_text("").is_empty());
+    }
+
+    #[test]
+    fn examples_round_trip_through_excel_text() {
+        let examples = vec![
+            CardExample {
+                id: "ex_1".to_string(),
+                sentence_en: "Excuse me!".to_string(),
+                translation_zh: "打扰一下！".to_string(),
+            },
+            CardExample {
+                id: "ex_2".to_string(),
+                sentence_en: "Yes it is.".to_string(),
+                translation_zh: EXAMPLE_TRANSLATION_PLACEHOLDER.to_string(),
+            },
+        ];
+        let text = examples_to_excel_text(&examples);
+        assert_eq!(text, "Excuse me!|打扰一下！\nYes it is.");
+        let parsed = examples_from_import_text(&text);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].sentence_en, "Excuse me!");
+        assert_eq!(parsed[0].translation_zh, "打扰一下！");
+        assert_eq!(parsed[1].translation_zh, EXAMPLE_TRANSLATION_PLACEHOLDER);
     }
 }
