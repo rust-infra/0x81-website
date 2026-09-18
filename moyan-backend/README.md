@@ -66,9 +66,9 @@ docker run -d \
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | `/api/auth/google/callback?code=xxx` | Google OAuth 回调 |
-| POST | `/api/auth/kimi/device` | Kimi Device Flow 获取设备码 |
-| POST | `/api/auth/kimi/token` | Kimi Device Flow 轮询 Token |
-| POST | `/api/auth/kimi` | Kimi 登录（传入 access_token） |
+| POST | `/api/auth/kimi/device` | Kimi Device Flow 获取设备码（后端代理） |
+| POST | `/api/auth/kimi/token` | Kimi Device Flow 轮询：授权完成后**服务端**用 userinfo 复核并签发本服务的 JWT |
+| POST | `/api/auth/kimi` | ⚠️ **已废弃（410）**：原先客户端提交 access_token 换 JWT，而那里本地解 JWT 不验签，可被自签 `sub` 冒充他人（详见 `controllers/auth.rs`） |
 | GET | `/api/auth/me` | 获取当前用户信息 (需 JWT) |
 | GET | `/api/auth/stats` | 获取用户统计 (需 JWT) |
 

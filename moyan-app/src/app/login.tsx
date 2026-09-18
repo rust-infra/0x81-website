@@ -14,7 +14,6 @@ import {
 import {
   googleMobileLogin,
   kimiDevice,
-  kimiLogin,
   kimiTokenPoll,
   type KimiDeviceInfo,
 } from '../lib/api';
@@ -112,8 +111,7 @@ export default function LoginScreen() {
         if (result.status === 'ok') {
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
           setPollStatus('授权成功，登录中...');
-          const login = await kimiLogin(result.accessToken);
-          await signIn(login.token, login.user);
+          await signIn(result.token, result.user);
         }
       } catch (err) {
         if (!aliveRef.current) return;

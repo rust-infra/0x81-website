@@ -3,14 +3,14 @@ use axum::{
     response::Json,
 };
 use chrono::Utc;
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, encode};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::middleware::auth::Claims;
 use crate::middleware::error::{AppError, AppState, success};
 use crate::models::{
-    AuthResponse, GoogleUserInfo, KimiAuthRequest, KimiTokenPayload, User, UserIdentity,
+    AuthResponse, GoogleUserInfo, KimiTokenPayload, User, UserIdentity,
     UserResponse,
 };
 
@@ -199,6 +199,12 @@ async fn exchange_google_code(
 const KIMI_CLIENT_ID: &str = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const KIMI_AUTH_BASE: &str = "https://auth.kimi.com";
 
+/// Kimi 的 OAuth 基址。`MOYAN_KIMI_BASE_URL` **只为测试**存在（指向本地 stub），
+/// 生产一律是 `KIMI_AUTH_BASE`。
+fn kimi_base() -> String {
+    std::env::var("MOYAN_KIMI_BASE_URL").unwrap_or_else(|_| KIMI_AUTH_BASE.to_string())
+}
+
 /// Kimi device authorization proxy
 /// POST /api/auth/kimi/device
 #[derive(Debug, Deserialize)]
@@ -224,7 +230,7 @@ pub async fn kimi_device(
     let device_id = req.device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let res = reqwest::Client::new()
-        .post(format!("{}/api/oauth/device_authorization", KIMI_AUTH_BASE))
+        .post(format!("{}/api/oauth/device_authorization", kimi_base()))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Accept", "application/json")
         .header("X-Msh-Platform", "web")
@@ -262,14 +268,19 @@ pub struct KimiTokenPollRequest {
     pub device_id: Option<String>,
 }
 
+/// Kimi device flow 的轮询端点。
+///
+/// 授权完成时**由服务端**拿 access_token 去 Kimi 的 userinfo 校验并建号，只把
+/// 「我们自己的 JWT」返回给客户端 —— Kimi 的 access_token 不出这个函数。
+/// （2026-09-18 之前是客户端把 access_token 提交到 `/api/auth/kimi`，而那边不验签。）
 pub async fn kimi_token_poll(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     axum::Json(req): axum::Json<KimiTokenPollRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let device_id = req.device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
     let res = reqwest::Client::new()
-        .post(format!("{}/api/oauth/token", KIMI_AUTH_BASE))
+        .post(format!("{}/api/oauth/token", kimi_base()))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Accept", "application/json")
         .header("X-Msh-Platform", "web")
@@ -297,7 +308,25 @@ pub async fn kimi_token_poll(
         .await
         .map_err(|e| AppError::Internal(format!("Parse error: {}", e)))?;
 
-    Ok(success(data))
+    // 用户还没授权（authorization_pending / slow_down）或出错：原样透传，
+    // 客户端据此继续轮询或报错。
+    let Some(access_token) = data
+        .get("access_token")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+    else {
+        return Ok(success(data));
+    };
+
+    // 授权完成：立刻用 Kimi 自己的 userinfo 复核这个 token 并建号。失败（含伪造 /
+    // 过期 token）一律 401 —— **绝不降级**成"本地解 JWT 取 sub"。
+    let user = kimi_user_from_access_token(&state, &access_token).await?;
+    let token = generate_jwt(&state, &user)?;
+
+    Ok(success(serde_json::json!({
+        "token": token,
+        "user": UserResponse::from(user),
+    })))
 }
 
 /// Kimi 未返回 email 时的占位邮箱：取 provider_id 的前 8 个**字符**。
@@ -310,31 +339,46 @@ fn kimi_placeholder_email(provider_id: &str) -> String {
     format!("{head}@kimi.user")
 }
 
-/// Verify Kimi access token and create/login user
-/// POST /api/auth/kimi
-pub async fn kimi_login(
-    State(state): State<AppState>,
-    axum::Json(req): axum::Json<KimiAuthRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
-    // Decode Kimi JWT without signature verification
-    // Kimi does not expose JWKS, so we use dangerous_insecure_decode
-    let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
-    validation.insecure_disable_signature_validation();
-    validation.validate_exp = false;
+/// 用 Kimi 的 userinfo 端点复核 access_token，并据此建号 / 登录。
+///
+/// 这是**唯一**信任 Kimi 身份的地方：token 由 Kimi 签发、由 Kimi 校验，我们只读它
+/// 返回的 `sub`。Kimi 不在 JWKS 暴露公钥，所以"本地验签"做不到——同理，
+/// "本地解 JWT 取 sub"等于信任调用方，绝不能用（见 `kimi_login_deprecated` 的说明）。
+async fn kimi_user_from_access_token(
+    state: &AppState,
+    access_token: &str,
+) -> Result<User, AppError> {
+    let res = reqwest::Client::new()
+        .get(format!("{}/api/oauth/userinfo", kimi_base()))
+        .header("Accept", "application/json")
+        .header("X-Msh-Platform", "web")
+        .header("X-Msh-Version", "1.0.0")
+        .header("X-Msh-Device-Name", "MoyanRust")
+        .header("X-Msh-Device-Model", "server")
+        .header("X-Msh-Os-Version", "linux")
+        .header("Authorization", format!("Bearer {access_token}"))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Kimi userinfo failed: {}", e)))?;
 
-    let token_data = jsonwebtoken::decode::<KimiTokenPayload>(
-        &req.access_token,
-        &DecodingKey::from_secret(&[]),
-        &validation,
-    )
-    .map_err(|_| AppError::BadRequest("Invalid Kimi access token format".to_string()))?;
+    if !res.status().is_success() {
+        let status = res.status();
+        let err_text = res.text().await.unwrap_or_default();
+        tracing::warn!(%status, "Kimi userinfo rejected the access token");
+        return Err(AppError::Unauthorized(format!(
+            "Kimi rejected the access token: {err_text}"
+        )));
+    }
 
-    let payload = token_data.claims;
+    let payload: KimiTokenPayload = res
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("Parse userinfo error: {}", e)))?;
 
     let provider_id = payload
         .sub
         .or(payload.user_id)
-        .ok_or_else(|| AppError::BadRequest("Token missing user identifier".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("Kimi userinfo missing user identifier".to_string()))?;
 
     let name = payload
         .name
@@ -350,22 +394,41 @@ pub async fn kimi_login(
 
     let avatar = payload.picture.or(payload.avatar);
 
-    let user = find_or_create_user(
-        &state,
+    find_or_create_user(
+        state,
         "kimi",
         &provider_id,
         &name,
         &email,
         avatar.as_deref(),
     )
-    .await?;
+    .await
+}
 
-    let token = generate_jwt(&state, &user)?;
-
-    Ok(success(AuthResponse {
-        token,
-        user: user.into(),
-    }))
+/// 旧接口（已废弃）：客户端把 Kimi 的 access_token 交给我们换后端 JWT。
+///
+/// 为什么废弃：这里原先用 `validation.insecure_disable_signature_validation()` 本地解
+/// JWT 取 `sub`，等于**信任调用方提交的身份** —— 任何人自签一个 HS256 token、把 sub
+/// 填成别人的值就能拿到对方的后端 JWT（2026-09-18 实测：自签 token → 200，用返回的
+/// token 读 `/api/settings` → 200，即账号接管）。Kimi 不在 JWKS 上暴露公钥，本地验签
+/// 本来就做不到；正确做法是由服务端持 access_token 去 Kimi 的 userinfo 复核
+/// （`kimi_user_from_access_token`），这一步已经并进 `POST /api/auth/kimi/token` ——
+/// access_token 不再离开服务端。
+///
+/// 路由保留只为给旧客户端一个明确答复（410 而不是 404）。
+pub async fn kimi_login_deprecated() -> impl axum::response::IntoResponse {
+    (
+        axum::http::StatusCode::GONE,
+        Json(serde_json::json!({
+            "success": false,
+            "error": {
+                "code": 410,
+                "message": "此接口已废弃：请在服务端 device flow 里完成授权 \
+                            （/api/auth/kimi/device → /api/auth/kimi/token），\
+                            客户端不再提交 access_token。"
+            }
+        })),
+    )
 }
 
 // ==================== Common Auth Endpoints ====================

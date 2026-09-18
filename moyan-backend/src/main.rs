@@ -649,6 +649,157 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
         Ok(())
     }
+
+    /// 设置一个环境变量，测试结束（含 panic）时自动清掉。
+    struct EnvGuard(&'static str);
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe { std::env::remove_var(self.0) }
+        }
+    }
+
+    /// 一个假的 Kimi：`/api/oauth/token` 返回给定的授权结果，
+    /// `/api/oauth/userinfo` 按 `verified` 放行或 401。
+    async fn start_kimi_stub(access_token: Option<&str>, verified: bool) -> String {
+        use axum::{
+            Json, Router,
+            routing::{get, post},
+        };
+
+        let token_body = match access_token {
+            Some(token) => serde_json::json!({ "access_token": token, "token_type": "Bearer" }),
+            None => serde_json::json!({ "error": "authorization_pending" }),
+        };
+        let userinfo_body = if verified {
+            serde_json::json!({ "sub": "kimi-user-1", "name": "Kimi User", "email": "k@kimi.user" })
+        } else {
+            serde_json::json!({ "code": "unauthenticated" })
+        };
+
+        let app = Router::new()
+            .route(
+                "/api/oauth/token",
+                post(move || {
+                    let body = token_body.clone();
+                    async move { Json(body) }
+                }),
+            )
+            .route(
+                "/api/oauth/userinfo",
+                get(move || {
+                    let body = userinfo_body.clone();
+                    let status = if verified {
+                        StatusCode::OK
+                    } else {
+                        StatusCode::UNAUTHORIZED
+                    };
+                    async move { (status, Json(body)) }
+                }),
+            );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind kimi stub");
+        let addr = listener.local_addr().expect("kimi stub addr");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        format!("http://{addr}")
+    }
+
+    fn kimi_poll_request(device_code: &str) -> anyhow::Result<Request<Body>> {
+        Ok(Request::builder()
+            .method("POST")
+            .uri("/api/auth/kimi/token")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(
+                &serde_json::json!({ "device_code": device_code, "device_id": "d-1" }),
+            )?))?)
+    }
+
+    /// 现行登录路径：轮询拿到 Kimi 的 access_token 后由**服务端**去 userinfo 复核，
+    /// 只把我们的 JWT 回给客户端——Kimi 的 access_token 不离开服务端。
+    #[tokio::test]
+    async fn kimi_token_poll_returns_our_jwt_and_never_the_kimi_token() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let base = start_kimi_stub(Some("kimi-access-token"), true).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app.clone().oneshot(kimi_poll_request("dc-1")?).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        let token = body["data"]["token"]
+            .as_str()
+            .expect("backend token in response")
+            .to_string();
+        assert_ne!(
+            token, "kimi-access-token",
+            "不能把 Kimi 的 access_token 当成我们的 JWT 回传"
+        );
+        assert!(
+            !body.to_string().contains("kimi-access-token"),
+            "响应体里不应出现 Kimi 的 access_token"
+        );
+        assert_eq!(body["data"]["user"]["name"], "Kimi User");
+
+        // 这个 token 必须是**我们自己签的**：能过 jwt_middleware。
+        let me = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/auth/me")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(me.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    /// 回归：Kimi 不认的 token（伪造 / 过期）必须 401。
+    ///
+    /// 这条钉住的正是 2026-09-18 的漏洞——原先 `POST /api/auth/kimi` 本地解 JWT 取
+    /// `sub`，自签一个 token 就能冒充任何人。
+    #[tokio::test]
+    async fn kimi_token_poll_rejects_a_token_kimi_would_not_verify() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let base = start_kimi_stub(Some("forged-token"), false).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app.oneshot(kimi_poll_request("dc-2")?).await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    /// 旧接口必须保持关闭：它不验签，任何人自签 `sub` 即可接管账号。
+    #[tokio::test]
+    async fn kimi_login_endpoint_is_gone() -> anyhow::Result<()> {
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/kimi")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(
+                        &serde_json::json!({ "access_token": "forged" }),
+                    )?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::GONE);
+        Ok(())
+    }
 }
 
 #[tokio::main]
