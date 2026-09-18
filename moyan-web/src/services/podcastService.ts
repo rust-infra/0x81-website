@@ -33,14 +33,14 @@ export interface AppConfig {
   podcast?: PodcastConfig;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { API_BASE, hasBackend } from "./backendMode";
 
 function getToken(): string | null {
   return localStorage.getItem("moyan_token");
 }
 
 export function hasPodcastBackend(): boolean {
-  return API_BASE.length > 0;
+  return hasBackend();
 }
 
 async function apiRequest<T>(

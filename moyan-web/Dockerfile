@@ -14,6 +14,13 @@ RUN npm config set registry https://registry.npmmirror.com \
 # 复制源码
 COPY . .
 
+# 服务端权威模式开关（判断逻辑见 src/services/backendMode.ts）。
+# ⚠️ 线上是同源部署：moyan-web 由 Caddy 托管、Caddyfile 把 /api/* 反代到 moyan-backend，
+# 请求本就该走相对路径，所以 VITE_API_URL 是**故意留空**的。此时若不开这个开关，前端会
+# 静默退回 IndexedDB 本地模式（词库只认镜像里打包的 public/vocabulary.json），
+# 后台导入的词库在 /decks 永远看不见 —— 2026-09-18 踩过，别删。
+ARG VITE_SERVER_MODE=1
+
 # 构建生产版本
 RUN npm run build
 

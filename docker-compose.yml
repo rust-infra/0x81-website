@@ -78,7 +78,14 @@ services:
       start_period: 5s
 
   moyan-web:
-    build: ./moyan-web
+    build:
+      context: ./moyan-web
+      args:
+        # 显式开启「服务端为权威」模式（见 moyan-web/src/services/backendMode.ts）。
+        # 线上同源部署，VITE_API_URL 故意留空（请求走相对路径 /api，由 Caddy 反代到
+        # moyan-backend），所以不能再用「VITE_API_URL 非空」判断后端可用性 —— 那样
+        # 前端会退回 IndexedDB 本地模式，管理后台导入的词库在 /decks 永远看不见。
+        VITE_SERVER_MODE: "1"
     ports:
       - "5000:5000"
     depends_on:

@@ -1,4 +1,5 @@
 import { getCurrentUser, onAuthChange } from "./authService";
+import { API_BASE, hasBackend } from "./backendMode";
 import {
   getSpeechSettings,
   saveSpeechSettings,
@@ -7,7 +8,6 @@ import {
 import { getLanguage, setLanguage, type Language } from "@/i18n/translations";
 import { getThemeName, setTheme, type ThemeName } from "@/theme";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
 let startupSyncPromise: Promise<void> | null = null;
 let startupSyncKey: string | null = null;
 let settingsSyncSubscriberCount = 0;
@@ -98,7 +98,7 @@ export function formatSettingsSyncTimestamp(
 }
 
 export function hasSettingsBackend(): boolean {
-  return API_BASE.length > 0;
+  return hasBackend();
 }
 
 export function buildUserSettingsPayload(): UserSettingsPayload {

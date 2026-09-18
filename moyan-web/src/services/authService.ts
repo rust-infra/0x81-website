@@ -1,6 +1,6 @@
 // Google OAuth + Auth State Management
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { API_BASE, hasBackend } from "./backendMode";
 
 export interface User {
   id: string;
@@ -312,7 +312,7 @@ export async function loginWithKimi(
       const kimiToken = await pollKimiToken(deviceAuth.device_code);
       if (kimiToken) {
         // If backend is configured, exchange Kimi token for backend JWT
-        if (API_BASE) {
+        if (hasBackend()) {
           const res = await fetch(`${API_BASE}/api/auth/kimi`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -416,8 +416,8 @@ export function getTelegramInitData(): string {
  * 前端把 initData 交给后端，后端用 bot token 做 HMAC 校验后签发 JWT。
  */
 export async function loginWithTelegram(initData: string): Promise<User> {
-  if (!API_BASE) {
-    throw new Error("后端未配置（VITE_API_URL 为空），Telegram 登录不可用");
+  if (!hasBackend()) {
+    throw new Error("后端未配置（未开启服务端模式），Telegram 登录不可用");
   }
   const res = await fetch(`${API_BASE}/api/auth/telegram`, {
     method: "POST",
