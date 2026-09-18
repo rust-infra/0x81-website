@@ -141,8 +141,10 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 ### `moyan-web` / `moyan-admin` / `moyan-backend`（墨言）
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
+- 前端是**服务端为权威**模式：`docker-compose.yml` 给 `moyan-web` 传构建参数 `VITE_SERVER_MODE=1`（判断逻辑集中在 `moyan-web/src/services/backendMode.ts`）。线上是**同源部署**——`VITE_API_URL` 故意留空、请求走相对路径 `/api` 由 Caddy 反代，所以**不能**再用「`VITE_API_URL` 是否为空」判断后端是否可用：那样前端会静默退回 IndexedDB 本地模式，表现是「管理后台导入的词库在 `/decks` 永远看不到」（2026-09-18 踩过）。开关只影响构建产物，改完必须 `docker compose build moyan-web && docker compose up -d moyan-web`（`up -d` 不会重建镜像）。副作用：服务端模式下 `/decks` 等页面要求登录，浏览器里旧的本地牌组/进度不再显示
 - 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin.moyan.0x81.uk`（网关也认 `admin-moyan.0x81.uk`；两个名字当前的 DNS 与证书现状见「管理后台的域名与 TLS」——**目前能用的只有 `admin.moyan.0x81.uk`，且只能走 http**）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
+- 后端鉴权：Bearer **JWT（HS256，密钥 `MOYAN_JWT_SECRET`）**。⚠️ 这个键**必须**在根 `.env` 里设（`openssl rand -hex 32`）：留空会回落到 compose 里公开的 `change-me-in-production`，等于任何人都能自签 token（2026-09-18 已换掉线上默认值）。另有非 JWT 的 legacy 兜底认证（`ALLOW_LEGACY_TOKEN_AUTH`）：**默认关闭**，只有 `moyan-backend/dev-run.sh` 打开——它会把任意 Bearer 值按哈希自动建号放行，线上开着就是无鉴权入口
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk`、`https://admin-moyan.0x81.uk` 与旧名 `https://admin.moyan.0x81.uk`）
 
@@ -315,7 +317,11 @@ docker compose up -d                          # 改完 .env 要重建，只 rest
   已配置但请求头的值不相等。拿到 401 时按顺序怀疑：改完 `.env` 只 `restart` 而没重建容器（值不会
   生效，要 `up -d`）；`.env` 的值带 `\r`（CRLF 文件）/引号/尾随空格——登录页会对**你输入的值**
   `trim()`，带杂质的服务端值永远匹配不上（用 `sed -n 's/^MOYAN_ADMIN_TOKEN=//p' .env | od -c` 看）；
-  记的串和服务器上的不是同一个。
+  记的串和服务器上的不是同一个；**值含非 ASCII 字符**（如 `£`、中文）——这种最阴：服务端配了、
+  你输的也一字不差，仍然恒 401，因为 `admin_auth.rs:26` 用 `HeaderValue::to_str()`，
+  而它只接受可见 ASCII（0x20-0x7E），值里有 `£` 时 `to_str()` 直接 `Err`，中间件把请求当成
+  "没带 token"；更糟的是浏览器 `fetch` 会按 ByteString 把它编成单字节，与 `.env` 里的 UTF-8
+  永远不等。**token 只用 ASCII**（`openssl rand -hex 20`），要换就得连登录页一起换。
 - 它**不进 git**（`.gitignore` 里有 `.env`，历史里也从未提交过）、**不进 release 资产**，
   所以换服务器必须手工重建，`git clone` 拿不到——这是继 `certs/` 之后第二个纯手工部署件。
 - ⚠️ **别把 `.env` 放进前端目录**：`moyan-web/` / `moyan-admin/` 的 Dockerfile 是 `COPY . .`
