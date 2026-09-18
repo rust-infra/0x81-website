@@ -129,7 +129,7 @@ mod tests {
                 .oneshot(
                     Request::builder()
                         .uri(path)
-                        .header("authorization", "Bearer test-token")
+                        .header("authorization", format!("Bearer {}", test_bearer()))
                         .body(Body::empty())?,
                 )
                 .await?;
@@ -140,6 +140,52 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    /// 与 `test_state()` 的 `jwt_secret` 配对的真 JWT。
+    ///
+    /// 这些路由测试原本发的是非 JWT 的 `Bearer test-token`——那是 legacy 兜底路径
+    /// 才认的值。`allow_legacy_token_auth` 默认关闭后（见 `middleware::auth`）它们
+    /// 全部 401；改成签一个真的 HS256 token，测试才走线上真实的鉴权路径。
+    fn test_bearer() -> String {
+        test_bearer_for("test-user")
+    }
+
+    fn test_bearer_for(sub: &str) -> String {
+        use crate::middleware::auth::Claims;
+        let claims = Claims {
+            sub: sub.to_string(),
+            email: "test@example.com".to_string(),
+            name: "Test User".to_string(),
+            exp: 4_102_444_800, // 2100-01-01，测试用的长期有效值
+            iat: 0,
+        };
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &claims,
+            &jsonwebtoken::EncodingKey::from_secret(b"test-secret"),
+        )
+        .expect("encode test JWT")
+    }
+
+    /// 预建一个测试用户并返回它的 id。
+    ///
+    /// `type_sessions` / `type_resume` 等表对 `users` 有外键，而 sqlx 的 SQLite
+    /// 连接默认开启外键强制——只签一个合法 JWT 还不够，被写的行必须真的有主人。
+    async fn seed_test_user(state: &AppState) -> String {
+        state
+            .services
+            .auth
+            .find_or_create_user(crate::models::UserIdentity {
+                provider: "test",
+                provider_id: "test-user",
+                name: "Test User",
+                email: "test@example.com",
+                avatar: None,
+            })
+            .await
+            .expect("seed test user")
+            .id
     }
 
     fn test_state(repository: Arc<SqliteRepositories>) -> AppState {
@@ -199,16 +245,19 @@ mod tests {
 
     #[tokio::test]
     async fn type_sync_saves_session_and_entries() -> anyhow::Result<()> {
-        let app = build_app(test_state(Arc::new(
+        let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
-        )));
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
         let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/type/sync")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&valid_type_payload())?))?,
             )
@@ -233,7 +282,7 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/type/sync")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", format!("Bearer {}", test_bearer()))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&payload)?))?,
             )
@@ -254,7 +303,7 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/type/sync")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", format!("Bearer {}", test_bearer()))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&payload)?))?,
             )
@@ -266,14 +315,17 @@ mod tests {
     #[tokio::test]
     async fn type_stats_returns_practiced_mastery() -> anyhow::Result<()> {
         let repository = Arc::new(SqliteRepositories::connect("sqlite::memory:").await?);
-        let app = build_app(test_state(repository.clone()));
+        let state = test_state(repository.clone());
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
         let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/type/sync")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&valid_type_payload())?))?,
             )
@@ -284,7 +336,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/type/stats")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .body(Body::empty())?,
             )
             .await?;
@@ -319,16 +371,19 @@ mod tests {
 
     #[tokio::test]
     async fn type_resume_put_get_delete_round_trip() -> anyhow::Result<()> {
-        let app = build_app(test_state(Arc::new(
+        let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
-        )));
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
         let put = app
             .clone()
             .oneshot(
                 Request::builder()
                     .method("PUT")
                     .uri("/api/type/resume")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&valid_resume_payload())?))?,
             )
@@ -340,7 +395,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/type/resume?deck_id=deck_resume")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .body(Body::empty())?,
             )
             .await?;
@@ -356,7 +411,7 @@ mod tests {
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/type/resume?deck_id=deck_resume")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .body(Body::empty())?,
             )
             .await?;
@@ -366,7 +421,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/type/resume?deck_id=deck_resume")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", bearer.clone())
                     .body(Body::empty())?,
             )
             .await?;
@@ -387,7 +442,7 @@ mod tests {
                 Request::builder()
                     .method("PUT")
                     .uri("/api/type/resume")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", format!("Bearer {}", test_bearer()))
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&payload)?))?,
             )
@@ -405,7 +460,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/study/daily-trend?days=7")
-                    .header("authorization", "Bearer test-token")
+                    .header("authorization", format!("Bearer {}", test_bearer()))
                     .body(Body::empty())?,
             )
             .await?;

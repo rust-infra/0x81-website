@@ -300,6 +300,16 @@ pub async fn kimi_token_poll(
     Ok(success(data))
 }
 
+/// Kimi 未返回 email 时的占位邮箱：取 provider_id 的前 8 个**字符**。
+///
+/// 必须按字符切：`&s[..8]` 是字节切片，provider_id（来自 token 的 `sub`）若含多字节
+/// UTF-8 且第 8 字节落在非字符边界上会直接 panic（2026-09-18 修正）。
+/// 纯展示用——身份判定仍是 `users` 的 `UNIQUE(provider, provider_id)` 全值。
+fn kimi_placeholder_email(provider_id: &str) -> String {
+    let head: String = provider_id.chars().take(8).collect();
+    format!("{head}@kimi.user")
+}
+
 /// Verify Kimi access token and create/login user
 /// POST /api/auth/kimi
 pub async fn kimi_login(
@@ -336,7 +346,7 @@ pub async fn kimi_login(
         .email
         .clone()
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| format!("{}@kimi.user", &provider_id[..provider_id.len().min(8)]));
+        .unwrap_or_else(|| kimi_placeholder_email(&provider_id));
 
     let avatar = payload.picture.or(payload.avatar);
 
@@ -628,5 +638,23 @@ mod telegram_tests {
     #[test]
     fn rejects_missing_hash() {
         assert!(validate_telegram_init_data("t", "auth_date=1&user=%7B%7D").is_err());
+    }
+}
+
+#[cfg(test)]
+mod kimi_email_tests {
+    use super::*;
+
+    #[test]
+    fn placeholder_email_slices_chars_not_bytes() {
+        // ASCII：与旧的字节切片结果一致（前 8 字节 == 前 8 字符）
+        assert_eq!(kimi_placeholder_email("123456789"), "12345678@kimi.user");
+        // 短于 8 个字符：原样保留
+        assert_eq!(kimi_placeholder_email("abc"), "abc@kimi.user");
+        // 多字节：旧实现 `&provider_id[..8]` 在这里 panic（byte index is not a char boundary）
+        assert_eq!(
+            kimi_placeholder_email("用户名一二三四五六七八"),
+            "用户名一二三四五@kimi.user"
+        );
     }
 }
