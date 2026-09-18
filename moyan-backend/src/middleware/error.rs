@@ -23,6 +23,9 @@ pub struct AppState {
     pub google_mobile_redirect_url: String,
     pub admin_token: String,
     pub telegram_bot_token: String,
+    /// 是否允许非 JWT 的 legacy token 兜底认证（仅开发；线上必须为 false）。
+    /// 详见 `middleware::auth::legacy_token_auth_allowed`。
+    pub allow_legacy_token_auth: bool,
 }
 
 /// Application-wide error type
