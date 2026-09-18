@@ -318,9 +318,27 @@ pub async fn kimi_token_poll(
         return Ok(success(data));
     };
 
+    let refresh_token = data
+        .get("refresh_token")
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+
     // 授权完成：立刻用 Kimi 自己的 userinfo 复核这个 token 并建号。失败（含伪造 /
     // 过期 token）一律 401 —— **绝不降级**成"本地解 JWT 取 sub"。
-    let user = kimi_user_from_access_token(&state, &access_token).await?;
+    //
+    // 例外：Kimi 的 userinfo 目前会拒收它**自己刚签发**的 ES256 token（2026-09-18
+    // 实测，见 `kimi_user_from_refresh_verification` 的说明）。这种情况改用 Kimi 的
+    // token 端点做等价的复核；除此之外仍然一律 401。
+    let user = match kimi_user_from_access_token(&state, &access_token).await {
+        Ok(user) => user,
+        Err(AppError::Unauthorized(message)) => match refresh_token.as_deref() {
+            Some(refresh_token) => {
+                kimi_user_from_refresh_verification(&state, refresh_token, &access_token).await?
+            }
+            None => return Err(AppError::Unauthorized(message)),
+        },
+        Err(err) => return Err(err),
+    };
     let token = generate_jwt(&state, &user)?;
 
     Ok(success(serde_json::json!({
@@ -341,9 +359,11 @@ fn kimi_placeholder_email(provider_id: &str) -> String {
 
 /// 用 Kimi 的 userinfo 端点复核 access_token，并据此建号 / 登录。
 ///
-/// 这是**唯一**信任 Kimi 身份的地方：token 由 Kimi 签发、由 Kimi 校验，我们只读它
-/// 返回的 `sub`。Kimi 不在 JWKS 暴露公钥，所以"本地验签"做不到——同理，
-/// "本地解 JWT 取 sub"等于信任调用方，绝不能用（见 `kimi_login_deprecated` 的说明）。
+/// 这是**首选**的身份信任来源：token 由 Kimi 签发、由 Kimi 校验，我们只读它返回的
+/// `sub`（顺带拿 name/email/avatar）。Kimi 不在 JWKS 暴露公钥，所以"本地验签"做不到——
+/// 同理，"本地解 JWT 取 sub"等于信任调用方，绝不能用（见 `kimi_login_deprecated` 的说明）。
+///
+/// 上游异常时的兜底见 `kimi_user_from_refresh_verification`（同样由 Kimi 复核，不降级成本地验签）。
 async fn kimi_user_from_access_token(
     state: &AppState,
     access_token: &str,
@@ -380,29 +400,146 @@ async fn kimi_user_from_access_token(
         .or(payload.user_id)
         .ok_or_else(|| AppError::BadRequest("Kimi userinfo missing user identifier".to_string()))?;
 
-    let name = payload
-        .name
-        .or(payload.nickname)
+    kimi_user_from_identity(
+        state,
+        &provider_id,
+        payload.name.or(payload.nickname),
+        payload.email,
+        payload.picture.or(payload.avatar),
+    )
+    .await
+}
+
+/// 由「已复核过的 Kimi 用户标识」+ 可选的资料字段建号 / 登录。
+///
+/// 名字 / 邮箱缺失时用占位值（`Kimi User` / `{sub 前 8 字符}@kimi.user`，见
+/// `kimi_placeholder_email`）。注意 `find_or_create` 会 upsert 这三个字段，
+/// 所以**没有**资料的上游路径（如 refresh 兜底）会把已有用户的显示名写回占位值。
+async fn kimi_user_from_identity(
+    state: &AppState,
+    provider_id: &str,
+    name: Option<String>,
+    email: Option<String>,
+    avatar: Option<String>,
+) -> Result<User, AppError> {
+    let name = name
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Kimi User".to_string());
 
-    let email = payload
-        .email
-        .clone()
+    let email = email
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| kimi_placeholder_email(&provider_id));
-
-    let avatar = payload.picture.or(payload.avatar);
+        .unwrap_or_else(|| kimi_placeholder_email(provider_id));
 
     find_or_create_user(
         state,
         "kimi",
-        &provider_id,
+        provider_id,
         &name,
         &email,
         avatar.as_deref(),
     )
     .await
+}
+
+/// Kimi access token 的 JWT claims。**只在 Kimi 已经复核过这组 token 之后**才解
+/// （见 `kimi_user_from_refresh_verification` 的信任边界说明）。
+#[derive(Debug, Deserialize)]
+struct KimiAccessTokenClaims {
+    sub: Option<String>,
+    user_id: Option<String>,
+    iss: Option<String>,
+    #[serde(rename = "type")]
+    token_type: Option<String>,
+}
+
+/// Kimi 自签 token 的签发方。
+const KIMI_ISSUER: &str = "kimi-auth";
+
+/// userinfo 不可用时的兜底：用 Kimi 的 **token 端点**复核 access_token。
+///
+/// 背景（2026-09-18 实测）：Kimi 现在用 **ES256** 签 access token
+/// （header `{"alg":"ES256","kid":"d4cbb48f…"}`，claims `iss=kimi-auth`、
+/// `type=access`、`scope=kimi-code`），但它自己的 `/api/oauth/userinfo` 的算法白名单
+/// 里没有 ES256 —— 对**自己刚签发**的 token 也回
+/// `401 invalid user token: token signature is invalid: signing method ES256 is invalid`
+/// （`/api/oauth/me` 同样）。Kimi 不暴露 JWKS（多个候选路径均 404），所以本地验签做不到。
+///
+/// 兜底原理：拿同一次授权返回的 `refresh_token` 去 Kimi 的 `/api/oauth/token`
+/// （`grant_type=refresh_token`）。**该端点的 ES256 验签是正常的**——篡改过的
+/// refresh_token 会被 `invalid_grant` 拒（实测）——因此"refresh 成功"就是 Kimi 给出的
+/// "这组 token 确由我签发"的证明；证明成立后再从 access_token 里取 `sub`。
+///
+/// 信任边界（与已废弃的 `POST /api/auth/kimi` 的区别）：这里的 access_token 由 Kimi 的
+/// token 端点**在本次请求内**返回，从不来自客户端（旧接口已 410），且使用前已经过
+/// Kimi 的 refresh 复核。旧漏洞是"信任调用方提交的 JWT"，不是这个。
+async fn kimi_user_from_refresh_verification(
+    state: &AppState,
+    refresh_token: &str,
+    access_token: &str,
+) -> Result<User, AppError> {
+    let res = reqwest::Client::new()
+        .post(format!("{}/api/oauth/token", kimi_base()))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Accept", "application/json")
+        .header("X-Msh-Platform", "web")
+        .header("X-Msh-Version", "1.0.0")
+        .header("X-Msh-Device-Name", "MoyanRust")
+        .header("X-Msh-Device-Model", "server")
+        .header("X-Msh-Os-Version", "linux")
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("client_id", KIMI_CLIENT_ID),
+        ])
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Kimi refresh verification failed: {}", e)))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let err_text = res.text().await.unwrap_or_default();
+        tracing::warn!(%status, "Kimi refused to verify the device-flow token via refresh_token");
+        return Err(AppError::Unauthorized(format!(
+            "Kimi rejected the access token: {err_text}"
+        )));
+    }
+
+    // 到这里 Kimi 已经确认这组 token 是真的，可以读它的 claims 了（签名不做本地校验：
+    // 没有 JWKS 可依，真实性由上面的 refresh 复核保证）。
+    let claims = jsonwebtoken::dangerous::insecure_decode::<KimiAccessTokenClaims>(access_token)
+        .map_err(|e| {
+            AppError::Unauthorized(format!("Kimi access token is not a readable JWT: {e}"))
+        })?
+        .claims;
+
+    // 防御性检查：确认是我们认识的 Kimi access token 形态（缺失的字段不拦，Kimi 以后
+    // 可能改 claim 集合）。
+    if let Some(iss) = claims.iss.as_deref() {
+        if iss != KIMI_ISSUER {
+            return Err(AppError::Unauthorized(format!(
+                "Kimi access token has an unexpected issuer: {iss}"
+            )));
+        }
+    }
+    if let Some(token_type) = claims.token_type.as_deref() {
+        if token_type != "access" {
+            return Err(AppError::Unauthorized(format!(
+                "Kimi token is not an access token: type={token_type}"
+            )));
+        }
+    }
+
+    let provider_id = claims
+        .sub
+        .or(claims.user_id)
+        .ok_or_else(|| AppError::BadRequest("Kimi access token missing user identifier".to_string()))?;
+
+    tracing::warn!(
+        provider_id = %provider_id,
+        "verified Kimi login via the refresh_token fallback (upstream userinfo rejects ES256 tokens)"
+    );
+
+    kimi_user_from_identity(state, &provider_id, None, None, None).await
 }
 
 /// 旧接口（已废弃）：客户端把 Kimi 的 access_token 交给我们换后端 JWT。

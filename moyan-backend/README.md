@@ -67,10 +67,28 @@ docker run -d \
 |------|------|------|
 | GET | `/api/auth/google/callback?code=xxx` | Google OAuth 回调 |
 | POST | `/api/auth/kimi/device` | Kimi Device Flow 获取设备码（后端代理） |
-| POST | `/api/auth/kimi/token` | Kimi Device Flow 轮询：授权完成后**服务端**用 userinfo 复核并签发本服务的 JWT |
+| POST | `/api/auth/kimi/token` | Kimi Device Flow 轮询：授权完成后**服务端**用 Kimi 的 userinfo 复核并签发本服务的 JWT（userinfo 拒收 ES256 token 时自动改用 Kimi 的 refresh_token 复核，见下） |
 | POST | `/api/auth/kimi` | ⚠️ **已废弃（410）**：原先客户端提交 access_token 换 JWT，而那里本地解 JWT 不验签，可被自签 `sub` 冒充他人（详见 `controllers/auth.rs`） |
 | GET | `/api/auth/me` | 获取当前用户信息 (需 JWT) |
 | GET | `/api/auth/stats` | 获取用户统计 (需 JWT) |
+
+### Kimi 登录的身份复核（2026-09-18）
+
+Kimi 的 access token 从不经过客户端：后端在 device flow 里直接向 Kimi 换取，然后**由
+Kimi 自己**复核这份 token（我们本地不验签——Kimi 不暴露 JWKS，无法验签，见
+`controllers/auth.rs`）。复核分两条路：
+
+1. **首选** `/api/oauth/userinfo`：拿到 `sub` + 昵称/邮箱/头像。
+2. **兜底** 当 userinfo 回 401 时（当前上游故障：Kimi 用 **ES256** 签 token，但它的
+   userinfo 算法白名单里没有 ES256，于是连它**自己刚签发**的 token 也拒：
+   `signing method ES256 is invalid`），改用 `/api/oauth/token` 的
+   `grant_type=refresh_token` 复核——该端点的 ES256 验签正常（篡改会被 `invalid_grant`
+   拒），refresh 成功即证明这组 token 确由 Kimi 签发，之后再从 access_token 取 `sub`
+   （`iss` 必须是 `kimi-auth`、`type` 必须是 `access`）。
+
+   ⚠️ 兜底路径拿不到昵称/邮箱/头像，用户会以占位的 `Kimi User` /
+   `{sub 前 8 字符}@kimi.user` 建号；且 `find_or_create` 会 upsert 这两个字段，所以已有
+   Kimi 用户的显示名/邮箱在兜底期间会被写回占位值。Kimi 修好 userinfo 后自动恢复首选路径。
 
 ### 数据同步
 

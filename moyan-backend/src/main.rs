@@ -718,6 +718,208 @@ mod tests {
             )?))?)
     }
 
+    /// 假 Kimi，模拟 2026-09-18 的上游故障：`/api/oauth/userinfo` 拒收 Kimi **自家**
+    /// 刚签发的 ES256 token，而 `/api/oauth/token` 的 refresh_token 校验正常
+    /// （由 `refresh_accepted` 决定是否放行）。
+    async fn start_kimi_es256_stub(refresh_accepted: bool, access_token: &str) -> String {
+        use axum::{
+            Json, Router,
+            body::Bytes,
+            routing::{get, post},
+        };
+
+        let access_token = access_token.to_string();
+        let app = Router::new()
+            .route(
+                "/api/oauth/token",
+                post(move |body: Bytes| {
+                    let access_token = access_token.clone();
+                    async move {
+                        // refresh 复核请求 vs. device flow 轮询请求，按 grant_type 区分。
+                        if String::from_utf8_lossy(&body).contains("grant_type=refresh_token") {
+                            let status = if refresh_accepted {
+                                StatusCode::OK
+                            } else {
+                                StatusCode::UNAUTHORIZED
+                            };
+                            let body = if refresh_accepted {
+                                serde_json::json!({
+                                    "access_token": access_token,
+                                    "token_type": "Bearer",
+                                })
+                            } else {
+                                serde_json::json!({ "error": "invalid_grant" })
+                            };
+                            (status, Json(body))
+                        } else {
+                            (
+                                StatusCode::OK,
+                                Json(serde_json::json!({
+                                    "access_token": access_token,
+                                    "refresh_token": "kimi-refresh-token",
+                                    "token_type": "Bearer",
+                                    "expires_in": 900,
+                                    "scope": "kimi-code",
+                                })),
+                            )
+                        }
+                    }
+                }),
+            )
+            .route(
+                "/api/oauth/userinfo",
+                get(|| async {
+                    (
+                        StatusCode::UNAUTHORIZED,
+                        Json(serde_json::json!({
+                            "code": "unauthenticated",
+                            "message": "invalid user token: token signature is invalid: \
+                                        signing method ES256 is invalid",
+                            "details": [{}],
+                        })),
+                    )
+                }),
+            );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind kimi stub");
+        let addr = listener.local_addr().expect("kimi stub addr");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        format!("http://{addr}")
+    }
+
+    /// 构造一个 Kimi 形态的 access token（`alg: ES256` + 给定 claims）。
+    /// 签名是假的——我们本地不验签，真实性由 stub 的 refresh 复核代表。
+    fn es256_access_token(sub: &str, iss: &str, token_type: &str) -> String {
+        fn b64url(input: &str) -> String {
+            const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+            let bytes = input.as_bytes();
+            let mut out = String::new();
+            for chunk in bytes.chunks(3) {
+                let b = [
+                    chunk[0],
+                    *chunk.get(1).unwrap_or(&0),
+                    *chunk.get(2).unwrap_or(&0),
+                ];
+                let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+                out.push(TABLE[(n >> 18) as usize & 63] as char);
+                out.push(TABLE[(n >> 12) as usize & 63] as char);
+                if chunk.len() > 1 {
+                    out.push(TABLE[(n >> 6) as usize & 63] as char);
+                }
+                if chunk.len() > 2 {
+                    out.push(TABLE[n as usize & 63] as char);
+                }
+            }
+            out
+        }
+
+        let header = b64url(
+            &serde_json::json!({
+                "alg": "ES256",
+                "kid": "d4cbb48f550952c67a011c2e98dee27fad4325fb",
+                "typ": "JWT",
+            })
+            .to_string(),
+        );
+        let payload = b64url(
+            &serde_json::json!({
+                "client_id": "17e5f671-d194-4dfb-9706-5516cb48c098",
+                "user_id": sub,
+                "scope": "kimi-code",
+                "type": token_type,
+                "iss": iss,
+                "sub": sub,
+                "exp": 4102444800u64,
+                "nbf": 0,
+                "iat": 0,
+                "jti": "j-1",
+            })
+            .to_string(),
+        );
+        format!("{header}.{payload}.c2ln")
+    }
+
+    /// 回归（2026-09-18 上游故障）：Kimi 的 userinfo 拒收自家 ES256 token 时，登录改走
+    /// refresh_token 复核——仍由 Kimi 复核，仍只把**我们自己的** JWT 回给客户端。
+    #[tokio::test]
+    async fn kimi_login_falls_back_to_refresh_verification_when_userinfo_rejects_es256()
+    -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
+        let base = start_kimi_es256_stub(true, &kimi_token).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app.clone().oneshot(kimi_poll_request("dc-es256")?).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        let token = body["data"]["token"]
+            .as_str()
+            .expect("backend token in response")
+            .to_string();
+        assert!(
+            !body.to_string().contains(&kimi_token),
+            "响应体里不应出现 Kimi 的 access_token"
+        );
+        // 身份取自 token 的 `sub`（userinfo 不可用，只有占位资料）。
+        assert_eq!(body["data"]["user"]["name"], "Kimi User");
+        assert_eq!(body["data"]["user"]["email"], "kimi-use@kimi.user");
+
+        // 回给客户端的必须是我们自己签的 JWT。
+        let me = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/auth/me")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(me.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    /// refresh 兜底**不是**无条件信任：Kimi 不认 refresh_token 时仍然 401。
+    #[tokio::test]
+    async fn kimi_login_still_401_when_refresh_verification_fails() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
+        let base = start_kimi_es256_stub(false, &kimi_token).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app.oneshot(kimi_poll_request("dc-es256-bad")?).await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    /// refresh 通过也不代表 claims 可以乱信：issuer / token 类型不对照样拒绝。
+    #[tokio::test]
+    async fn kimi_refresh_fallback_rejects_foreign_issuer_tokens() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let foreign = es256_access_token("kimi-user-1", "evil-issuer", "access");
+        let base = start_kimi_es256_stub(true, &foreign).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let app = build_app(test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        )));
+        let response = app.oneshot(kimi_poll_request("dc-es256-iss")?).await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
     /// 现行登录路径：轮询拿到 Kimi 的 access_token 后由**服务端**去 userinfo 复核，
     /// 只把我们的 JWT 回给客户端——Kimi 的 access_token 不离开服务端。
     #[tokio::test]
