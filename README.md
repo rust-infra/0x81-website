@@ -8,7 +8,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `tact.0x81.uk` | `website` | tact 产品落地页 |
 | `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
-| `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（`admin.moyan.0x81.uk` 也仍被网关接受，但那个名字是两层子域，**过不了 Cloudflare**：见「细节与约束」） |
+| `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关同时接受 `admin.moyan.0x81.uk`，两个名字都路由到 5001；**当前只有后者在 DNS 里**，实测见「管理后台的域名与 TLS」） |
 
 ## 架构
 
@@ -21,8 +21,9 @@ website-rs :80/:443     Axum 网关
       ├─ Host: tact.0x81.uk           →  website :4321
       ├─ Host: crab.0x81.uk           →  crab-web :4322
       ├─ Host: moyan.0x81.uk          →  moyan-web :5000（/api → moyan-backend :4323）
-      ├─ Host: admin-moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
-      │  （admin.moyan.0x81.uk 同样路由到 5001，但这个两层子域没有证书可用）
+      ├─ Host: admin.moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
+      │  （admin-moyan.0x81.uk 同样路由到 5001：两个名字网关都收，
+      │    各自的 DNS/证书现状见「管理后台的域名与 TLS」）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -140,7 +141,7 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 ### `moyan-web` / `moyan-admin` / `moyan-backend`（墨言）
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
-- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin-moyan.0x81.uk`（网关也认 `admin.moyan.0x81.uk`，但两层子域没有证书，别用）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin.moyan.0x81.uk`（网关也认 `admin-moyan.0x81.uk`；两个名字当前的 DNS 与证书现状见「管理后台的域名与 TLS」——**目前能用的只有 `admin.moyan.0x81.uk`，且只能走 http**）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk`、`https://admin-moyan.0x81.uk` 与旧名 `https://admin.moyan.0x81.uk`）
@@ -265,9 +266,30 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
   表现成"整站变成一段 JSON 但处处 200"。`website-rs` 的 `request_host()` 同时处理两种形式，
   没匹配上上游时还会打 `no upstream configured for host ...` 告警——看到这条就说明有请求打到了
   没配置的 Host 名。
-- `admin.moyan.0x81.uk` 是**两层子域**，Cloudflare 的 Universal SSL（`*.0x81.uk` 只覆盖一层）
-  与我们的 Origin 证书都不含它：边缘握手直接失败，即便放行也会在 Full (strict) 下 526。
-  管理后台请用 `admin-moyan.0x81.uk`（网关两个名字都接受，换名只需加一条 DNS 记录）。
+- 管理后台的两个域名现状见下面「管理后台的域名与 TLS」——**目前只有 `admin.moyan.0x81.uk`
+  能用，且只能走 http**。
+
+### 管理后台的域名与 TLS（2026-09-18 实测）
+
+网关（`website-rs/src/main.rs:170`）两个名字都收，差别全在 Cloudflare 那一侧：
+
+| 名字 | DNS 记录 | HTTP | HTTPS |
+|---|---|---|---|
+| `admin.moyan.0x81.uk` | ✓ Cloudflare（172.67.222.124 / 104.21.70.97） | ✓ 200 | ✗ 边缘握手失败 |
+| `admin-moyan.0x81.uk` | ✗ **NXDOMAIN**（记录还没建） | — | — |
+
+（查 DNS 用 Cloudflare DoH：`curl -sS -H 'accept: application/dns-json'
+"https://cloudflare-dns.com/dns-query?name=<name>&type=A"`，NXDOMAIN 回 `"Status":3`。）
+
+- `admin.moyan.0x81.uk` 是**两级子域**：`*.0x81.uk` 只覆盖一层，Universal SSL 与我们自己的
+  Origin 证书都不含它 → 边缘直接拒绝握手，即便放行也会在 Full (strict) 下 526。
+- 所以后台**现在只能走 `http://admin.moyan.0x81.uk`**；实测它**没有** 301 跳 https
+  （`GET http://…/login` 返回 200），即 Always Use HTTPS 对这个名字目前未生效 →
+  `X-Admin-Token` 是明文过网的，不该长期这样用。
+- 修法（代码里已为此留好口子）：给 `admin-moyan.0x81.uk` 补一条指向 Cloudflare 的 DNS 记录。
+  它只有一层，现成的 Universal SSL 就能覆盖，**不需要任何新证书**；之后把后台书签与
+  `MOYAN_ALLOWED_ORIGINS`（默认已同时含两个名字）里的旧名换掉即可。
+- 记录没建/没生效的表现是 `Name or service not known`（走本地代理时是 502），**不是**网关或容器故障。
 
 ### 环境变量（仓库根 `.env`）
 
@@ -288,6 +310,12 @@ docker compose up -d                          # 改完 .env 要重建，只 rest
   直接写 `ADMIN_TOKEN=` 不会进容器。
 - **`MOYAN_ADMIN_TOKEN` 不能空**：它是管理后台登录页要填的 `X-Admin-Token`；空值下后端对
   `/api/admin/*` 一律回 503（`"ADMIN_TOKEN is not configured"`，设计上禁止空密钥放行）。
+- **后台登不上，先按状态码分流**（不用登服务器，`moyan-backend/src/middleware/admin_auth.rs:7-12`）：
+  `GET /api/admin/ping` 返回 **503** = 容器里 `ADMIN_TOKEN` 是空串（没配）；返回 **401** =
+  已配置但请求头的值不相等。拿到 401 时按顺序怀疑：改完 `.env` 只 `restart` 而没重建容器（值不会
+  生效，要 `up -d`）；`.env` 的值带 `\r`（CRLF 文件）/引号/尾随空格——登录页会对**你输入的值**
+  `trim()`，带杂质的服务端值永远匹配不上（用 `sed -n 's/^MOYAN_ADMIN_TOKEN=//p' .env | od -c` 看）；
+  记的串和服务器上的不是同一个。
 - 它**不进 git**（`.gitignore` 里有 `.env`，历史里也从未提交过）、**不进 release 资产**，
   所以换服务器必须手工重建，`git clone` 拿不到——这是继 `certs/` 之后第二个纯手工部署件。
 - ⚠️ **别把 `.env` 放进前端目录**：`moyan-web/` / `moyan-admin/` 的 Dockerfile 是 `COPY . .`
