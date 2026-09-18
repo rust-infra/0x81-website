@@ -8,7 +8,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `tact.0x81.uk` | `website` | tact 产品落地页 |
 | `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
-| `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关同时接受 `admin.moyan.0x81.uk`，两个名字都路由到 5001；**当前只有后者在 DNS 里**，实测见「管理后台的域名与 TLS」） |
+| `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关也认旧名 `admin.moyan.0x81.uk`，两者都路由到 5001；**旧名已无 DNS 记录**，实测见「管理后台的域名与 TLS」） |
 
 ## 架构
 
@@ -21,9 +21,9 @@ website-rs :80/:443     Axum 网关
       ├─ Host: tact.0x81.uk           →  website :4321
       ├─ Host: crab.0x81.uk           →  crab-web :4322
       ├─ Host: moyan.0x81.uk          →  moyan-web :5000（/api → moyan-backend :4323）
-      ├─ Host: admin.moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
-      │  （admin-moyan.0x81.uk 同样路由到 5001：两个名字网关都收，
-      │    各自的 DNS/证书现状见「管理后台的域名与 TLS」）
+      ├─ Host: admin-moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
+      │  （旧名 admin.moyan.0x81.uk 网关也收、同样路由到 5001，但它已无 DNS 记录，
+      │    现状见「管理后台的域名与 TLS」）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -142,11 +142,11 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
 - 前端是**服务端为权威**模式：`docker-compose.yml` 给 `moyan-web` 传构建参数 `VITE_SERVER_MODE=1`（判断逻辑集中在 `moyan-web/src/services/backendMode.ts`）。线上是**同源部署**——`VITE_API_URL` 故意留空、请求走相对路径 `/api` 由 Caddy 反代，所以**不能**再用「`VITE_API_URL` 是否为空」判断后端是否可用：那样前端会静默退回 IndexedDB 本地模式，表现是「管理后台导入的词库在 `/decks` 永远看不到」（2026-09-18 踩过）。开关只影响构建产物，改完必须 `docker compose build moyan-web && docker compose up -d moyan-web`（`up -d` 不会重建镜像）。副作用：服务端模式下 `/decks` 等页面要求登录，浏览器里旧的本地牌组/进度不再显示
-- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin.moyan.0x81.uk`（网关也认 `admin-moyan.0x81.uk`；两个名字当前的 DNS 与证书现状见「管理后台的域名与 TLS」——**目前能用的只有 `admin.moyan.0x81.uk`，且只能走 http**）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 **`https://admin-moyan.0x81.uk`**（网关也认旧名 `admin.moyan.0x81.uk`，但该名已无 DNS 记录；现状见「管理后台的域名与 TLS」）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
 - 后端鉴权：Bearer **JWT（HS256，密钥 `MOYAN_JWT_SECRET`）**。⚠️ 这个键**必须**在根 `.env` 里设（`openssl rand -hex 32`）：留空会回落到 compose 里公开的 `change-me-in-production`，等于任何人都能自签 token（2026-09-18 已换掉线上默认值）。另有非 JWT 的 legacy 兜底认证（`ALLOW_LEGACY_TOKEN_AUTH`）：**默认关闭**，只有 `moyan-backend/dev-run.sh` 打开——它会把任意 Bearer 值按哈希自动建号放行，线上开着就是无鉴权入口
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
-- CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk`、`https://admin-moyan.0x81.uk` 与旧名 `https://admin.moyan.0x81.uk`）
+- CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin-moyan.0x81.uk`，另保留了旧名 `https://admin.moyan.0x81.uk`——旧名已无 DNS，这条留着只是无害的兼容）
 
 ## Rust 服务的构建与部署（CI 编译，服务器只运行）
 
@@ -268,30 +268,32 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
   表现成"整站变成一段 JSON 但处处 200"。`website-rs` 的 `request_host()` 同时处理两种形式，
   没匹配上上游时还会打 `no upstream configured for host ...` 告警——看到这条就说明有请求打到了
   没配置的 Host 名。
-- 管理后台的两个域名现状见下面「管理后台的域名与 TLS」——**目前只有 `admin.moyan.0x81.uk`
-  能用，且只能走 http**。
+- 管理后台的域名现状见下面「管理后台的域名与 TLS」——**走 `https://admin-moyan.0x81.uk`，
+  https 已通**。
 
-### 管理后台的域名与 TLS（2026-09-18 实测）
+### 管理后台的域名与 TLS（2026-09-18 更新）
 
 网关（`website-rs/src/main.rs:170`）两个名字都收，差别全在 Cloudflare 那一侧：
 
 | 名字 | DNS 记录 | HTTP | HTTPS |
 |---|---|---|---|
-| `admin.moyan.0x81.uk` | ✓ Cloudflare（172.67.222.124 / 104.21.70.97） | ✓ 200 | ✗ 边缘握手失败 |
-| `admin-moyan.0x81.uk` | ✗ **NXDOMAIN**（记录还没建） | — | — |
+| `admin-moyan.0x81.uk` | ✓ Cloudflare（172.67.222.124 / 104.21.70.97） | ✓ 200（**不跳转**，见下） | ✓ **200，证书校验通过** |
+| `admin.moyan.0x81.uk`（旧名） | ✗ **NXDOMAIN**（记录已不存在） | — | — |
 
 （查 DNS 用 Cloudflare DoH：`curl -sS -H 'accept: application/dns-json'
 "https://cloudflare-dns.com/dns-query?name=<name>&type=A"`，NXDOMAIN 回 `"Status":3`。）
 
-- `admin.moyan.0x81.uk` 是**两级子域**：`*.0x81.uk` 只覆盖一层，Universal SSL 与我们自己的
-  Origin 证书都不含它 → 边缘直接拒绝握手，即便放行也会在 Full (strict) 下 526。
-- 所以后台**现在只能走 `http://admin.moyan.0x81.uk`**；实测它**没有** 301 跳 https
-  （`GET http://…/login` 返回 200），即 Always Use HTTPS 对这个名字目前未生效 →
-  `X-Admin-Token` 是明文过网的，不该长期这样用。
-- 修法（代码里已为此留好口子）：给 `admin-moyan.0x81.uk` 补一条指向 Cloudflare 的 DNS 记录。
-  它只有一层，现成的 Universal SSL 就能覆盖，**不需要任何新证书**；之后把后台书签与
-  `MOYAN_ALLOWED_ORIGINS`（默认已同时含两个名字）里的旧名换掉即可。
-- 记录没建/没生效的表现是 `Name or service not known`（走本地代理时是 502），**不是**网关或容器故障。
+- `admin-moyan.0x81.uk` **只有一层子域**，正好被 Cloudflare Universal SSL 的 `*.0x81.uk`
+  覆盖（实测证书 `CN=0x81.uk`，SAN 只有 `0x81.uk` / `*.0x81.uk`，Google Trust Services 签发），
+  所以补一条 DNS 记录就够了，**不需要任何自有证书**——`https://…/login` 直接 200、校验通过。
+- ⚠️ **Always Use HTTPS 仍未生效**：`http://admin-moyan.0x81.uk/login` 返回 200 而不是 301，
+  即用 `http://` 书签时 `X-Admin-Token` 仍会明文过网。要去 Cloudflare 打开**区域级**的
+  Always Use HTTPS（这是 CF 控制台设置，不在仓库里）。
+- 旧名 `admin.moyan.0x81.uk` 是**两级子域**：`*.0x81.uk` 覆盖不到，边缘直接握手失败，
+  即便放行也会在 Full (strict) 下 526。它现在连 DNS 记录都没有（NXDOMAIN）；网关里的路由
+  仍然保留（零成本兼容），要恢复可用必须重新加记录 **并且** 配一张自有证书。
+- 名字没解析/记录没生效的表现是 `Name or service not known`（走本地代理时是 502），
+  **不是**网关或容器故障。
 
 ### 环境变量（仓库根 `.env`）
 

@@ -167,11 +167,11 @@ async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
     } else if host == "moyan.0x81.uk" {
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN");
         proxy_request(req, &upstream, 5000).await
-    } else if host == "admin.moyan.0x81.uk" || host == "admin-moyan.0x81.uk" {
-        // 两个名字都收：`admin.moyan.0x81.uk` 是两层子域，既不被 Universal SSL 的
-        // *.0x81.uk 覆盖（边缘直接握手失败），也不在 Origin 证书 SAN 里（Full (strict)
-        // 下会 526）。`admin-moyan.0x81.uk` 只有一层，现成的证书就能覆盖——过渡期两个
-        // 都保留，换到新名字只需加一条 DNS 记录。
+    } else if host == "admin-moyan.0x81.uk" || host == "admin.moyan.0x81.uk" {
+        // 现行域名是 `admin-moyan.0x81.uk`：一层子域，被 Universal SSL 的 *.0x81.uk
+        // 覆盖，DNS 已生效、https 可直连。旧名 `admin.moyan.0x81.uk` 是两层子域，
+        // *.0x81.uk 覆盖不到（边缘直接握手失败，Full (strict) 下 526），其 DNS 记录
+        // 已删除；这里仍然接受它只是零成本兼容，真要恢复可用得重新加记录并配自有证书。
         let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN_ADMIN");
         proxy_request(req, &upstream, 5001).await
     } else if host == "0x81.uk" || host == "www.0x81.uk" {
