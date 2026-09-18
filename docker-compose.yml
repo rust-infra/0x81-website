@@ -57,7 +57,9 @@ services:
       - HTTP_PROXY=${HTTP_PROXY:-http://host.docker.internal:17890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://host.docker.internal:17890}
       - ALL_PROXY=${ALL_PROXY:-http://host.docker.internal:17890}
-      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
+      # Kimi auth is a direct, China-reachable service. Keep it off the host
+      # proxy so a broken/slow Clash forward cannot turn device auth into 500.
+      - NO_PROXY=auth.kimi.com,${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
     extra_hosts:
       # Maps host.docker.internal to the docker bridge gateway (172.17.0.1).
       - "host.docker.internal:host-gateway"

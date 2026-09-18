@@ -23,8 +23,10 @@ export ALLOW_LEGACY_TOKEN_AUTH="${ALLOW_LEGACY_TOKEN_AUTH:-1}"
 export http_proxy="${http_proxy:-http://127.0.0.1:7890}"
 export https_proxy="${https_proxy:-http://127.0.0.1:7890}"
 export all_proxy="${all_proxy:-http://127.0.0.1:7890}"
-# 本地回环不走代理
-export no_proxy="${no_proxy:-localhost,127.0.0.1,::1}"
+# 本地回环不走代理；Kimi auth 必须直连
+_DEV_NO_PROXY="auth.kimi.com,${no_proxy:-localhost,127.0.0.1,::1}"
+export no_proxy="$_DEV_NO_PROXY"
+export NO_PROXY="$_DEV_NO_PROXY"
 
 echo ">>> moyan-backend dev: PORT=${PORT:-4323} DATABASE_URL=${DATABASE_URL:-sqlite:data/local-dev.db}"
 echo ">>> proxy: ${MOYAN_YTDLP_PROXY:-$https_proxy}"
