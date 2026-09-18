@@ -79,7 +79,8 @@ Compose 环境变量：
    Cloudflare 下载页给的两个文件默认叫 `example.com.pem` / `example.com.key`，要**按内容**改名：
    `example.com.pem` → `certs/origin.pem`，`example.com.key` → `certs/origin-key.pem`
    （私钥以 `-----BEGIN PRIVATE KEY-----` 开头；**别把 pem 改名成 key**）
-3. 放上服务器（证书是**唯一仍需手工放置**的部署件——私钥不进 git，也不进 release 资产）。
+3. 放上服务器（证书和仓库根 `.env` 一样是**纯手工部署件**：不进 git、也不进 release 资产，
+   见「环境变量（仓库根 `.env`）」）。
    本仓库在这台服务器上的部署目录就是 `/root/Projects/0x81-website`，compose 只挂它的
    `./certs`，所以证书必须落在**那个**目录的 `certs/` 里：
    ```bash
@@ -139,7 +140,7 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 ### `moyan-web` / `moyan-admin` / `moyan-backend`（墨言）
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
-- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin-moyan.0x81.uk`（网关也认 `admin.moyan.0x81.uk`，但两层子域没有证书，别用）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 `admin-moyan.0x81.uk`（网关也认 `admin.moyan.0x81.uk`，但两层子域没有证书，别用）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk`、`https://admin-moyan.0x81.uk` 与旧名 `https://admin.moyan.0x81.uk`）
@@ -178,7 +179,10 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
                                     git pull 只更新到这里）
  ├── docker-compose.yml
  ├── scripts/{build-rust.sh, fetch-rust.sh, lib/elf-arch.py}
- ├── .env                       ← GH_TOKEN=github_pat_xxx（fine-grained，Contents: Read）
+ ├── .env                       ← 手工放的密钥文件（不进 git、也不进 release），chmod 600
+ │      MOYAN_ADMIN_TOKEN=…        → 容器内 ADMIN_TOKEN；留空则 /api/admin/* 一律 503
+ │      MOYAN_JWT_SECRET=…         → 登录态签名（留空回落到 change-me-in-production）
+ │      GH_TOKEN=github_pat_xxx    → fine-grained，Contents: Read（fetch-rust.sh 拉 release 资产）
  ├── certs/{origin.pem, origin-key.pem}
  └── bin/                       ← 唯一由 fetch-rust.sh 填充，不在版本控制里
       ├── website-rs        10.3 MB / 0755   →  挂进 /app/website-rs（:ro,Z）
@@ -209,9 +213,9 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| **首次部署** | `git clone` → `.env` 里写 `GH_TOKEN` → `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。自检不通过就是证书没就位或没生效 |
+| **首次部署** | `git clone` → `cp .env.example .env` 后填 `MOYAN_ADMIN_TOKEN` / `MOYAN_JWT_SECRET` / `GH_TOKEN`（`chmod 600 .env`）→ `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。自检不通过就是证书没就位或没生效。漏写 `MOYAN_ADMIN_TOKEN` 的表现是后台登录一直 503 |
 | **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build`。证书没换就不用动 |
-| **换证书** | `scp` 新证书到 `<server>:/root/Projects/0x81-website/certs/`（两个文件都换，别只换一个）→ `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是唯一不进 git / 不进 release 的部署件；Cloudflare Origin 证书最长 15 年，无需续期自动化。自检会校验"确实是私钥且与证书配对"，配错文件当场报错 |
+| **换证书** | `scp` 新证书到 `<server>:/root/Projects/0x81-website/certs/`（两个文件都换，别只换一个）→ `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是纯手工部署件之一（另一个是根 `.env`），不进 git / 不进 release；Cloudflare Origin 证书最长 15 年，无需续期自动化。自检会校验"确实是私钥且与证书配对"，配错文件当场报错 |
 | **回滚** | `scripts/fetch-rust.sh <旧 tag> && docker compose up -d` | 版本锚点是 tag，不用碰 git 历史 |
 
 后备手段（CI 挂了 / 服务器连不上 GitHub）：在开发机 `scripts/build-rust.sh` 编出**同样的两个
@@ -228,7 +232,8 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 - `GH_TOKEN` 需要 fine-grained PAT、权限 `Contents: Read`（仓库是 private，release 资产
   必须走 API 下载；`github.com/.../releases/download/...` 直链在私有仓库下不带凭证会 404）。
-  可放在仓库根 `.env` 的 `GH_TOKEN=` 一行里，脚本不会把它写进任何产物。
+  它和其它密钥一样写在**仓库根** `.env` 里（`scripts/fetch-rust.sh` 就从那里读，见下一节），
+  脚本不会把它写进任何产物。
 - 两个 Dockerfile 都拆成 `runtime`（仅运行时依赖）与 `full`（把二进制 COPY 进镜像）两段。
   compose 用 `build.target: runtime` + 挂载 `./bin/<service>`；
   `docker build ./website-rs` 的默认行为仍是 `full`，不受影响。
@@ -263,6 +268,35 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 - `admin.moyan.0x81.uk` 是**两层子域**，Cloudflare 的 Universal SSL（`*.0x81.uk` 只覆盖一层）
   与我们的 Origin 证书都不含它：边缘握手直接失败，即便放行也会在 Full (strict) 下 526。
   管理后台请用 `admin-moyan.0x81.uk`（网关两个名字都接受，换名只需加一条 DNS 记录）。
+
+### 环境变量（仓库根 `.env`）
+
+```bash
+cd /root/Projects/0x81-website
+cp .env.example .env          # 模板在仓库根，列了 compose 会插值的全部键
+$EDITOR .env                  # 至少填 MOYAN_ADMIN_TOKEN / MOYAN_JWT_SECRET / GH_TOKEN
+chmod 600 .env
+docker compose config | grep -i admin_token   # 能打出非空值 = 插值读到了
+docker compose up -d                          # 改完 .env 要重建，只 restart 不够
+```
+
+- **位置只有一个**：与 `docker-compose.yml` 同级的 `.env`（compose 的"项目目录"）。服务器上是
+  `/root/Projects/0x81-website/.env`；`scripts/fetch-rust.sh` 先 `cd` 到仓库根再读同一个文件，
+  两处一致。`moyan-backend/.env`、`moyan-web/.env` 等**子目录** `.env` 只服务本地
+  `dev-run.sh` / `vite dev`，compose 完全不看它们。
+- **键名必须带 `MOYAN_` 前缀**：compose 里写的是 `ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}` 这种映射，
+  直接写 `ADMIN_TOKEN=` 不会进容器。
+- **`MOYAN_ADMIN_TOKEN` 不能空**：它是管理后台登录页要填的 `X-Admin-Token`；空值下后端对
+  `/api/admin/*` 一律回 503（`"ADMIN_TOKEN is not configured"`，设计上禁止空密钥放行）。
+- 它**不进 git**（`.gitignore` 里有 `.env`，历史里也从未提交过）、**不进 release 资产**，
+  所以换服务器必须手工重建，`git clone` 拿不到——这是继 `certs/` 之后第二个纯手工部署件。
+- ⚠️ **别把 `.env` 放进前端目录**：`moyan-web/` / `moyan-admin/` 的 Dockerfile 是 `COPY . .`
+  后 `npm run build`，Vite 会在构建期把 `VITE_*` 固化进镜像——本地调试用的
+  `VITE_API_URL=http://localhost:4323` 会被原样打进线上产物。两个 `.dockerignore` 已加 `.env*`
+  兜底；要给镜像注入 `VITE_*` 请走构建参数。
+- ⚠️ 模板里代理那几行（`HTTP_PROXY` 等）**故意注释着**：compose 会把 `.env` 的键也注入自己的
+  进程环境，而 docker CLI 读 `HTTP(S)_PROXY` 去拉镜像——激活后宿主的 `docker pull` 会去连
+  `host.docker.internal:17890`（宿主上通常解析不到）而失败。
 
 ## 本地运行
 
