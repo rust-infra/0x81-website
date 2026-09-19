@@ -3,7 +3,7 @@ use axum::{
     response::Json,
 };
 use chrono::Utc;
-use jsonwebtoken::{EncodingKey, Header, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -506,11 +506,24 @@ async fn kimi_user_from_refresh_verification(
 
     // 到这里 Kimi 已经确认这组 token 是真的，可以读它的 claims 了（签名不做本地校验：
     // 没有 JWKS 可依，真实性由上面的 refresh 复核保证）。
-    let claims = jsonwebtoken::dangerous::insecure_decode::<KimiAccessTokenClaims>(access_token)
-        .map_err(|e| {
-            AppError::Unauthorized(format!("Kimi access token is not a readable JWT: {e}"))
-        })?
-        .claims;
+    //
+    // 注意 jsonwebtoken 9 **没有** `dangerous::insecure_decode`（v8 的 API，写它会
+    // 直接编译失败）：v9 的等价写法是 `insecure_disable_signature_validation()`。
+    // 另外 v9 默认 required_spec_claims={"exp"}、validate_exp/validate_aud 均开启，
+    // 那些校验都是"验签通过后才算数"的范畴，这里的真实性由 Kimi 的 refresh 复核
+    // 替代，所以一并关掉——只管把字段读出来。
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.insecure_disable_signature_validation();
+    validation.required_spec_claims.clear();
+    validation.validate_exp = false;
+    validation.validate_aud = false;
+    let claims = decode::<KimiAccessTokenClaims>(
+        access_token,
+        &DecodingKey::from_secret(b""),
+        &validation,
+    )
+    .map_err(|e| AppError::Unauthorized(format!("Kimi access token is not a readable JWT: {e}")))?
+    .claims;
 
     // 防御性检查：确认是我们认识的 Kimi access token 形态（缺失的字段不拦，Kimi 以后
     // 可能改 claim 集合）。
