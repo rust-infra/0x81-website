@@ -920,6 +920,86 @@ mod tests {
         Ok(())
     }
 
+    /// 回归（2026-09-19 事故）：兜底路径**没有**任何资料，不能把已有账号的昵称 /
+    /// 邮箱 / 头像写回占位值。
+    ///
+    /// 事故原样：`find_or_create` 是 upsert，而兜底路径只能用 `Kimi User` /
+    /// `{sub 前 8 字符}@kimi.user` 占位，于是 userinfo 坏着的每一天，每次 Kimi 登录
+    /// 都会把该账号的资料覆盖成占位值——手工改名改不牢。
+    #[tokio::test]
+    async fn kimi_refresh_fallback_keeps_existing_profile() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
+        let base = start_kimi_es256_stub(true, &kimi_token).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        // 先有一个资料完整的账号（上游正常时登录过 / 用户改过昵称）。
+        state
+            .services
+            .auth
+            .find_or_create_user(crate::models::UserIdentity {
+                provider: "kimi",
+                provider_id: "kimi-user-1",
+                name: "张三",
+                email: "zhangsan@example.com",
+                avatar: Some("https://img.example.com/a.png"),
+            })
+            .await?;
+
+        let app = build_app(state);
+        let response = app.clone().oneshot(kimi_poll_request("dc-es256-keep")?).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["user"]["name"], "张三");
+        assert_eq!(body["data"]["user"]["email"], "zhangsan@example.com");
+        assert_eq!(
+            body["data"]["user"]["avatar"],
+            "https://img.example.com/a.png"
+        );
+        assert_eq!(body["data"]["user"]["provider"], "kimi");
+        Ok(())
+    }
+
+    /// 反向约束：上游恢复、userinfo 又能给出真资料时，仍然要覆盖库里的旧值——不能
+    /// 因为"保护已有资料"就把账号永久钉在占位值上。
+    #[tokio::test]
+    async fn kimi_userinfo_profile_still_overwrites_stored_values() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let base = start_kimi_stub(Some("kimi-access-token"), true).await;
+        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
+        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        state
+            .services
+            .auth
+            .find_or_create_user(crate::models::UserIdentity {
+                provider: "kimi",
+                provider_id: "kimi-user-1",
+                name: "旧昵称",
+                email: "old@example.com",
+                avatar: None,
+            })
+            .await?;
+
+        let app = build_app(state);
+        let response = app.oneshot(kimi_poll_request("dc-1")?).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // stub 的 userinfo 返回 name="Kimi User"、email="k@kimi.user"。
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["user"]["name"], "Kimi User");
+        assert_eq!(body["data"]["user"]["email"], "k@kimi.user");
+        Ok(())
+    }
+
     /// 现行登录路径：轮询拿到 Kimi 的 access_token 后由**服务端**去 userinfo 复核，
     /// 只把我们的 JWT 回给客户端——Kimi 的 access_token 不离开服务端。
     #[tokio::test]

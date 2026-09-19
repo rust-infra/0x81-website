@@ -492,6 +492,21 @@ impl UserRepository for SqliteRepositories {
         )
     }
 
+    async fn find_by_provider(
+        &self,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<Option<User>, RepositoryError> {
+        Ok(sqlx::query_as::<_, UserRow>(
+            "SELECT * FROM users WHERE provider = ? AND provider_id = ?",
+        )
+        .bind(provider)
+        .bind(provider_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(Into::into))
+    }
+
     async fn admin_list_users(
         &self,
         q: Option<&str>,

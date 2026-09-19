@@ -413,8 +413,13 @@ async fn kimi_user_from_access_token(
 /// 由「已复核过的 Kimi 用户标识」+ 可选的资料字段建号 / 登录。
 ///
 /// 名字 / 邮箱缺失时用占位值（`Kimi User` / `{sub 前 8 字符}@kimi.user`，见
-/// `kimi_placeholder_email`）。注意 `find_or_create` 会 upsert 这三个字段，
-/// 所以**没有**资料的上游路径（如 refresh 兜底）会把已有用户的显示名写回占位值。
+/// `kimi_placeholder_email`）——但**占位值只发给新账号**：`find_or_create` 是 upsert，
+/// 把占位值一起写进去会把已有账号的真实资料覆盖掉。2026-09-19 实测事故：userinfo
+/// 故障期间兜底路径拿不到任何资料，于是每次登录都把账号昵称/邮箱写回占位值，手工改名
+/// 改不牢。
+///
+/// 现在的规则：**本次上游给了什么就更新什么，没给的沿用库里的旧值，绝不用占位值覆盖**；
+/// 库里也没有（新账号）才落占位值。上游恢复、重新带回真资料时照旧覆盖（占位值能被改回）。
 async fn kimi_user_from_identity(
     state: &AppState,
     provider_id: &str,
@@ -422,13 +427,27 @@ async fn kimi_user_from_identity(
     email: Option<String>,
     avatar: Option<String>,
 ) -> Result<User, AppError> {
+    let existing = state
+        .services
+        .auth
+        .find_by_provider("kimi", provider_id)
+        .await?;
+
     let name = name
+        .filter(|s| !s.is_empty())
+        .or_else(|| existing.as_ref().map(|user| user.name.clone()))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Kimi User".to_string());
 
     let email = email
         .filter(|s| !s.is_empty())
+        .or_else(|| existing.as_ref().map(|user| user.email.clone()))
+        .filter(|s| !s.is_empty())
         .unwrap_or_else(|| kimi_placeholder_email(provider_id));
+
+    let avatar = avatar
+        .filter(|s| !s.is_empty())
+        .or_else(|| existing.and_then(|user| user.avatar));
 
     find_or_create_user(
         state,

@@ -70,6 +70,15 @@ pub struct SyncCounts {
 pub trait UserRepository: Send + Sync {
     async fn find_or_create(&self, identity: UserIdentity<'_>) -> Result<User, RepositoryError>;
     async fn find_by_id(&self, user_id: &str) -> Result<Option<User>, RepositoryError>;
+    /// 按 `(provider, provider_id)` 查用户，不存在返回 `None`。
+    ///
+    /// 登录流程用它区分"这次从上游拿到了资料"还是"只是复核了身份但没资料"：后者
+    /// 不能拿占位值去 upsert 覆盖已存在的资料（见 `kimi_user_from_identity`）。
+    async fn find_by_provider(
+        &self,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<Option<User>, RepositoryError>;
 
     async fn admin_list_users(
         &self,

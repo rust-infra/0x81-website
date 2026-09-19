@@ -86,9 +86,11 @@ Kimi 自己**复核这份 token（我们本地不验签——Kimi 不暴露 JWKS
    拒），refresh 成功即证明这组 token 确由 Kimi 签发，之后再从 access_token 取 `sub`
    （`iss` 必须是 `kimi-auth`、`type` 必须是 `access`）。
 
-   ⚠️ 兜底路径拿不到昵称/邮箱/头像，用户会以占位的 `Kimi User` /
-   `{sub 前 8 字符}@kimi.user` 建号；且 `find_or_create` 会 upsert 这两个字段，所以已有
-   Kimi 用户的显示名/邮箱在兜底期间会被写回占位值。Kimi 修好 userinfo 后自动恢复首选路径。
+   ⚠️ 兜底路径拿不到昵称/邮箱/头像，所以**只有新账号**会用占位值 `Kimi User` /
+   `{sub 前 8 字符}@kimi.user` 建号；已有账号不会被占位值覆盖——本次上游没给的字段一律
+   沿用库里的旧值（2026-09-19 修：此前 `find_or_create` 是 upsert，兜底期间每次登录都会
+   把已有账号的显示名/邮箱写回占位值，手工改名改不牢）。Kimi 修好 userinfo 后自动恢复
+   首选路径；上游重新带回真资料时照旧覆盖，占位值能被改回。
 
 ### 数据同步
 

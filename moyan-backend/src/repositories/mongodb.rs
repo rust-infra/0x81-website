@@ -346,6 +346,17 @@ impl UserRepository for MongoRepositories {
         Ok(self.users().find_one(doc! { "id": user_id }).await?)
     }
 
+    async fn find_by_provider(
+        &self,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<Option<User>, RepositoryError> {
+        Ok(self
+            .users()
+            .find_one(doc! { "provider": provider, "provider_id": provider_id })
+            .await?)
+    }
+
     async fn admin_list_users(
         &self,
         q: Option<&str>,
