@@ -42,6 +42,7 @@ import {
   egregiousSrsUpdates,
   newPrefixedId,
   toAgainUpsertBody,
+  typedCharMatches,
   typedStatesFromCharInfos,
 } from '../services/typePractice';
 import { getCurrentUser } from '../services/authService';
@@ -599,7 +600,7 @@ export default function TypeTraining() {
 
     const expected = target[inputIndex];
     const typed = e.key;
-    const isCorrect = typed === expected;
+    const isCorrect = typedCharMatches(typed, expected);
 
     setCharInfos(prev => {
       const next = [...prev];

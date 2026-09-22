@@ -10,8 +10,38 @@ import {
   isEgregious,
   typedStatesFromCharInfos,
   toAgainUpsertBody,
+  typedCharMatches,
   wpmOf,
 } from "./typePractice";
+
+describe("typedCharMatches", () => {
+  it("accepts an exact match", () => {
+    expect(typedCharMatches("A", "A")).toBe(true);
+    expect(typedCharMatches("a", "a")).toBe(true);
+  });
+
+  it("ignores letter case in both directions", () => {
+    expect(typedCharMatches("a", "A")).toBe(true);
+    expect(typedCharMatches("A", "a")).toBe(true);
+  });
+
+  it("still rejects different characters", () => {
+    expect(typedCharMatches("b", "A")).toBe(false);
+    expect(typedCharMatches("a", "b")).toBe(false);
+  });
+
+  it("keeps CJK, digits and punctuation exact", () => {
+    expect(typedCharMatches("词", "词")).toBe(true);
+    expect(typedCharMatches("字", "词")).toBe(false);
+    expect(typedCharMatches("1", "1")).toBe(true);
+    expect(typedCharMatches("'", "’")).toBe(false);
+    expect(typedCharMatches(" ", " ")).toBe(true);
+  });
+
+  it("treats a missing expected character as a mismatch", () => {
+    expect(typedCharMatches("a", undefined)).toBe(false);
+  });
+});
 
 describe("isEgregious", () => {
   it("marks skipped words as egregious", () => {

@@ -10,6 +10,21 @@ import { calculateSRS } from "./srs";
 export const EGREGIOUS_ACCURACY_THRESHOLD = 0.7;
 export const TYPE_SYNC_ENTRY_LIMIT = 2000;
 
+/**
+ * Whether a typed character matches the expected target character.
+ * Comparison ignores letter case (typing "a" for "A" counts as correct);
+ * CJK characters, digits and punctuation are unaffected because
+ * `toLowerCase()` is the identity for them.
+ */
+export function typedCharMatches(
+  typed: string,
+  expected: string | undefined
+): boolean {
+  if (expected === undefined) return false;
+  if (typed === expected) return true;
+  return typed.toLowerCase() === expected.toLowerCase();
+}
+
 export function accuracyOf(correctChars: number, wrongChars: number): number {
   const total = correctChars + wrongChars;
   return total === 0 ? 0 : correctChars / total;
