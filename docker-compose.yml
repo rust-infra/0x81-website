@@ -45,18 +45,21 @@ services:
       - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
       - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
-      # Local HTTP proxy (e.g. Clash on the host, port 7890) for data collection.
-      # 127.0.0.1 inside the container is the container itself, so we use the
-      # host gateway (host.docker.internal -> 172.24.0.1 for this project).
-      # The host Clash listens ONLY on 127.0.0.1:7890 (no Allow LAN), which
-      # containers cannot reach; socat on the host forwards
-      # 172.24.0.1:17890 -> 127.0.0.1:7890 (see docs, started via setsid/systemd).
-      # MOYAN_YTDLP_PROXY has the highest priority in normalize_proxy(); the
-      # standard vars also cover reqwest clients (Google OAuth, etc.).
-      - MOYAN_YTDLP_PROXY=${MOYAN_YTDLP_PROXY:-http://host.docker.internal:17890}
-      - HTTP_PROXY=${HTTP_PROXY:-http://host.docker.internal:17890}
-      - HTTPS_PROXY=${HTTPS_PROXY:-http://host.docker.internal:17890}
-      - ALL_PROXY=${ALL_PROXY:-http://host.docker.internal:17890}
+      # Data collection (yt-dlp) proxy. **默认不注入代理**：本机没有本地代理
+      # （Clash/socat 均不存在，127.0.0.1:7890 与 host-gateway:17890 都没有监听），
+      # 而宿主可直连 YouTube。此前的默认值 http://host.docker.internal:17890
+      # 指向一个没人监听的端口，导致 yt-dlp 报
+      #   ERROR: Unable to download API page: [Errno 111] Connection refused
+      # （直连则正常）。需要代理时（例如部署到墙内）在仓库根 .env 里显式设置：
+      #   MOYAN_YTDLP_PROXY=http://host.docker.internal:17890
+      # 并在宿主用 socat 把 host-gateway:17890 转发到 127.0.0.1:7890
+      # （host.docker.internal -> host-gateway；127.0.0.1 在容器内是容器自己）。
+      # MOYAN_YTDLP_PROXY 在 normalize_proxy() 里优先级最高；标准变量同时覆盖
+      # reqwest 客户端（Google OAuth 等），所以一并留空。
+      - MOYAN_YTDLP_PROXY=${MOYAN_YTDLP_PROXY:-}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
       # Kimi auth is a direct, China-reachable service. Keep it off the host
       # proxy so a broken/slow Clash forward cannot turn device auth into 500.
       - NO_PROXY=auth.kimi.com,${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
