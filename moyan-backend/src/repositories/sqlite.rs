@@ -492,6 +492,21 @@ impl UserRepository for SqliteRepositories {
         )
     }
 
+    async fn find_by_provider(
+        &self,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<Option<User>, RepositoryError> {
+        Ok(sqlx::query_as::<_, UserRow>(
+            "SELECT * FROM users WHERE provider = ? AND provider_id = ?",
+        )
+        .bind(provider)
+        .bind(provider_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(Into::into))
+    }
+
     async fn admin_list_users(
         &self,
         q: Option<&str>,
@@ -1043,30 +1058,60 @@ impl VocabularyRepository for SqliteRepositories {
         user_id: &str,
         deck_id: &str,
     ) -> Result<Vec<StudyCard>, RepositoryError> {
-        let rows = sqlx::query_as::<_, StudyCardRow>(
-            "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
-                    c.created_at, c.updated_at,
-                    p.id AS progress_id,
-                    p.owner_user_id AS progress_owner_user_id,
-                    p.card_id AS progress_card_id,
-                    p.srs_status AS progress_srs_status,
-                    p.interval_days AS progress_interval_days,
-                    p.repetitions AS progress_repetitions,
-                    p.ease_factor AS progress_ease_factor,
-                    p.due_date AS progress_due_date,
-                    p.last_reviewed_at AS progress_last_reviewed_at,
-                    p.created_at AS progress_created_at,
-                    p.updated_at AS progress_updated_at
-             FROM cards c
-             LEFT JOIN card_progress p
-                ON p.card_id = c.id AND p.owner_user_id = ?
-             WHERE c.deck_id = ?
-             ORDER BY c.created_at, c.id",
-        )
-        .bind(user_id)
-        .bind(deck_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = if deck_id == "all" {
+            // "全部"模式：与日常练习词库一致（系统词库 + 用户启用的 deck）
+            sqlx::query_as::<_, StudyCardRow>(
+                "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
+                        c.created_at, c.updated_at,
+                        p.id AS progress_id,
+                        p.owner_user_id AS progress_owner_user_id,
+                        p.card_id AS progress_card_id,
+                        p.srs_status AS progress_srs_status,
+                        p.interval_days AS progress_interval_days,
+                        p.repetitions AS progress_repetitions,
+                        p.ease_factor AS progress_ease_factor,
+                        p.due_date AS progress_due_date,
+                        p.last_reviewed_at AS progress_last_reviewed_at,
+                        p.created_at AS progress_created_at,
+                        p.updated_at AS progress_updated_at
+                 FROM cards c
+                 JOIN decks d ON d.id = c.deck_id
+                 LEFT JOIN card_progress p
+                    ON p.card_id = c.id AND p.owner_user_id = ?
+                 WHERE (d.owner_user_id = ? AND d.is_active = 1) OR d.owner_user_id = ?
+                 ORDER BY c.created_at, c.id",
+            )
+            .bind(user_id)
+            .bind(SYSTEM_OWNER_ID)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, StudyCardRow>(
+                "SELECT c.id, c.deck_id, c.front, c.back, c.pronunciation, c.tags, c.examples,
+                        c.created_at, c.updated_at,
+                        p.id AS progress_id,
+                        p.owner_user_id AS progress_owner_user_id,
+                        p.card_id AS progress_card_id,
+                        p.srs_status AS progress_srs_status,
+                        p.interval_days AS progress_interval_days,
+                        p.repetitions AS progress_repetitions,
+                        p.ease_factor AS progress_ease_factor,
+                        p.due_date AS progress_due_date,
+                        p.last_reviewed_at AS progress_last_reviewed_at,
+                        p.created_at AS progress_created_at,
+                        p.updated_at AS progress_updated_at
+                 FROM cards c
+                 LEFT JOIN card_progress p
+                    ON p.card_id = c.id AND p.owner_user_id = ?
+                 WHERE c.deck_id = ?
+                 ORDER BY c.created_at, c.id",
+            )
+            .bind(user_id)
+            .bind(deck_id)
+            .fetch_all(&self.pool)
+            .await?
+        };
         rows.into_iter().map(TryInto::try_into).collect()
     }
 

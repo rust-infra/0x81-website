@@ -1,0 +1,69 @@
+name: Release Rust Binaries
+
+# 打 tag（v*）时编译 website-rs / moyan-backend 的二进制，作为 release 资产发布。
+# 服务器侧不跑 cargo，用 scripts/fetch-rust.sh <tag> 下载后挂载进 runtime 镜像：
+#
+#   docker compose up -d      # 只重启，不重建镜像
+#
+# 编译复用各项目 Dockerfile 的 builder 段（scripts/build-rust.sh），保证工具链、
+# musl target 与 glibc 匹配关系与本地构建完全一致；因此这里不传任何 build-arg，
+# 镜像源走 Dockerfile 自己的默认值。
+#
+# 注意：本 workflow 与 docker-build.yml 是两件事。后者只验证镜像能否构建；
+# 这里发布的是二进制资产，不做 docker push。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要挂资产的 tag（如 v1.0.0）；留空则用当前分支"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Build binaries
+        # 固定 linux/amd64：runner 本身就是 x86_64，而脚本会据此校验 ELF 架构。
+        # 服务器改为 arm64 时这里要改成 linux/arm64（runner 仍是 x86_64，
+        # docker 走 QEMU 交叉构建）。
+        run: PLATFORM=linux/amd64 scripts/build-rust.sh
+
+      - name: Checksums
+        # 文件名不带路径，fetch-rust.sh 用 `sha256sum -c --ignore-missing` 校验
+        run: cd bin && sha256sum website-rs moyan-backend > SHA256SUMS
+
+      - name: Show build provenance
+        run: cat bin/*.rev && cat bin/SHA256SUMS
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          fail_on_unmatched_files: true
+          body: |
+            Rust 二进制（`website-rs` / `moyan-backend`），由 `scripts/build-rust.sh`
+            在 CI 中用各项目 Dockerfile 的 builder 段编译，平台 linux/amd64。
+
+            服务器侧更新：
+
+            ```bash
+            scripts/fetch-rust.sh ${{ inputs.tag || github.ref_name }}
+            docker compose up -d
+            ```
+          files: |
+            bin/website-rs
+            bin/moyan-backend
+            bin/website-rs.rev
+            bin/moyan-backend.rev
+            bin/SHA256SUMS

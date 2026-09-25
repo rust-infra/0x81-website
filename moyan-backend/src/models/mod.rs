@@ -44,11 +44,6 @@ impl From<User> for UserResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KimiAuthRequest {
-    pub access_token: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KimiTokenPayload {
     pub sub: Option<String>,

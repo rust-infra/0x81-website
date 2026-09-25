@@ -42,6 +42,7 @@ import {
   egregiousSrsUpdates,
   newPrefixedId,
   toAgainUpsertBody,
+  typedCharMatches,
   typedStatesFromCharInfos,
 } from '../services/typePractice';
 import { getCurrentUser } from '../services/authService';
@@ -433,13 +434,9 @@ export default function TypeTraining() {
             const d = decksList.find(x => x.id === deckId);
             if (d && !cancelled) setDeckName(d.name);
           } else {
-            const decksList = await listDecks();
-            const allCards: TypeCard[] = [];
-            for (const d of decksList) {
-              const studyCards = await listStudyCards(d.id);
-              allCards.push(...studyCards.map(mapApiTypeCard));
-            }
-            loaded = allCards;
+            // "全部"模式：与日常练习词库一致（系统词库 + 用户启用的 deck）
+            const studyCards = await listStudyCards('all');
+            loaded = studyCards.map(mapApiTypeCard);
           }
         } else if (deckId) {
           const localCards = await db.cards.where('deckId').equals(Number(deckId)).toArray();
@@ -603,7 +600,7 @@ export default function TypeTraining() {
 
     const expected = target[inputIndex];
     const typed = e.key;
-    const isCorrect = typed === expected;
+    const isCorrect = typedCharMatches(typed, expected);
 
     setCharInfos(prev => {
       const next = [...prev];

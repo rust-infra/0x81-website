@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowRight, BookOpen, Target, TrendingUp, X, CalendarDays, Layers, Keyboard } from 'lucide-react';
+import { ArrowRight, BookOpen, Target, TrendingUp, X, CalendarDays, Layers, Keyboard, Headphones } from 'lucide-react';
 import InkProgress from '../components/shaders/InkProgress';
 import BottomNav from '../components/BottomNav';
 import { UserMenu } from '../components/UserMenu';
@@ -229,6 +229,27 @@ export default function Home() {
           <div className="flex-1 text-left">
             <p className="font-medium text-[var(--ink)]">{t('type.training')}</p>
             <p className="text-xs text-[var(--ink-muted)]">{t('type.training.desc')}</p>
+          </div>
+          <ArrowRight size={18} style={{ color: 'var(--ink-muted)' }} />
+        </button>
+      </section>
+
+      {/* 播客听力入口 */}
+      <section className="px-5 mb-6">
+        <button
+          onClick={() => navigate('/podcast')}
+          className="w-full rounded-2xl p-4 flex items-center gap-4 transition-all active:scale-[0.98] hover:shadow-md"
+          style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}
+        >
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: 'var(--accent-light)' }}
+          >
+            <Headphones size={22} style={{ color: 'var(--accent)' }} />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="font-medium text-[var(--ink)]">{t('podcast.training')}</p>
+            <p className="text-xs text-[var(--ink-muted)]">{t('podcast.training.desc')}</p>
           </div>
           <ArrowRight size={18} style={{ color: 'var(--ink-muted)' }} />
         </button>

@@ -16,15 +16,14 @@ import type {
   UpsertCardProgressRequest,
   CardProgress,
 } from "@/types/vocabulary";
+import { API_BASE } from "./backendMode";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// 服务端权威模式的总开关见 backendMode.ts（不要再用「VITE_API_URL 是否为空」判断：
+// 线上同源部署时它本来就应该为空，那会让前端静默退回本地 IndexedDB 模式）。
+export { hasBackend as hasVocabularyBackend } from "./backendMode";
 
 function getToken(): string | null {
   return localStorage.getItem("moyan_token");
-}
-
-export function hasVocabularyBackend(): boolean {
-  return API_BASE.length > 0;
 }
 
 async function apiRequest<T>(

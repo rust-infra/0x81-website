@@ -24,6 +24,16 @@ impl AuthService {
         self.repository.find_by_id(user_id).await
     }
 
+    pub async fn find_by_provider(
+        &self,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<Option<User>, RepositoryError> {
+        self.repository
+            .find_by_provider(provider, provider_id)
+            .await
+    }
+
     pub async fn user_stats(&self, user_id: &str) -> Result<UserStats, RepositoryError> {
         self.repository.stats(user_id).await
     }

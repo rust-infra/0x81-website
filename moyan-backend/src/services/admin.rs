@@ -12,7 +12,7 @@ use crate::models::{
 };
 use crate::repositories::Repository;
 use crate::services::admin_excel::{
-    build_export_xlsx, build_template_xlsx, example_from_import_text, parse_import_xlsx,
+    build_export_xlsx, build_template_xlsx, examples_from_import_text, parse_import_xlsx,
     validate_import_rows, VocabularyExport,
 };
 
@@ -358,9 +358,8 @@ impl AdminService {
                 examples: row
                     .example
                     .as_deref()
-                    .and_then(example_from_import_text)
-                    .into_iter()
-                    .collect(),
+                    .map(examples_from_import_text)
+                    .unwrap_or_default(),
             })
             .collect();
 
@@ -499,7 +498,9 @@ fn normalize_examples(inputs: Vec<CardExampleInput>) -> Result<Vec<CardExample>,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CreateCardRequest, Deck, ImportMode, PatchAdminUserRequest, UserIdentity};
+    use crate::models::{
+        Card, CardExample, CreateCardRequest, Deck, ImportMode, PatchAdminUserRequest, UserIdentity,
+    };
     use crate::repositories::{Repository, SqliteRepositories};
     use chrono::Utc;
     use std::sync::Arc;
@@ -698,6 +699,45 @@ mod tests {
             .expect("lookup card")
             .expect("card should exist");
         assert_eq!(updated.back, "updated");
+    }
+
+    #[tokio::test]
+    async fn import_persists_example_translation() {
+        let repo = seeded_repo().await;
+        let service = AdminService::new(repo.clone());
+        let deck = sample_deck(Utc::now());
+        let now = Utc::now();
+        let card = Card {
+            id: "card_example_test".to_string(),
+            deck_id: deck.id.clone(),
+            front: "excuse".to_string(),
+            back: "原谅".to_string(),
+            pronunciation: Some("/ɪkˈskjuːs/".to_string()),
+            tags: vec![],
+            examples: vec![CardExample {
+                id: "ex_1".to_string(),
+                sentence_en: "Excuse me!".to_string(),
+                translation_zh: "打扰一下！".to_string(),
+            }],
+            created_at: now,
+            updated_at: now,
+        };
+        let xlsx = build_export_xlsx(std::slice::from_ref(&deck), &[card])
+            .expect("export xlsx should build");
+
+        service
+            .import_vocabulary(&xlsx, ImportMode::Merge)
+            .await
+            .expect("import with examples should succeed");
+
+        let stored = repo
+            .admin_find_card_by_front("deck_import_test", "excuse")
+            .await
+            .expect("lookup card")
+            .expect("card should exist");
+        assert_eq!(stored.examples.len(), 1);
+        assert_eq!(stored.examples[0].sentence_en, "Excuse me!");
+        assert_eq!(stored.examples[0].translation_zh, "打扰一下！");
     }
 
     #[tokio::test]

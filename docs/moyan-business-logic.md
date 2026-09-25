@@ -6,7 +6,9 @@
 
 Moyan 是一个以英语词汇记忆为核心的 Web 应用。
 
-当配置了 `VITE_API_URL` 时，词库与学习进度以**服务端为权威**：系统词库共享一份（`owner_user_id = "system"`），用户自建词库与 `card_progress` / `review_logs_v2` 按用户隔离；登录成功后后端会确保系统词库可用。未配置 API 时仍可走 IndexedDB 本地模式（不含 Anki/CSV 导入）。
+当开启**服务端为权威**模式时，词库与学习进度以**服务端为权威**：系统词库共享一份（`owner_user_id = "system"`），用户自建词库与 `card_progress` / `review_logs_v2` 按用户隔离；登录成功后后端会确保系统词库可用。关闭时仍可走 IndexedDB 本地模式（不含 Anki/CSV 导入）。
+
+开关只看 `VITE_SERVER_MODE` / `VITE_API_URL` / 是否生产构建（实现见 `moyan-web/src/services/backendMode.ts`），**不再**把「`VITE_API_URL` 非空」当作唯一依据：线上同源部署时该变量故意为空，旧判断会让前端静默退回本地模式。
 
 用户闭环：
 
@@ -140,7 +142,9 @@ flowchart LR
 
 登录是可选项。Google 使用 Google Identity Services 取得用户资料；Kimi 使用 OAuth Device Flow，在新窗口完成授权后轮询令牌。当前用户资料和令牌写在 `localStorage`，页面通过内存监听器广播登录状态。
 
-当配置 `VITE_API_URL` 时，Kimi 令牌会换取后端令牌；另有 Rust 后端的 Google 回调和“当前用户”接口实现。未配置后端时，Kimi 会在前端尝试解析令牌，Google 仅取得用户资料。
+当开启服务端模式时（见 §1 的开关说明），Kimi 令牌会换取后端令牌；另有 Rust 后端的 Google 回调和“当前用户”接口实现。关闭后端时，Kimi 会在前端尝试解析令牌，Google 仅取得用户资料。
+
+后端只接受通过 HS256 校验的 JWT（密钥 `JWT_SECRET` / compose 的 `MOYAN_JWT_SECRET`）。无法通过校验的 Bearer 值**默认直接 401**；只有显式设 `ALLOW_LEGACY_TOKEN_AUTH=1`（`moyan-backend/dev-run.sh` 在本地开发时设）才会回落到「按 token 哈希自动建号」的 legacy 兜底——那是开发便利，线上开等于没有鉴权。
 
 ### 8.2 同步
 

@@ -152,7 +152,9 @@ impl VocabularyService {
         user_id: &str,
         deck_id: &str,
     ) -> Result<Vec<StudyCard>, AppError> {
-        self.require_readable_deck(user_id, deck_id).await?;
+        if deck_id != "all" {
+            self.require_readable_deck(user_id, deck_id).await?;
+        }
         Ok(self.repository.list_study_cards(user_id, deck_id).await?)
     }
 

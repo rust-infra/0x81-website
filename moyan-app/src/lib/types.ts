@@ -179,7 +179,8 @@ export interface PodcastTranslate {
 
 export interface AppConfig {
   podcast: {
-    enabled: boolean;
+    app_enabled: boolean;
+    web_enabled: boolean;
     youtube_api_key: string;
   };
 }

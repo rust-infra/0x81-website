@@ -186,7 +186,8 @@ pub async fn update_llm_settings(
 
 #[derive(Debug, Deserialize)]
 pub struct PodcastConfigUpdate {
-    pub enabled: bool,
+    pub app_enabled: Option<bool>,
+    pub web_enabled: Option<bool>,
     pub youtube_api_key: Option<String>,
 }
 
@@ -201,10 +202,19 @@ pub async fn update_podcast_config(
     State(state): State<AppState>,
     axum::Json(req): axum::Json<PodcastConfigUpdate>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    // 先读当前配置，未提供的字段保持原值
+    let current = state.services.podcast.config().await?;
+    let app_enabled = req.app_enabled.unwrap_or(current.podcast.app_enabled);
+    let web_enabled = req.web_enabled.unwrap_or(current.podcast.web_enabled);
+    let youtube_api_key = req
+        .youtube_api_key
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&current.podcast.youtube_api_key);
     let cfg = state
         .services
         .podcast
-        .set_config(req.enabled, req.youtube_api_key.as_deref().unwrap_or(""))
+        .set_config(app_enabled, web_enabled, youtube_api_key)
         .await?;
     let cfg: PodcastConfig = cfg.podcast;
     Ok(success(cfg))

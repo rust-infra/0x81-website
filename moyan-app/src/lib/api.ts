@@ -242,40 +242,35 @@ export async function kimiDevice(deviceId: string): Promise<KimiDeviceInfo> {
   return body.data as KimiDeviceInfo;
 }
 
+/**
+ * 轮询登录。后端拿到 Kimi 的 access_token 后**立刻**用 userinfo 复核并建号，
+ * 成功时返回的是我们自己的 JWT —— Kimi 的 access_token 不会到达客户端
+ * （2026-09-18 之前客户端要再调一次 /api/auth/kimi 提交它，而那个接口不验签）。
+ */
 export async function kimiTokenPoll(
   deviceCode: string,
   deviceId: string
-): Promise<{ status: 'ok'; accessToken: string } | { status: 'pending' }> {
+): Promise<
+  { status: 'ok'; token: string; user: User } | { status: 'pending' }
+> {
   const res = await fetch(`${API_BASE}/api/auth/kimi/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_code: deviceCode, device_id: deviceId }),
   });
   const body = await res.json().catch(() => ({}));
-  if (res.ok && body?.success && body?.data?.access_token) {
-    return { status: 'ok', accessToken: body.data.access_token };
+  if (res.ok && body?.success && body?.data?.token) {
+    return {
+      status: 'ok',
+      token: body.data.token as string,
+      user: body.data.user as User,
+    };
   }
   const message: string = body?.error?.message || '';
   if (/authorization_pending|slow_down|pending/i.test(message)) {
     return { status: 'pending' };
   }
   throw new Error(message || `登录轮询失败 (${res.status})`);
-}
-
-export async function kimiLogin(
-  accessToken: string
-): Promise<{ token: string; user: User }> {
-  const res = await fetch(`${API_BASE}/api/auth/kimi`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ access_token: accessToken }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `登录失败 (${res.status})`);
-  }
-  const data = body.data as { token: string; user: User };
-  return { token: data.token, user: data.user };
 }
 
 export async function googleMobileLogin(

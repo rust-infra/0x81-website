@@ -18,7 +18,19 @@ services:
     restart: unless-stopped
 
   moyan-backend:
-    build: ./moyan-backend
+    # 服务器不编译：二进制由 CI（release workflow，打 tag 触发）编好并以 release
+    # 资产发布，服务器用 scripts/fetch-rust.sh <tag> 拉到 ./bin/；这里只用
+    # Dockerfile 的 runtime stage（仅运行时依赖：ffmpeg/python3/yt-dlp），
+    # 再把它挂载进容器。
+    image: 0x81/moyan-backend-runtime:local
+    # 这个镜像只含运行时依赖，是 compose 在本机构建出来的产物，**不存在于任何 registry**：
+    # pull_policy: build 告诉 compose 不要试图 pull（否则在尚未构建过该镜像的机器上会打出
+    # "pull access denied for 0x81/moyan-backend-runtime" 之类的告警，docker compose pull
+    # 更会直接报错），镜像不在本地缓存时才构建。
+    pull_policy: build
+    build:
+      context: ./moyan-backend
+      target: runtime
     ports:
       - "4323:4323"
     environment:
@@ -31,10 +43,37 @@ services:
       - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
       - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
-      - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin.moyan.0x81.uk}
+      - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
+      # Data collection (yt-dlp) proxy. **默认不注入代理**：本机没有本地代理
+      # （Clash/socat 均不存在，127.0.0.1:7890 与 host-gateway:17890 都没有监听），
+      # 而宿主可直连 YouTube。此前的默认值 http://host.docker.internal:17890
+      # 指向一个没人监听的端口，导致 yt-dlp 报
+      #   ERROR: Unable to download API page: [Errno 111] Connection refused
+      # （直连则正常）。需要代理时（例如部署到墙内）在仓库根 .env 里显式设置：
+      #   MOYAN_YTDLP_PROXY=http://host.docker.internal:17890
+      # 并在宿主用 socat 把 host-gateway:17890 转发到 127.0.0.1:7890
+      # （host.docker.internal -> host-gateway；127.0.0.1 在容器内是容器自己）。
+      # MOYAN_YTDLP_PROXY 在 normalize_proxy() 里优先级最高；标准变量同时覆盖
+      # reqwest 客户端（Google OAuth 等），所以一并留空。
+      - MOYAN_YTDLP_PROXY=${MOYAN_YTDLP_PROXY:-}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      # Kimi auth is a direct, China-reachable service. Keep it off the host
+      # proxy so a broken/slow Clash forward cannot turn device auth into 500.
+      - NO_PROXY=auth.kimi.com,${NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal}
+    extra_hosts:
+      # Maps host.docker.internal to the docker bridge gateway (172.17.0.1).
+      - "host.docker.internal:host-gateway"
     volumes:
-      - ./moyan-backend/data:/data
+      # :Z relabels the bind mount to container_file_t so the container can
+      # write the SQLite DB on SELinux-enforcing hosts (SQLITE_CANTOPEN otherwise)
+      - ./moyan-backend/data:/data:Z
+      # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑
+      # scripts/build-rust.sh）。:Z 同上，SELinux 下可读可执行。
+      # 注意：先跑 scripts/fetch-rust.sh，否则 compose 会把不存在的路径建成空目录。
+      - ./bin/moyan-backend:/app/moyan-backend:ro,Z
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4323/api/health"]
@@ -44,7 +83,14 @@ services:
       start_period: 5s
 
   moyan-web:
-    build: ./moyan-web
+    build:
+      context: ./moyan-web
+      args:
+        # 显式开启「服务端为权威」模式（见 moyan-web/src/services/backendMode.ts）。
+        # 线上同源部署，VITE_API_URL 故意留空（请求走相对路径 /api，由 Caddy 反代到
+        # moyan-backend），所以不能再用「VITE_API_URL 非空」判断后端可用性 —— 那样
+        # 前端会退回 IndexedDB 本地模式，管理后台导入的词库在 /decks 永远看不见。
+        VITE_SERVER_MODE: "1"
     ports:
       - "5000:5000"
     depends_on:
@@ -60,7 +106,13 @@ services:
     restart: unless-stopped
 
   website-rs:
-    build: ./website-rs
+    # 同上：runtime stage 只装 ca-certificates/curl，二进制由 fetch-rust.sh 拉取后挂载。
+    image: 0x81/website-rs-runtime:local
+    # 同 moyan-backend：本机构建产物，不来自 registry，故不尝试 pull。
+    pull_policy: build
+    build:
+      context: ./website-rs
+      target: runtime
     ports:
       - "80:80"
       - "443:443"
@@ -74,7 +126,11 @@ services:
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
-      - ./certs:/certs:ro
+      - ./certs:/certs:ro,Z
+      # ^ :Z 与其它挂载一致（SELinux enforcing 的主机上不加会导致容器读不到证书，
+      #   而网关对此只 warn 并退回仅 HTTP——见 scripts/check-tls.sh）
+      # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑 scripts/build-rust.sh）
+      - ./bin/website-rs:/app/website-rs:ro,Z
     depends_on:
       - website
       - 0xindex

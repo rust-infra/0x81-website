@@ -103,8 +103,11 @@ openssl rand -base64 32
 ```bash
 cd /opt/moyan
 
-# 构建并启动
-docker compose up -d --build
+# 构建并启动（Rust 二进制由 CI 在打 tag 时编译、作为 release 资产发布，
+# 服务器用 scripts/fetch-rust.sh <tag> 拉到 bin/；这里只构建 runtime 层，
+# 不跑 cargo。详见仓库根 README 的「Rust 服务的构建与部署」）
+GH_TOKEN=github_pat_xxx scripts/fetch-rust.sh v0.1.0
+docker compose up -d
 
 # 查看日志
 docker compose logs -f
@@ -260,8 +263,10 @@ docker compose logs -f
 # 重启服务
 docker compose restart
 
-# 更新代码后重建
-docker compose up -d --build
+# 更新代码后：git pull 拿新 compose/配置，再拉新二进制 → 重启（服务端不编译）
+git pull
+GH_TOKEN=github_pat_xxx scripts/fetch-rust.sh v0.1.0   # 或省略参数取 latest
+docker compose up -d
 
 # 备份数据库
 cp /opt/moyan/data/moyan.db /opt/moyan/data/moyan.db.$(date +%Y%m%d)

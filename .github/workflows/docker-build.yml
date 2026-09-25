@@ -1,5 +1,7 @@
 name: Build Docker Images
 
+# 只验证镜像能否构建（push: false, load: false），不发布任何产物。
+# 二进制的发布在 release-rust-binaries.yml，部署在服务器上用 scripts/fetch-rust.sh。
 on:
   push:
     branches: [main, develop]
@@ -12,21 +14,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # debian_image 是给 Rust 服务的 runtime 段用的（前端服务不消费它，写同一个
+        # 值只为让表达式保持单值）。它必须与各 Dockerfile 里二进制对 glibc 的要求匹配：
+        #   - moyan-backend：rust:latest 编出的二进制要求 GLIBC_2.39，而 bookworm 只有
+        #     2.36 —— 镜像能构建成功，但一启动就 "GLIBC_2.39 not found"。所以这里必须
+        #     跟 Dockerfile 的默认值一样用 trixie-slim（glibc 2.41）。
+        #   - website-rs：静态链接的 musl 二进制，不依赖 glibc，bookworm 即可。
         service:
           - name: website
             context: ./website
+            debian_image: debian:bookworm-slim
           - name: 0xindex
             context: ./0xindex
+            debian_image: debian:bookworm-slim
           - name: crab-web
             context: ./crab-web
+            debian_image: debian:bookworm-slim
           - name: moyan-web
             context: ./moyan-web
+            debian_image: debian:bookworm-slim
           - name: moyan-admin
             context: ./moyan-admin
+            debian_image: debian:bookworm-slim
           - name: moyan-backend
             context: ./moyan-backend
+            debian_image: debian:trixie-slim
           - name: website-rs
             context: ./website-rs
+            debian_image: debian:bookworm-slim
 
     steps:
       - name: Checkout
@@ -45,6 +60,6 @@ jobs:
             NODE_IMAGE=node:20-alpine
             CADDY_IMAGE=caddy:2-alpine
             RUST_IMAGE=rust:latest
-            DEBIAN_IMAGE=debian:bookworm-slim
+            DEBIAN_IMAGE=${{ matrix.service.debian_image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

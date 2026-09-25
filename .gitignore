@@ -8,3 +8,6 @@
 **/vendor
 certs/
 data
+moyan-backend/data/
+.env
+bin/

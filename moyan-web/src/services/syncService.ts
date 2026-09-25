@@ -1,7 +1,6 @@
 import { db } from "../db";
 import { getCurrentUser } from "./authService";
-
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { API_BASE, hasBackend } from "./backendMode";
 
 export interface SyncResult {
   success: boolean;
@@ -13,11 +12,7 @@ export interface SyncResult {
   };
 }
 
-/** Check if backend API is available */
-function hasBackend(): boolean {
-  return API_BASE.length > 0;
-}
-
+/** Check if backend API is available（判断依据见 backendMode.ts，勿用 API_BASE 是否为空） */
 /** Get auth token for current user */
 function getToken(): string | null {
   return localStorage.getItem("moyan_token");
