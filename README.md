@@ -233,59 +233,79 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 > 不能只 `git pull`。缺失时 compose 会把 `./bin/<service>` 建成的空目录挂进容器，表现为
 > 容器起不来、日志里全是 exec 失败。
 
-### 生产库备份（每日热备 + Google Cloud Storage）
+### 生产库备份（每日热备 + Google Drive）
 
-墨言的 SQLite 生产库（`/data/moyan-data/moyan.db`，见 `MOYAN_DATA_DIR`）由宿主的
-`scripts/backup-moyan-db.py` 每天热备一次并上传 GCS。**不需要装 pip 包 / gcloud / rclone**：
-服务账号的 RS256 签名借宿主已有的 `openssl` 完成，上传走 GCS JSON API（`urllib`）。
+墨言的 SQLite 生产库（`/data/moyan-data/moyan.db`，见 `MOYAN_DATA_DIR`）由宿主脚本每天热备一次并
+上传到 Google Drive。**不下载服务账号密钥**（Google 明确不推荐：长期、可移植、泄露后可在 GCP 里
+横向使用），也不自建 OIDC 签发者——用你自己的 Google 账号做一次**设备码授权**，本机只保存一枚
+**refresh token**：作用域是 `drive.file`（只能看/管本应用创建的文件）、可在 Google 账号里随时撤销、
+不做任何 GCP 资源级授权。
 
 | 组件 | 位置 |
 |------|------|
 | 备份脚本 | `scripts/backup-moyan-db.py`（软链到 `/usr/local/bin/moyan-db-backup`） |
-| 配置 | `/etc/moyan-db-backup.conf`（桶名 / 保留天数；**不含**密钥内容） |
-| 服务账号密钥 | `/root/.gcs-moyan-backup.json`（`chmod 600`，纯手工部署件，不进 git） |
-| 定时器 | `moyan-db-backup.timer`（本机时区 UTC → 每天 03:30 UTC = 北京时间 11:30，`Persistent=true`） |
-| 本地暂存 | `/var/backups/moyan/moyan-YYYYmmdd-HHMMSS.db.gz`（默认留 7 天） |
-| 云端 | `gs://<bucket>/moyan-db/…`（默认留 30 天） |
+| 配置 | `/etc/moyan-db-backup.conf`（文件夹名 / 保留天数；**不含**密钥） |
+| OAuth 凭据 | `/etc/moyan-backup/google-oauth.json`（`client_id`/`client_secret`/`refresh_token`，0600） |
+| Drive 目录 | 你的网盘里名为 `moyan-backups` 的文件夹（首次上传自动创建） |
+| 定时器 | `moyan-db-backup.timer`（本机时区 UTC → 每天 03:30 UTC = 北京 11:30，`Persistent=true`） |
+| 本地暂存 | `/var/backups/moyan/moyan-YYYYmmdd-HHMMSS.db.gz`（默认留 7 天，0600） |
 | 日志 | `journalctl -u moyan-db-backup` |
 
-手动运行 / 自检：
+常用命令：
 
 ```bash
-systemctl start moyan-db-backup.service          # 立刻备份一次（同时看上传是否正常）
-journalctl -u moyan-db-backup -n 20 --no-pager   # 结果（含 MD5 与字节数校验）
-moyan-db-backup --no-upload                      # 只做本地热备（演练）
-moyan-db-backup --selftest                       # 不联网自检：临时密钥签 JWT + 验签
+moyan-db-backup --authorize      # 一次性授权：打印 URL + 用户码，你同意后落盘 refresh token
+moyan-db-backup --check          # 自检：刷新令牌 + 打印 Drive 账号与配额
+systemctl start moyan-db-backup.service          # 立刻备份一次（含上传与校验）
+journalctl -u moyan-db-backup -n 20 --no-pager
+moyan-db-backup --no-upload      # 只做本地热备（演练）
 ```
+
+首次配置（Google Cloud 控制台，约 3 分钟）：
+
+1. 建项目（如 `moyan-backup`）→ **API 和服务 → 库** → 启用 **Google Drive API**。
+2. **OAuth 同意屏幕**：User type 选 External；填应用名与支持邮箱；**Scopes 只需加
+   `https://www.googleapis.com/auth/drive.file`**；测试用户里加上你自己的 Google 账号。
+3. **凭据 → 创建凭据 → OAuth 客户端 ID**：应用类型必须选
+   **「电视和受限输入设备」（TVs and Limited Input devices）**——只有这种类型支持设备码流程。
+   拿到 **client_id / client_secret**。
+4. 在服务器写凭据骨架并授权（服务端不会把密钥回显到日志）：
+
+   ```bash
+   install -d -m 700 /etc/moyan-backup
+   install -m 600 /dev/null /etc/moyan-backup/google-oauth.json
+   cat > /etc/moyan-backup/google-oauth.json <<'JSON'
+   { "client_id": "<你的 client_id>", "client_secret": "<你的 client_secret>" }
+   JSON
+   moyan-db-backup --authorize      # 按提示在浏览器里输入用户码
+   moyan-db-backup --check          # 打印出你的邮箱 = 授权生效
+   ```
+
+5. 授权成功后把 `/etc/moyan-db-backup.conf` 里的 `MOYAN_BACKUP_REQUIRE_UPLOAD=1` 打开
+   （此后"缺凭据/刷新失败"会让 systemd 单元变成 failed，能第一时间发现云备份断了）。
+   手动跑一次 `systemctl start moyan-db-backup.service`，日志里出现
+   "已上传 Drive：moyan-backups/…（md5 与字节数校验通过）" 即完成。
+
+⚠️ **最容易踩的坑：OAuth 同意屏幕停留在「测试」状态时，refresh token 只有 7 天有效期**，
+一周后备份会开始报 `invalid_grant`。把发布状态改成**「生产」**即可长期有效（`drive.file` 不是
+敏感/受限作用域，无需提交审核；只是首次授权会多一个"未验证应用"提示，走"高级 → 继续访问"）。
+脚本遇到 `invalid_grant` 会直接提示这两点并给出重授权命令。
 
 设计取舍（都不改容器、不需要停后端）：
 
 - **热备而非冷备**：用 python3 内置 `sqlite3` 的 backup API 从**正在被后端写入**的库取一致性
-  快照，之后再对快照跑 `PRAGMA integrity_check`，不 ok 就拒绝上传。
-- **上传即校验**：比对本地 gzip 的 MD5(base64) 与 GCS 返回的 `md5Hash` 及字节数，不一致当失败。
-- **失败不丢**：上传失败保留本地文件、返回非 0（`systemctl --failed` 可见），下次运行补传；
-  对象名带时间戳、不会互相覆盖。
-- **只备份数据库**：`system_vocabulary.json` / `.env` 不备份（前者在 git 里，后者是密钥，
-  不该往云上传）。库里有用户邮箱/昵称，桶必须是**私有**桶，本地文件权限也收到 `0600`。
-- 桶名留空（`MOYAN_BACKUP_BUCKET=`）时只做本地备份且**不报错**——所以可以先装定时器再补凭据。
+  快照，随后对快照跑 `PRAGMA integrity_check`，不 ok 就拒绝上传。
+- **上传即校验**：比对本地 gzip 的 md5 与 Drive 返回的 `md5Checksum` 及字节数，不一致当失败。
+- **失败不丢**：上传失败保留本地文件并返回非 0，下次运行补传（对象名带时间戳，不互相覆盖）。
+- **只备份数据库**：`system_vocabulary.json` 在 git 里、`.env` 是密钥，都不上云；库内有用户
+  邮箱/昵称，所以本地文件 0600、Drive 里也只放这一个文件夹。
+- 未授权阶段（`MOYAN_BACKUP_REQUIRE_UPLOAD` 未开）只警告不报错，本地备份照常每天跑。
 
-首次配置（Google Cloud 控制台，约 3 分钟）：
+恢复：Drive 里下载 `moyan-*.db.gz` → `gunzip` → 停后端 → 替换 `MOYAN_DATA_DIR` 指向目录里的
+`moyan.db` → `docker compose up -d`。回滚旧库前先备份当前文件。
 
-1. 建桶：Cloud Storage → 创建存储桶 → 名称全局唯一（如 `moyan-db-backup-0x81`）、
-   位置选离服务器近的区域、**保持"阻止公开访问"**、存储类别 Standard（数据只有几 MB）。
-   可选：桶 → 生命周期 → 30 天后删除对象（这样脚本的 `--keep-days` 清理就是多余保险）。
-2. 建服务账号：IAM 与管理 → 服务账号 → 创建（不需要项目级角色）。
-3. 只给这个桶授权：桶 → 权限 → 授予访问权限 → 把该服务账号加成
-   **Storage 对象管理员（`roles/storage.objectAdmin`）**；不要给项目级权限。
-4. 该服务账号 → 密钥 → 添加密钥 → 创建新密钥 → **JSON** → 下载。
-5. 把 JSON 放到服务器 `/root/.gcs-moyan-backup.json`，`chmod 600`；
-   把桶名填进 `/etc/moyan-db-backup.conf` 的 `MOYAN_BACKUP_BUCKET=`。
-6. `systemctl start moyan-db-backup.service` → 日志里出现"已上传 …（md5 与字节数校验通过）"
-   即成功；再 `journalctl -u moyan-db-backup | grep 已上传` 复核。
-
-恢复：`gs://<bucket>/moyan-db/moyan-*.db.gz` 下载 → `gunzip` → 停后端 →
-替换 `moyan-backend/data`（或 `MOYAN_DATA_DIR` 指向的目录）里的 `moyan.db` → `up -d`。
-回滚到旧库前先备份当前文件，`sqlite3` 也会忽略多余的 `-wal/-shm`（本库默认无 WAL 文件）。
+撤销授权：Google 账号 → 安全 → 「第三方应用和您授予的访问权限」里移除该应用即可（
+`drive.file` 作用域只能看到它自己上传的文件）。
 
 ### 细节与约束
 
