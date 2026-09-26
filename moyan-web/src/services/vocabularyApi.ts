@@ -8,6 +8,9 @@ import type {
   StudyCard,
   StudyQueue,
   TypeStats,
+  TypeMistakeList,
+  TypeMistakeSyncRequest,
+  TypeMistakeSyncResponse,
   TypeResume,
   TypeSyncRequest,
   TypeSyncResponse,
@@ -182,6 +185,21 @@ export async function getTypeResume(
     `/api/type/resume?deck_id=${encodeURIComponent(deckId ?? "")}`
   );
   return data.resume;
+}
+
+/** 错题本：打错过的词（含每词累计准确率与错字次数） */
+export async function listTypeMistakes(): Promise<TypeMistakeList> {
+  return apiRequest<TypeMistakeList>("/api/type/mistakes");
+}
+
+/** 错题本增量同步：add = 本批打错的词，remove = 本批练到 100% 准确率的词 */
+export async function syncTypeMistakes(
+  body: TypeMistakeSyncRequest
+): Promise<TypeMistakeSyncResponse> {
+  return apiRequest<TypeMistakeSyncResponse>("/api/type/mistakes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export async function deleteTypeResume(deckId: string | null): Promise<void> {

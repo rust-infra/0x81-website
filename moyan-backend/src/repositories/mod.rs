@@ -16,9 +16,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
     ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
-    DailyTrendPoint, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
-    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats,
+    DailyTrendPoint, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeRow,
+    TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
+    UserIdentity, UserSettings, UserStats,
 };
 
 pub async fn repository_from_env() -> Result<Arc<dyn Repository>, RepositoryError> {
@@ -304,6 +304,32 @@ pub trait TypeRepository: Send + Sync {
         user_id: &str,
         deck_id: &str,
     ) -> Result<bool, RepositoryError>;
+    /// Insert/refresh a mistakes-book row. `entry_id` (the wrong attempt's entry
+    /// id) makes client retries of the same batch idempotent.
+    async fn type_mistake_upsert(
+        &self,
+        user_id: &str,
+        card_id: &str,
+        deck_id: &str,
+        entry_id: Option<&str>,
+    ) -> Result<(), RepositoryError>;
+    /// Remove cards from the mistakes book; returns the number actually removed.
+    async fn type_mistake_delete(
+        &self,
+        user_id: &str,
+        card_ids: &[String],
+    ) -> Result<usize, RepositoryError>;
+    /// Mistakes book, most recently missed first, with card + progress + accuracy.
+    async fn type_mistake_list(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeMistakeRow>, RepositoryError>;
+    async fn type_mistake_count(&self, user_id: &str) -> Result<i64, RepositoryError>;
+    /// All-time typing accuracy grouped by deck.
+    async fn type_deck_accuracy(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeDeckAccuracy>, RepositoryError>;
 }
 
 #[async_trait]

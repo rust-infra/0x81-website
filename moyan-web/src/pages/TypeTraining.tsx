@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   X, RotateCcw, Keyboard, Trophy,
   Volume2, VolumeX, Layers, CalendarDays, ArrowRight,
-  Trash2,
+  Trash2, BookOpen,
 } from 'lucide-react';
 import { db } from '../db';
 import type { Card as LocalCard, Deck as LocalDeck, SRSData } from '../db';
@@ -22,7 +22,9 @@ import {
   getTypeResume,
   listDecks,
   listStudyCards,
+  listTypeMistakes,
   putTypeResume,
+  syncTypeMistakes,
   syncTypePractice,
   upsertCardProgress,
 } from '../services/vocabularyApi';
@@ -32,15 +34,20 @@ import type {
   StudyCard,
   TypeEntry,
   TypeMastery,
+  TypeMistake,
   TypeResume,
 } from '@/types/vocabulary';
 import {
+  ACCURACY_WARN_THRESHOLD,
+  MISTAKES_DECK_ID,
   buildTypeResume,
   buildTypeEntry,
   buildTypeSession,
   canResumeAt,
   egregiousSrsUpdates,
+  mistakeEventsOf,
   newPrefixedId,
+  type MistakeCandidate,
   toAgainUpsertBody,
   typedCharMatches,
   typedStatesFromCharInfos,
@@ -107,6 +114,22 @@ function mapApiTypeCard(sc: StudyCard): TypeCard {
     exampleText: example?.sentence_en || undefined,
     exampleZh: example?.translation_zh || undefined,
     srs: progressToSrs(sc.progress),
+  };
+}
+
+/** 错题本条目 → 打字练习卡片（可以像普通词库一样单独练习） */
+function mapMistakeTypeCard(mistake: TypeMistake): TypeCard {
+  const card = mistake.card;
+  const example = card.examples?.[0];
+  return {
+    id: card.id,
+    deckId: card.deck_id,
+    front: card.front,
+    back: card.back,
+    pronunciation: card.pronunciation,
+    exampleText: example?.sentence_en || undefined,
+    exampleZh: example?.translation_zh || undefined,
+    srs: progressToSrs(mistake.progress),
   };
 }
 
@@ -304,6 +327,9 @@ export default function TypeTraining() {
   const [decks, setDecks] = useState<UiDeck[]>([]);
   const [pickerReady, setPickerReady] = useState(false);
   const [loadError, setLoadError] = useState<string>('');
+  const [mistakesCount, setMistakesCount] = useState<number | null>(null);
+  /** 本次训练对错题本的净影响（结束页展示） */
+  const [mistakeDelta, setMistakeDelta] = useState({ added: 0, removed: 0 });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -314,6 +340,9 @@ export default function TypeTraining() {
     startedAt: number;
   } | null>(null);
   const entriesRef = useRef<TypeEntry[]>([]);
+  /** 与 entriesRef 一一对应（同序同长）：错题本同步要用的最小信息 */
+  const mistakesRef = useRef<MistakeCandidate[]>([]);
+  const mistakesSyncedCountRef = useRef(0);
   const skippedCountRef = useRef(0);
   const startTimeRef = useRef(0);
   const syncedCountRef = useRef(0);
@@ -336,6 +365,12 @@ export default function TypeTraining() {
             }
             const remote = await listDecks();
             setDecks(remote.map(mapApiDeck));
+            try {
+              const mistakes = await listTypeMistakes();
+              setMistakesCount(mistakes.items.length);
+            } catch {
+              setMistakesCount(null);
+            }
           } else {
             const all = await db.decks.toArray();
             setDecks(all.map(mapLocalDeck));
@@ -427,7 +462,12 @@ export default function TypeTraining() {
             navigate('/login');
             return;
           }
-          if (deckId) {
+          if (deckId === MISTAKES_DECK_ID) {
+            // 错题本：虚拟词库，卡片来自 type_mistakes（含每词累计准确率）
+            const mistakes = await listTypeMistakes();
+            loaded = mistakes.items.map(mapMistakeTypeCard);
+            if (!cancelled) setDeckName(t('type.mistakes.deck'));
+          } else if (deckId) {
             const studyCards = await listStudyCards(deckId);
             loaded = studyCards.map(mapApiTypeCard);
             const decksList = await listDecks();
@@ -447,7 +487,7 @@ export default function TypeTraining() {
           const localCards = await db.cards.toArray();
           loaded = localCards.map(mapLocalTypeCard);
         }
-        if (backend) {
+        if (backend && deckId !== MISTAKES_DECK_ID) {
           let mastery: TypeMastery[] | null = null;
           try {
             mastery = (await getTypeStats()).mastery;
@@ -455,9 +495,10 @@ export default function TypeTraining() {
             // stats unavailable → keep original order
           }
           loaded = await sortByMastery(loaded, mastery);
-        } else {
+        } else if (!backend) {
           loaded = await sortCardsSmart(loaded);
         }
+        // 错题本保持后端返回的顺序（最近打错的在前）
         if (cancelled) return;
         setCards(loaded);
         if (loaded.length > 0) {
@@ -684,9 +725,10 @@ export default function TypeTraining() {
   const finalizeWord = (card: TypeCard, skipped: boolean) => {
     const w = wordRef.current;
     if (backend && w) {
+      const entryId = newPrefixedId('te_');
       entriesRef.current.push(
         buildTypeEntry({
-          id: newPrefixedId('te_'),
+          id: entryId,
           cardId: card.id,
           deckId: card.deckId || deckId || 'all',
           mode,
@@ -697,9 +739,47 @@ export default function TypeTraining() {
           createdAt: new Date().toISOString(),
         })
       );
+      // 与 entriesRef 同序同长，供错题本同步推导进/出
+      mistakesRef.current.push({
+        entryId,
+        cardId: card.id,
+        deckId: card.deckId || deckId || 'all',
+        correctChars: w.correctChars,
+        wrongChars: w.wrongChars,
+        skipped,
+      });
       if (skipped) skippedCountRef.current += 1;
     }
     wordRef.current = null;
+  };
+
+  /**
+   * 错题本增量同步（只在打字统计同步成功后推进游标，失败则下次带上，
+   * 因此短暂断网不会漏记）：
+   * 本批打错的词 → 加入错题本；本批打到 100% 准确率的词 → 移出错题本。
+   */
+  const pushMistakes = async () => {
+    if (!backend) return;
+    const pending = mistakesRef.current.slice(mistakesSyncedCountRef.current);
+    if (pending.length === 0) return;
+    const events = mistakeEventsOf(pending);
+    if (events.add.length === 0 && events.remove.length === 0) {
+      mistakesSyncedCountRef.current = mistakesRef.current.length;
+      return;
+    }
+    try {
+      const result = await syncTypeMistakes({
+        add: events.add,
+        remove: events.remove,
+      });
+      mistakesSyncedCountRef.current = mistakesRef.current.length;
+      setMistakeDelta(prev => ({
+        added: prev.added + result.added,
+        removed: prev.removed + result.removed,
+      }));
+    } catch {
+      // 静默：保留未同步的候选，下一次同步一起提交
+    }
   };
 
   const applySrsAgain = async (entries: TypeEntry[]) => {
@@ -759,6 +839,7 @@ export default function TypeTraining() {
     if (await pushSync(all, pending)) {
       syncedCountRef.current = all.length;
       await applySrsAgain(pending);
+      await pushMistakes();
     }
   };
 
@@ -794,6 +875,7 @@ export default function TypeTraining() {
       syncedCountRef.current = all.length;
       await applySrsAgain(pending);
     }
+    await pushMistakes();
     sessionFinishedRef.current = true;
   };
 
@@ -826,16 +908,16 @@ export default function TypeTraining() {
   }, [currentCard, currentIndex, deckId, isComplete, backend, cards, deckName, mode, charInfos, inputIndex]);
 
   const applySort = async (list: TypeCard[]): Promise<TypeCard[]> => {
-    if (backend) {
-      let mastery: TypeMastery[] | null = null;
-      try {
-        mastery = (await getTypeStats()).mastery;
-      } catch {
-        // stats unavailable → keep original order
-      }
-      return sortByMastery(list, mastery);
+    if (!backend) return sortCardsSmart(list);
+    // 错题本按后端返回的顺序（最近打错的在前），不再按掌握度重排
+    if (deckId === MISTAKES_DECK_ID) return list;
+    let mastery: TypeMastery[] | null = null;
+    try {
+      mastery = (await getTypeStats()).mastery;
+    } catch {
+      // stats unavailable → keep original order
     }
-    return sortCardsSmart(list);
+    return sortByMastery(list, mastery);
   };
 
   const goNextCard = (isSkip: boolean) => {
@@ -906,6 +988,9 @@ export default function TypeTraining() {
     setElapsedSec(0);
     wordRef.current = null;
     entriesRef.current = [];
+    mistakesRef.current = [];
+    mistakesSyncedCountRef.current = 0;
+    setMistakeDelta({ added: 0, removed: 0 });
     skippedCountRef.current = 0;
     startTimeRef.current = 0;
     syncedCountRef.current = 0;
@@ -977,6 +1062,29 @@ export default function TypeTraining() {
                 <ArrowRight size={18} className="text-white/60" />
               </div>
             </button>
+
+            {backend && (
+              <button
+                onClick={() => {
+                  setShowDeckPicker(false);
+                  navigate(`/type?deck=${MISTAKES_DECK_ID}`);
+                }}
+                className="w-full text-left flex items-center gap-3 p-3 rounded-2xl transition-all active:scale-[0.99]"
+                style={{ backgroundColor: `${c.studyText}08` }}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${c.accent}1A` }}>
+                  <BookOpen size={18} style={{ color: c.accent }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-medium" style={{ color: c.studyText }}>{t('type.mistakes.deck')}</h3>
+                  <p className="text-[10px] truncate" style={{ color: c.studyMuted }}>{t('type.mistakes.desc')}</p>
+                </div>
+                <span className="text-[10px] shrink-0 tabular-nums" style={{ color: mistakesCount ? c.accent : c.studyMuted }}>
+                  {mistakesCount === null ? '' : `${mistakesCount}${t('word')}`}
+                </span>
+                <ArrowRight size={14} style={{ color: c.studyMuted }} />
+              </button>
+            )}
 
             {thirtyDayDecks.length > 0 && (
               <div>
@@ -1064,6 +1172,14 @@ export default function TypeTraining() {
               <div><p className="text-2xl font-bold" style={{ color: c.studyText }}>{stats.completedWords}</p><p className="text-xs" style={{ color: c.studyMuted }}>{t('type.words.completed')}</p></div>
               <div><p className="text-2xl font-bold" style={{ color: c.studyText }}>{Math.round(totalTime / 60)}:{String(totalTime % 60).padStart(2, '0')}</p><p className="text-xs" style={{ color: c.studyMuted }}>{t('type.time')}</p></div>
             </div>
+            {backend && (
+              <div className="flex items-center justify-center gap-4 pt-1 text-xs" style={{ color: c.studyMuted }}>
+                <span style={{ color: mistakeDelta.added > 0 ? c.accent : undefined }}>
+                  {t('type.mistakes.added', { n: mistakeDelta.added })}
+                </span>
+                <span>{t('type.mistakes.removed', { n: mistakeDelta.removed })}</span>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-3">
             <div className="flex gap-3">
@@ -1308,16 +1424,27 @@ export default function TypeTraining() {
           className="max-w-3xl mx-auto rounded-2xl shadow-lg px-2 py-4 backdrop-blur-sm"
           style={{ backgroundColor: cardSurface, border: `1px solid ${cardBorder}` }}
         >
-          <div className="grid grid-cols-5 gap-1 text-center">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 text-center">
             {[
-              { value: timeLabel, label: t('type.time') },
-              { value: String(stats.totalChars), label: t('type.inputs') },
-              { value: String(wpm), label: 'WPM' },
-              { value: String(stats.correctChars), label: t('type.correct.count') },
-              { value: `${accuracy}`, label: t('study.accuracy') },
+              { value: timeLabel, label: t('type.time'), warn: false },
+              { value: String(stats.totalChars), label: t('type.inputs'), warn: false },
+              { value: String(wpm), label: 'WPM', warn: false },
+              { value: String(stats.correctChars), label: t('type.correct.count'), warn: false },
+              { value: String(stats.wrongChars), label: t('type.wrong.count'), warn: stats.wrongChars > 0 },
+              {
+                value: `${accuracy}`,
+                label: t('study.accuracy'),
+                warn: accuracy / 100 < ACCURACY_WARN_THRESHOLD,
+              },
             ].map((item) => (
               <div key={item.label} className="px-1">
-                <p className="text-xl sm:text-2xl font-semibold tabular-nums tracking-tight" style={{ color: c.studyText }}>
+                <p
+                  className="text-xl sm:text-2xl font-semibold tabular-nums tracking-tight"
+                  style={{
+                    color: item.warn ? c.accent : c.studyText,
+                    fontWeight: item.warn ? 700 : undefined,
+                  }}
+                >
                   {item.value}
                 </p>
                 <div className="mx-auto mt-1.5 mb-1 h-px w-8" style={{ backgroundColor: `${c.studyText}22` }} />

@@ -350,6 +350,118 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn type_mistakes_sync_and_list_round_trip() -> anyhow::Result<()> {
+        let repository = Arc::new(SqliteRepositories::connect("sqlite::memory:").await?);
+        let state = test_state(repository.clone());
+        let sub = seed_test_user(&state).await;
+        let deck = state
+            .services
+            .vocabulary
+            .create_deck(
+                &sub,
+                crate::models::CreateDeckRequest {
+                    name: "错题本测试".into(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await
+            .expect("create deck");
+        let card = state
+            .services
+            .vocabulary
+            .create_card(
+                &sub,
+                &deck.id,
+                crate::models::CreateCardRequest {
+                    front: "hello".into(),
+                    back: "你好".into(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+            )
+            .await
+            .expect("create card");
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        // 打错一个词 → 进错题本
+        let payload = serde_json::json!({
+            "add": [{ "card_id": card.id, "deck_id": deck.id, "entry_id": "te_m1" }],
+            "remove": []
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/mistakes")
+                    .header("authorization", bearer.clone())
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["added"], 1);
+        assert_eq!(body["data"]["removed"], 0);
+        assert_eq!(body["data"]["total"], 1);
+
+        // 重试同一批 → 幂等
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/mistakes")
+                    .header("authorization", bearer.clone())
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/type/mistakes")
+                    .header("authorization", bearer.clone())
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        let items = body["data"]["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["card"]["front"], "hello");
+        assert_eq!(items[0]["wrong_count"], 1);
+
+        // 打到 100% 准确率 → 移出错题本
+        let payload = serde_json::json!({
+            "add": [],
+            "remove": [card.id]
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/type/mistakes")
+                    .header("authorization", bearer.clone())
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&payload)?))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["removed"], 1);
+        assert_eq!(body["data"]["total"], 0);
+        Ok(())
+    }
+
     fn valid_resume_payload() -> serde_json::Value {
         serde_json::json!({
             "deck_id": "deck_resume",

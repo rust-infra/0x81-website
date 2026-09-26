@@ -9,6 +9,10 @@ import { calculateSRS } from "./srs";
 
 export const EGREGIOUS_ACCURACY_THRESHOLD = 0.7;
 export const TYPE_SYNC_ENTRY_LIMIT = 2000;
+/** 打字页 HUD 里准确率低于该值就改成醒目（强调色 + 加粗）显示。 */
+export const ACCURACY_WARN_THRESHOLD = 0.9;
+/** 「错题本」虚拟词库 id（不是真实词库，只在打字页出现）。 */
+export const MISTAKES_DECK_ID = 'mistakes';
 
 /**
  * Whether a typed character matches the expected target character.
@@ -175,6 +179,52 @@ export function buildTypeResume(input: {
     })),
     updated_at: input.updatedAt,
   };
+}
+
+/** 一个词练完之后，决定它是否需要进/出错题本所需的最小信息。 */
+export interface MistakeCandidate {
+  entryId: string;
+  cardId: string;
+  deckId: string;
+  correctChars: number;
+  wrongChars: number;
+  skipped: boolean;
+}
+
+export interface MistakeEvents {
+  add: Array<{ card_id: string; deck_id: string; entry_id: string }>;
+  remove: string[];
+}
+
+/**
+ * 由一批完成记录推出错题本的增量变更（判定口径与打字统计一致：逐键计数）：
+ * - 跳过的词不参与：既不算打错、也不算练到 100%；
+ * - `wrongChars > 0` → 进错题本（打错后退格改对也算，与 accuracy 口径一致）；
+ * - `wrongChars === 0` 且确实敲过字 → 100% 准确率 → 移出错题本；
+ * - 同一个词在一批里出现多次时以最后一次为准（数组顺序 = 完成顺序）。
+ */
+export function mistakeEventsOf(candidates: MistakeCandidate[]): MistakeEvents {
+  const lastByCard = new Map<string, MistakeCandidate>();
+  for (const candidate of candidates) {
+    if (candidate.skipped) continue;
+    if (candidate.wrongChars > 0 || candidate.correctChars > 0) {
+      lastByCard.set(candidate.cardId, candidate);
+    }
+  }
+  const add: MistakeEvents['add'] = [];
+  const remove: string[] = [];
+  for (const candidate of lastByCard.values()) {
+    if (candidate.wrongChars > 0) {
+      add.push({
+        card_id: candidate.cardId,
+        deck_id: candidate.deckId || 'all',
+        entry_id: candidate.entryId,
+      });
+    } else {
+      remove.push(candidate.cardId);
+    }
+  }
+  return { add, remove };
 }
 
 export function typedStatesFromCharInfos(

@@ -223,6 +223,56 @@ export default function Stats() {
         </section>
       )}
 
+      {/* 打字：准确率最低的词（错题排行） */}
+      {typeStats && typeStats.mastery.length > 0 && (
+        <section className="px-5 mb-5">
+          <h2 className="font-serif-cn text-lg font-bold text-[var(--ink)] mb-3 flex items-center gap-1.5">
+            <Target size={16} className="text-[var(--accent)]" />
+            {t('stats.type.lowest.accuracy')}
+          </h2>
+          <div className="bg-[var(--card)] rounded-2xl p-5 shadow-sm">
+            <ul className="space-y-2.5">
+              {[...typeStats.mastery]
+                .sort((a, b) => a.accuracy - b.accuracy)
+                .slice(0, 10)
+                .map((card) => (
+                  <li
+                    key={card.card_id}
+                    className="flex items-center gap-3 text-xs"
+                  >
+                    <span className="text-[var(--ink)] min-w-0 flex-1 truncate">
+                      {card.front || card.card_id}
+                    </span>
+                    <span className="text-[var(--ink-light)] shrink-0">
+                      {t('stats.type.card.egregious', {
+                        n: card.egregious_count,
+                      })}
+                    </span>
+                    <span
+                      className="tabular-nums shrink-0 w-10 text-right font-semibold"
+                      style={{
+                        color:
+                          card.accuracy < 0.9
+                            ? 'var(--accent)'
+                            : 'var(--ink-light)',
+                      }}
+                    >
+                      {Math.round(card.accuracy * 100)}%
+                    </span>
+                    <span className="text-[var(--ink-light)]/70 shrink-0 hidden sm:inline tabular-nums">
+                      {card.last_practiced_at
+                        ? t('stats.type.last.practiced', {
+                            date: card.last_practiced_at.slice(0, 10),
+                          })
+                        : ''}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
       {/* 准确率 */}
       <section className="px-5 mb-5">
         <h2 className="font-serif-cn text-lg font-bold text-[var(--ink)] mb-3">{t('study.accuracy')} {t('stats.today')}</h2>

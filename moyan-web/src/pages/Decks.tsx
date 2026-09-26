@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, FolderOpen, Trash2 } from "lucide-react";
+import { Plus, FolderOpen, Trash2, BookOpen, ArrowRight } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { db } from "../db";
 import type { Deck as LocalDeck } from "../db";
@@ -8,8 +8,10 @@ import { initVocabularyDecks } from "../services/vocabularyLoader";
 import {
   createDeck,
   deleteDeck,
+  getTypeStats,
   hasVocabularyBackend,
   listDecks,
+  listTypeMistakes,
 } from "../services/vocabularyApi";
 import type { Deck as ApiDeck } from "@/types/vocabulary";
 import { t } from "../i18n/translations";
@@ -22,6 +24,8 @@ type UiDeck = {
   color?: string | null;
   cardCount: number;
   isSystem: boolean;
+  /** 历史打字准确率（0-1），没有打字记录时为 null */
+  typingAccuracy?: number | null;
 };
 
 function mapApiDeck(deck: ApiDeck): UiDeck {
@@ -55,6 +59,7 @@ export default function Decks() {
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckDesc, setNewDeckDesc] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [mistakesCount, setMistakesCount] = useState<number | null>(null);
 
   useEffect(() => {
     void loadDecks();
@@ -70,7 +75,31 @@ export default function Decks() {
           return;
         }
         const remote = await listDecks();
-        setDecks(remote.map(mapApiDeck));
+        // 词库徽章用的历史准确率（打字记录聚合）；失败就不显示徽章
+        const accuracyByDeck = new Map<string, number>();
+        try {
+          const stats = await getTypeStats();
+          for (const row of stats.deck_accuracy ?? []) {
+            accuracyByDeck.set(row.deck_id, row.accuracy);
+          }
+        } catch {
+          // stats unavailable → no badges
+        }
+        setDecks(
+          remote.map((deck) => {
+            const mapped = mapApiDeck(deck);
+            return {
+              ...mapped,
+              typingAccuracy: accuracyByDeck.get(mapped.id) ?? null,
+            };
+          })
+        );
+        try {
+          const mistakes = await listTypeMistakes();
+          setMistakesCount(mistakes.items.length);
+        } catch {
+          setMistakesCount(null);
+        }
       } else {
         await initVocabularyDecks();
         const local = await db.decks.toArray();
@@ -157,8 +186,26 @@ export default function Decks() {
               {deck.description}
             </p>
           )}
-          <p className="text-[11px] text-[var(--ink-light)]">
-            {deck.cardCount} {t("cards")}
+          <p className="text-[11px] text-[var(--ink-light)] flex items-center gap-2">
+            <span>
+              {deck.cardCount} {t("cards")}
+            </span>
+            {deck.typingAccuracy != null && (
+              <span
+                className="px-1.5 py-0.5 rounded tabular-nums"
+                style={{
+                  backgroundColor: "var(--input-bg)",
+                  color:
+                    deck.typingAccuracy < 0.9
+                      ? "var(--accent)"
+                      : "var(--ink-light)",
+                }}
+              >
+                {t("decks.accuracy", {
+                  n: Math.round(deck.typingAccuracy * 100),
+                })}
+              </span>
+            )}
           </p>
         </div>
         {showDelete && (
@@ -221,6 +268,40 @@ export default function Decks() {
               <h2 className="text-sm font-medium text-[var(--ink-light)]">
                 {backend ? t("decks.section.mine") : t("decks.title")}
               </h2>
+              {backend && (
+                <div
+                  onClick={() => navigate("/mistakes")}
+                  className="cursor-pointer w-full text-left bg-[var(--card)] rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all active:scale-[0.99]"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") navigate("/mistakes");
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--input-bg)] flex items-center justify-center shrink-0">
+                      <BookOpen size={16} className="text-[var(--accent)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-[var(--ink)]">
+                        {t("decks.mistakes.entry")}
+                      </h3>
+                      <p className="text-[11px] text-[var(--ink-light)] truncate">
+                        {t("mistakes.desc")}
+                      </p>
+                    </div>
+                    {mistakesCount !== null && (
+                      <span className="text-[11px] text-[var(--ink-light)] tabular-nums shrink-0">
+                        {mistakesCount} {t("word")}
+                      </span>
+                    )}
+                    <ArrowRight
+                      size={14}
+                      className="text-[var(--ink-muted)] shrink-0"
+                    />
+                  </div>
+                </div>
+              )}
               {myDecks.map((deck) => renderDeckCard(deck, true))}
               {myDecks.length === 0 && decks.length === 0 && (
                 <div className="text-center py-16">

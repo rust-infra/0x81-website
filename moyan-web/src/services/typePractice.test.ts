@@ -8,6 +8,7 @@ import {
   canResumeAt,
   egregiousSrsUpdates,
   isEgregious,
+  mistakeEventsOf,
   typedStatesFromCharInfos,
   toAgainUpsertBody,
   typedCharMatches,
@@ -278,5 +279,84 @@ describe("type resume helpers", () => {
     expect(canResumeAt(midWord, "word", "world")).toBe(false);
     // null resume → false
     expect(canResumeAt(null, "word", "hello")).toBe(false);
+  });
+});
+
+describe("mistakeEventsOf", () => {
+  const candidate = (
+    overrides: Partial<Parameters<typeof mistakeEventsOf>[0][number]> = {}
+  ) => ({
+    entryId: "te_1",
+    cardId: "card_a",
+    deckId: "deck_a",
+    correctChars: 5,
+    wrongChars: 1,
+    skipped: false,
+    ...overrides,
+  });
+
+  it("adds a word with wrong chars", () => {
+    const events = mistakeEventsOf([candidate()]);
+    expect(events.add).toEqual([
+      { card_id: "card_a", deck_id: "deck_a", entry_id: "te_1" },
+    ]);
+    expect(events.remove).toEqual([]);
+  });
+
+  it("removes a word typed at 100% accuracy", () => {
+    const events = mistakeEventsOf([
+      candidate({ wrongChars: 0, correctChars: 5 }),
+    ]);
+    expect(events.add).toEqual([]);
+    expect(events.remove).toEqual(["card_a"]);
+  });
+
+  it("ignores skipped words completely", () => {
+    expect(mistakeEventsOf([candidate({ wrongChars: 0, correctChars: 0, skipped: true })]))
+      .toEqual({ add: [], remove: [] });
+    expect(mistakeEventsOf([candidate({ skipped: true })])).toEqual({
+      add: [],
+      remove: [],
+    });
+  });
+
+  it("falls back to 'all' when the entry has no deck id", () => {
+    const events = mistakeEventsOf([candidate({ deckId: "" })]);
+    expect(events.add[0].deck_id).toBe("all");
+  });
+
+  it("keeps only the last event per card", () => {
+    // 先打错、后练到 100% → 最终应移出
+    const events = mistakeEventsOf([
+      candidate({ entryId: "te_1", wrongChars: 2 }),
+      candidate({ entryId: "te_2", wrongChars: 0, correctChars: 4 }),
+    ]);
+    expect(events.add).toEqual([]);
+    expect(events.remove).toEqual(["card_a"]);
+  });
+
+  it("keeps an earlier mistake when the later attempt was skipped", () => {
+    const events = mistakeEventsOf([
+      candidate({ entryId: "te_1", wrongChars: 2 }),
+      candidate({
+        entryId: "te_2",
+        correctChars: 0,
+        wrongChars: 0,
+        skipped: true,
+      }),
+    ]);
+    expect(events.add).toEqual([
+      { card_id: "card_a", deck_id: "deck_a", entry_id: "te_1" },
+    ]);
+    expect(events.remove).toEqual([]);
+  });
+
+  it("handles several cards in one batch", () => {
+    const events = mistakeEventsOf([
+      candidate({ cardId: "card_a", entryId: "te_a" }),
+      candidate({ cardId: "card_b", entryId: "te_b", wrongChars: 0, correctChars: 3 }),
+    ]);
+    expect(events.add.map((a) => a.card_id)).toEqual(["card_a"]);
+    expect(events.remove).toEqual(["card_b"]);
   });
 });

@@ -173,12 +173,64 @@ export interface TypeMastery {
   egregious_count: number;
   score: number;
   last_practiced_at: string | null;
+  /** 卡片正面词；卡片被删除时为 null */
+  front?: string | null;
+}
+
+/** 某个词库的历史打字准确率（词库列表徽章用） */
+export interface TypeDeckAccuracy {
+  deck_id: string;
+  accuracy: number;
+  correct_chars: number;
+  wrong_chars: number;
+  entries: number;
 }
 
 export interface TypeStats {
   recent_sessions: TypeSession[];
   daily_trend: TypeDailyTrend[];
   mastery: TypeMastery[];
+  deck_accuracy?: TypeDeckAccuracy[];
+}
+
+/** 错题本里的一个词（打错过、尚未再练到 100% 准确率） */
+export interface TypeMistake {
+  card_id: string;
+  deck_id: string;
+  /** 进入错题本的次数 */
+  wrong_count: number;
+  created_at: string;
+  last_wrong_at: string;
+  card: Card;
+  progress: CardProgress | null;
+  /** 该词历史累计（来自打字记录） */
+  correct_chars: number;
+  wrong_chars: number;
+  accuracy: number;
+  egregious_count: number;
+}
+
+export interface TypeMistakeAdd {
+  card_id: string;
+  deck_id: string;
+  /** 本次打错那条记录的 id：服务端用它去重，重试同一批不会重复计数 */
+  entry_id?: string | null;
+}
+
+export interface TypeMistakeSyncRequest {
+  add: TypeMistakeAdd[];
+  /** 本批打到 100% 准确率的词（从错题本移出） */
+  remove: string[];
+}
+
+export interface TypeMistakeSyncResponse {
+  added: number;
+  removed: number;
+  total: number;
+}
+
+export interface TypeMistakeList {
+  items: TypeMistake[];
 }
 
 export interface TypedCharState {

@@ -16,9 +16,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
-    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeRow,
+    TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
+    UserIdentity, UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1548,6 +1548,52 @@ impl TypeRepository for MongoRepositories {
         _user_id: &str,
         _deck_id: &str,
     ) -> Result<bool, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mistake_upsert(
+        &self,
+        _user_id: &str,
+        _card_id: &str,
+        _deck_id: &str,
+        _entry_id: Option<&str>,
+    ) -> Result<(), RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mistake_delete(
+        &self,
+        _user_id: &str,
+        _card_ids: &[String],
+    ) -> Result<usize, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mistake_list(
+        &self,
+        _user_id: &str,
+    ) -> Result<Vec<TypeMistakeRow>, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_mistake_count(&self, _user_id: &str) -> Result<i64, RepositoryError> {
+        Err(RepositoryError::Configuration(
+            "type practice requires sqlite backend".into(),
+        ))
+    }
+
+    async fn type_deck_accuracy(
+        &self,
+        _user_id: &str,
+    ) -> Result<Vec<TypeDeckAccuracy>, RepositoryError> {
         Err(RepositoryError::Configuration(
             "type practice requires sqlite backend".into(),
         ))

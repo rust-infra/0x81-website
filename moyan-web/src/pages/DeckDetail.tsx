@@ -10,6 +10,7 @@ import { t } from "../i18n/translations";
 import {
   createCard,
   deleteCard,
+  getTypeStats,
   hasVocabularyBackend,
   listCards,
   listDecks,
@@ -56,6 +57,10 @@ export default function DeckDetail() {
   const [examples, setExamples] = useState<ExampleDraft[]>([]);
   const [exporting, setExporting] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  /** 每张卡的历史打字准确率（0-1，没有记录则不在 map 里） */
+  const [accuracyByCard, setAccuracyByCard] = useState<Map<string, number>>(
+    new Map()
+  );
 
   useEffect(() => {
     void loadData();
@@ -107,6 +112,16 @@ export default function DeckDetail() {
         if (!getCurrentUser()) {
           navigate("/login");
           return;
+        }
+        try {
+          const stats = await getTypeStats();
+          const map = new Map<string, number>();
+          for (const row of stats.mastery) {
+            map.set(row.card_id, row.accuracy);
+          }
+          setAccuracyByCard(map);
+        } catch {
+          // 打字统计不可用就不显示准确率徽章
         }
         const decks = await listDecks();
         const deck = decks.find((d: ApiDeck) => d.id === deckId);
@@ -425,6 +440,22 @@ export default function DeckDetail() {
                     style={getStatusStyle(card.status)}
                   >
                     {getStatusLabel(card.status)}
+                  </span>
+                )}
+                {accuracyByCard.has(card.id) && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded tabular-nums shrink-0"
+                    style={{
+                      backgroundColor: "var(--input-bg)",
+                      color:
+                        (accuracyByCard.get(card.id) ?? 1) < 0.9
+                          ? "var(--accent)"
+                          : "var(--ink-light)",
+                    }}
+                  >
+                    {t("deck.detail.accuracy", {
+                      n: Math.round((accuracyByCard.get(card.id) ?? 0) * 100),
+                    })}
                   </span>
                 )}
               </div>

@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::middleware::auth::Claims;
 use crate::middleware::error::{success, AppError, AppState};
-use crate::models::{TypeResume, TypeSyncRequest};
+use crate::models::{TypeMistakeSyncRequest, TypeResume, TypeSyncRequest};
 
 #[derive(Debug, Deserialize)]
 pub struct ResumeQuery {
@@ -27,6 +27,25 @@ pub async fn stats(
     claims: axum::Extension<Claims>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     Ok(success(state.services.typing.stats(&claims.sub).await?))
+}
+
+/// 错题本：打错的词（含每词累计准确率与错字次数）。
+pub async fn list_mistakes(
+    State(state): State<AppState>,
+    claims: axum::Extension<Claims>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    Ok(success(state.services.typing.mistakes(&claims.sub).await?))
+}
+
+/// 错题本增量同步：add = 本批打错的词，remove = 本批打到 100% 准确率的词。
+pub async fn sync_mistakes(
+    State(state): State<AppState>,
+    claims: axum::Extension<Claims>,
+    axum::Json(req): axum::Json<TypeMistakeSyncRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    Ok(success(
+        state.services.typing.mistakes_sync(&claims.sub, req).await?,
+    ))
 }
 
 pub async fn put_resume(

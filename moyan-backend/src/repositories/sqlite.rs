@@ -9,9 +9,9 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, TypeDailyTrend, TypeEntry, TypeMasteryRow, TypeResume, TypeSession,
-    UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User, UserIdentity,
-    UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeRow,
+    TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
+    UserIdentity, UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1795,6 +1795,7 @@ struct TypeMasteryRowDb {
     wrong_chars: i64,
     egregious_count: i64,
     last_practiced_at: Option<DateTime<Utc>>,
+    front: Option<String>,
 }
 
 impl From<TypeMasteryRowDb> for TypeMasteryRow {
@@ -1810,7 +1811,132 @@ impl From<TypeMasteryRowDb> for TypeMasteryRow {
             accuracy,
             egregious_count: row.egregious_count,
             last_practiced_at: row.last_practiced_at,
+            front: row.front,
         }
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct TypeDeckAccuracyDb {
+    deck_id: String,
+    correct_chars: i64,
+    wrong_chars: i64,
+    entries: i64,
+}
+
+impl From<TypeDeckAccuracyDb> for TypeDeckAccuracy {
+    fn from(row: TypeDeckAccuracyDb) -> Self {
+        let total = row.correct_chars + row.wrong_chars;
+        Self {
+            deck_id: row.deck_id,
+            accuracy: if total > 0 {
+                row.correct_chars as f64 / total as f64
+            } else {
+                1.0
+            },
+            correct_chars: row.correct_chars,
+            wrong_chars: row.wrong_chars,
+            entries: row.entries,
+        }
+    }
+}
+
+/// Row shape for the mistakes-book query (card + optional progress + aggregates).
+#[derive(sqlx::FromRow)]
+struct TypeMistakeRowDb {
+    card_id: String,
+    deck_id: String,
+    wrong_count: i64,
+    created_at: DateTime<Utc>,
+    last_wrong_at: DateTime<Utc>,
+    correct_chars: i64,
+    wrong_chars: i64,
+    egregious_count: i64,
+    front: String,
+    back: String,
+    pronunciation: Option<String>,
+    tags: String,
+    examples: String,
+    card_created_at: DateTime<Utc>,
+    card_updated_at: DateTime<Utc>,
+    progress_id: Option<String>,
+    progress_owner_user_id: Option<String>,
+    progress_card_id: Option<String>,
+    progress_srs_status: Option<String>,
+    progress_interval_days: Option<f64>,
+    progress_repetitions: Option<i32>,
+    progress_ease_factor: Option<f64>,
+    progress_due_date: Option<DateTime<Utc>>,
+    progress_last_reviewed_at: Option<DateTime<Utc>>,
+    progress_created_at: Option<DateTime<Utc>>,
+    progress_updated_at: Option<DateTime<Utc>>,
+}
+
+impl TryFrom<TypeMistakeRowDb> for TypeMistakeRow {
+    type Error = RepositoryError;
+
+    fn try_from(row: TypeMistakeRowDb) -> Result<Self, Self::Error> {
+        let card = Card {
+            id: row.card_id.clone(),
+            deck_id: row.deck_id.clone(),
+            front: row.front,
+            back: row.back,
+            pronunciation: row.pronunciation,
+            tags: parse_json_vec(&row.tags)?,
+            examples: parse_json_vec(&row.examples)?,
+            created_at: row.card_created_at,
+            updated_at: row.card_updated_at,
+        };
+        let progress = match (
+            row.progress_id,
+            row.progress_owner_user_id,
+            row.progress_card_id,
+            row.progress_srs_status,
+            row.progress_interval_days,
+            row.progress_repetitions,
+            row.progress_ease_factor,
+            row.progress_due_date,
+            row.progress_created_at,
+            row.progress_updated_at,
+        ) {
+            (
+                Some(id),
+                Some(owner_user_id),
+                Some(card_id),
+                Some(srs_status),
+                Some(interval),
+                Some(repetitions),
+                Some(ease_factor),
+                Some(due_date),
+                Some(created_at),
+                Some(updated_at),
+            ) => Some(CardProgress {
+                id,
+                owner_user_id,
+                card_id,
+                srs_status,
+                interval,
+                repetitions,
+                ease_factor,
+                due_date,
+                last_reviewed_at: row.progress_last_reviewed_at,
+                created_at,
+                updated_at,
+            }),
+            _ => None,
+        };
+        Ok(TypeMistakeRow {
+            card_id: row.card_id,
+            deck_id: row.deck_id,
+            wrong_count: row.wrong_count,
+            created_at: row.created_at,
+            last_wrong_at: row.last_wrong_at,
+            correct_chars: row.correct_chars,
+            wrong_chars: row.wrong_chars,
+            egregious_count: row.egregious_count,
+            card,
+            progress,
+        })
     }
 }
 
@@ -1958,19 +2084,40 @@ impl TypeRepository for SqliteRepositories {
         user_id: &str,
     ) -> Result<Vec<TypeMasteryRow>, RepositoryError> {
         let rows = sqlx::query_as::<_, TypeMasteryRowDb>(
-            "SELECT card_id,
-                    SUM(correct_chars) AS correct_chars,
-                    SUM(wrong_chars) AS wrong_chars,
-                    SUM(egregious) AS egregious_count,
-                    MAX(created_at) AS last_practiced_at
-             FROM type_entries
-             WHERE owner_user_id = ?
-             GROUP BY card_id",
+            "SELECT te.card_id,
+                    SUM(te.correct_chars) AS correct_chars,
+                    SUM(te.wrong_chars) AS wrong_chars,
+                    SUM(te.egregious) AS egregious_count,
+                    MAX(te.created_at) AS last_practiced_at,
+                    MAX(c.front) AS front
+             FROM type_entries te
+             LEFT JOIN cards c ON c.id = te.card_id
+             WHERE te.owner_user_id = ?
+             GROUP BY te.card_id",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows.into_iter().map(TypeMasteryRow::from).collect())
+    }
+
+    async fn type_deck_accuracy(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeDeckAccuracy>, RepositoryError> {
+        let rows = sqlx::query_as::<_, TypeDeckAccuracyDb>(
+            "SELECT deck_id,
+                    SUM(correct_chars) AS correct_chars,
+                    SUM(wrong_chars) AS wrong_chars,
+                    COUNT(*) AS entries
+             FROM type_entries
+             WHERE owner_user_id = ?
+             GROUP BY deck_id",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(TypeDeckAccuracy::from).collect())
     }
 
     async fn type_resume_upsert(
@@ -2042,6 +2189,116 @@ impl TypeRepository for SqliteRepositories {
             .execute(&self.pool)
             .await?;
         Ok(result.rows_affected() > 0)
+    }
+
+    async fn type_mistake_upsert(
+        &self,
+        user_id: &str,
+        card_id: &str,
+        deck_id: &str,
+        entry_id: Option<&str>,
+    ) -> Result<(), RepositoryError> {
+        let now = Utc::now();
+        // Re-sending the same entry id (client retry of a batch) must not bump
+        // wrong_count again, hence the CASE on last_entry_id.
+        sqlx::query(
+            "INSERT INTO type_mistakes (
+                owner_user_id, card_id, deck_id, wrong_count, last_entry_id,
+                created_at, last_wrong_at
+             ) VALUES (?, ?, ?, 1, ?, ?, ?)
+             ON CONFLICT(owner_user_id, card_id) DO UPDATE SET
+                deck_id = excluded.deck_id,
+                wrong_count = type_mistakes.wrong_count
+                    + CASE
+                        WHEN ? IS NOT NULL AND type_mistakes.last_entry_id = ? THEN 0
+                        ELSE 1
+                      END,
+                last_entry_id = excluded.last_entry_id,
+                last_wrong_at = excluded.last_wrong_at",
+        )
+        .bind(user_id)
+        .bind(card_id)
+        .bind(deck_id)
+        .bind(entry_id)
+        .bind(now)
+        .bind(now)
+        .bind(entry_id)
+        .bind(entry_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn type_mistake_delete(
+        &self,
+        user_id: &str,
+        card_ids: &[String],
+    ) -> Result<usize, RepositoryError> {
+        let mut removed = 0usize;
+        for card_id in card_ids {
+            let result =
+                sqlx::query("DELETE FROM type_mistakes WHERE owner_user_id = ? AND card_id = ?")
+                    .bind(user_id)
+                    .bind(card_id)
+                    .execute(&self.pool)
+                    .await?;
+            removed += result.rows_affected() as usize;
+        }
+        Ok(removed)
+    }
+
+    async fn type_mistake_list(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<TypeMistakeRow>, RepositoryError> {
+        let rows = sqlx::query_as::<_, TypeMistakeRowDb>(
+            "SELECT m.card_id, m.deck_id, m.wrong_count, m.created_at, m.last_wrong_at,
+                    c.front, c.back, c.pronunciation, c.tags, c.examples,
+                    c.created_at AS card_created_at, c.updated_at AS card_updated_at,
+                    p.id AS progress_id,
+                    p.owner_user_id AS progress_owner_user_id,
+                    p.card_id AS progress_card_id,
+                    p.srs_status AS progress_srs_status,
+                    p.interval_days AS progress_interval_days,
+                    p.repetitions AS progress_repetitions,
+                    p.ease_factor AS progress_ease_factor,
+                    p.due_date AS progress_due_date,
+                    p.last_reviewed_at AS progress_last_reviewed_at,
+                    p.created_at AS progress_created_at,
+                    p.updated_at AS progress_updated_at,
+                    COALESCE(te.correct_chars, 0) AS correct_chars,
+                    COALESCE(te.wrong_chars, 0) AS wrong_chars,
+                    COALESCE(te.egregious_count, 0) AS egregious_count
+             FROM type_mistakes m
+             JOIN cards c ON c.id = m.card_id
+             LEFT JOIN card_progress p
+                ON p.card_id = c.id AND p.owner_user_id = m.owner_user_id
+             LEFT JOIN (
+                SELECT card_id,
+                       SUM(correct_chars) AS correct_chars,
+                       SUM(wrong_chars) AS wrong_chars,
+                       SUM(egregious) AS egregious_count
+                FROM type_entries
+                WHERE owner_user_id = ?
+                GROUP BY card_id
+             ) te ON te.card_id = m.card_id
+             WHERE m.owner_user_id = ?
+             ORDER BY m.last_wrong_at DESC, m.card_id",
+        )
+        .bind(user_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn type_mistake_count(&self, user_id: &str) -> Result<i64, RepositoryError> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM type_mistakes WHERE owner_user_id = ?")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row.0)
     }
 }
 
@@ -3695,6 +3952,98 @@ mod tests {
         assert_eq!(card_a.egregious_count, 0);
         assert!((card_b.accuracy - 0.5).abs() < 1e-9);
         assert_eq!(card_b.egregious_count, 2);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn type_mistakes_book_round_trip() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+        let user = repo
+            .find_or_create(UserIdentity {
+                provider: "test",
+                provider_id: "type-mistakes-1",
+                name: "Mistakes",
+                email: "mistakes@example.com",
+                avatar: None,
+            })
+            .await?;
+        let deck = repo
+            .create_user_deck(
+                &user.id,
+                &CreateDeckRequest {
+                    name: "错题测试".into(),
+                    description: None,
+                    color: None,
+                },
+            )
+            .await?;
+        let card = repo
+            .create_card(
+                &deck.id,
+                &CreateCardRequest {
+                    front: "hello".to_string(),
+                    back: "你好".to_string(),
+                    pronunciation: None,
+                    tags: None,
+                    examples: None,
+                },
+                Vec::new(),
+            )
+            .await?;
+
+        assert_eq!(repo.type_mistake_count(&user.id).await?, 0);
+        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_1"))
+            .await?;
+        // Same entry id again (client retry) must not bump the counter.
+        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_1"))
+            .await?;
+        assert_eq!(repo.type_mistake_count(&user.id).await?, 1);
+        // A later, different wrong attempt counts.
+        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_2"))
+            .await?;
+
+        let entries = vec![TypeEntry {
+            id: "te_2".into(),
+            card_id: card.id.clone(),
+            deck_id: deck.id.clone(),
+            mode: "word".into(),
+            correct_chars: 3,
+            wrong_chars: 2,
+            accuracy: 0.6,
+            wpm: 20.0,
+            duration_ms: 3_000,
+            egregious: true,
+            created_at: Utc::now(),
+        }];
+        repo.type_entries_insert(&user.id, &entries).await?;
+
+        let items = repo.type_mistake_list(&user.id).await?;
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert_eq!(item.card_id, card.id);
+        assert_eq!(item.wrong_count, 2);
+        assert_eq!(item.card.front, "hello");
+        assert_eq!(item.card.back, "你好");
+        assert_eq!(item.correct_chars, 3);
+        assert_eq!(item.wrong_chars, 2);
+        assert_eq!(item.egregious_count, 1);
+        let mistake = item.clone().into_mistake();
+        assert!((mistake.accuracy - 0.6).abs() < 1e-9);
+        assert!(mistake.progress.is_none());
+
+        let deck_accuracy = repo.type_deck_accuracy(&user.id).await?;
+        assert_eq!(deck_accuracy.len(), 1);
+        assert_eq!(deck_accuracy[0].deck_id, deck.id);
+        assert!((deck_accuracy[0].accuracy - 0.6).abs() < 1e-9);
+        assert_eq!(deck_accuracy[0].entries, 1);
+
+        assert_eq!(
+            repo.type_mistake_delete(&user.id, &[card.id.clone()])
+                .await?,
+            1
+        );
+        assert_eq!(repo.type_mistake_delete(&user.id, &[card.id]).await?, 0);
+        assert!(repo.type_mistake_list(&user.id).await?.is_empty());
         Ok(())
     }
 

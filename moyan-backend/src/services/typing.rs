@@ -2,16 +2,21 @@ use std::sync::Arc;
 
 use crate::middleware::error::AppError;
 use crate::models::{
-    TypeEntry, TypeMastery, TypeMasteryRow, TypeResume, TypeResumeResponse, TypeSession,
+    TypeEntry, TypeMastery, TypeMasteryRow, TypeMistakeAdd, TypeMistakeListResponse,
+    TypeMistakeSyncRequest, TypeMistakeSyncResponse, TypeResume, TypeResumeResponse, TypeSession,
     TypeStatsResponse, TypeSyncRequest, TypeSyncResponse,
 };
 use crate::repositories::Repository;
 
 pub const TYPE_SYNC_ENTRY_LIMIT: usize = 2000;
+/// Upper bound for one mistakes-book batch (add + remove separately).
+pub const TYPE_MISTAKE_SYNC_LIMIT: usize = 2000;
 pub const TYPE_RECENT_SESSION_LIMIT: i64 = 20;
 pub const TYPE_TREND_DAYS: i64 = 30;
 const VALID_TYPE_MODES: &[&str] = &["word", "sentence"];
 const MASTERY_EGREGIOUS_PENALTY: f64 = 15.0;
+/// Fallback deck id when a typing entry has no deck (matches the frontend 'all').
+const DEFAULT_DECK_ID: &str = "all";
 
 #[derive(Clone)]
 pub struct TypeService {
@@ -63,10 +68,93 @@ impl TypeService {
             .await?;
         let rows = self.repository.type_mastery_rows(user_id).await?;
         let mastery = rows.into_iter().map(mastery_from_row).collect();
+        let deck_accuracy = self.repository.type_deck_accuracy(user_id).await?;
         Ok(TypeStatsResponse {
             recent_sessions,
             daily_trend,
             mastery,
+            deck_accuracy,
+        })
+    }
+
+    /// Mistakes book: every word that was typed wrong, most recently missed first.
+    pub async fn mistakes(&self, user_id: &str) -> Result<TypeMistakeListResponse, AppError> {
+        let rows = self.repository.type_mistake_list(user_id).await?;
+        Ok(TypeMistakeListResponse {
+            items: rows.into_iter().map(|r| r.into_mistake()).collect(),
+        })
+    }
+
+    /// Apply one typing batch to the mistakes book.
+    ///
+    /// 口径与打字统计一致（逐键计数）：某个词这次练习 `wrong_chars > 0` → 进错题本；
+    /// `wrong_chars == 0` 且真的敲过字 → 100% 准确率 → 移出。跳过的词不参与。
+    pub async fn mistakes_sync(
+        &self,
+        user_id: &str,
+        req: TypeMistakeSyncRequest,
+    ) -> Result<TypeMistakeSyncResponse, AppError> {
+        if req.add.len() > TYPE_MISTAKE_SYNC_LIMIT || req.remove.len() > TYPE_MISTAKE_SYNC_LIMIT {
+            return Err(AppError::BadRequest(format!(
+                "too many mistakes in one batch (max {TYPE_MISTAKE_SYNC_LIMIT})"
+            )));
+        }
+        // Same card may appear several times in a batch: the last occurrence wins
+        // (it carries the newest entry id, keeping retries idempotent).
+        let mut adds: Vec<TypeMistakeAdd> = Vec::new();
+        for add in req.add {
+            let card_id = add.card_id.trim().to_string();
+            if card_id.is_empty() {
+                return Err(AppError::BadRequest("card_id is required".into()));
+            }
+            let deck_id = if add.deck_id.trim().is_empty() {
+                DEFAULT_DECK_ID.to_string()
+            } else {
+                add.deck_id.trim().to_string()
+            };
+            let item = TypeMistakeAdd {
+                card_id,
+                deck_id,
+                entry_id: add.entry_id.filter(|e| !e.trim().is_empty()),
+            };
+            match adds.iter_mut().find(|a| a.card_id == item.card_id) {
+                Some(existing) => *existing = item,
+                None => adds.push(item),
+            }
+        }
+
+        let mut removes: Vec<String> = Vec::new();
+        for card_id in req.remove {
+            let card_id = card_id.trim().to_string();
+            if card_id.is_empty() {
+                continue;
+            }
+            if !removes.contains(&card_id) {
+                removes.push(card_id);
+            }
+        }
+
+        // Removal runs first so a card present in both lists ends up in the book
+        // (only possible when the client sent a stale batch).
+        let removed = self
+            .repository
+            .type_mistake_delete(user_id, &removes)
+            .await?;
+        for add in &adds {
+            self.repository
+                .type_mistake_upsert(
+                    user_id,
+                    &add.card_id,
+                    &add.deck_id,
+                    add.entry_id.as_deref(),
+                )
+                .await?;
+        }
+        let total = self.repository.type_mistake_count(user_id).await?;
+        Ok(TypeMistakeSyncResponse {
+            added: adds.len(),
+            removed,
+            total,
         })
     }
 
@@ -175,5 +263,6 @@ fn mastery_from_row(row: TypeMasteryRow) -> TypeMastery {
         egregious_count: row.egregious_count,
         score,
         last_practiced_at: row.last_practiced_at,
+        front: row.front,
     }
 }

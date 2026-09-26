@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::models::{Card, CardProgress};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeEntry {
     pub id: String,
@@ -47,6 +49,8 @@ pub struct TypeMasteryRow {
     pub accuracy: f64,
     pub egregious_count: i64,
     pub last_practiced_at: Option<DateTime<Utc>>,
+    /// Card front text, joined for display (None when the card was deleted).
+    pub front: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +65,16 @@ pub struct TypeSyncResponse {
     pub saved_entries: usize,
 }
 
+/// Per-deck typing accuracy (all-time), used by the deck list badges.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeDeckAccuracy {
+    pub deck_id: String,
+    pub accuracy: f64,
+    pub correct_chars: i64,
+    pub wrong_chars: i64,
+    pub entries: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeMastery {
     pub card_id: String,
@@ -68,6 +82,9 @@ pub struct TypeMastery {
     pub egregious_count: i64,
     pub score: f64,
     pub last_practiced_at: Option<DateTime<Utc>>,
+    /// Card front text (None when the card no longer exists).
+    #[serde(default)]
+    pub front: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +92,9 @@ pub struct TypeStatsResponse {
     pub recent_sessions: Vec<TypeSession>,
     pub daily_trend: Vec<TypeDailyTrend>,
     pub mastery: Vec<TypeMastery>,
+    /// All-time accuracy per deck (deck badges on the 词库 list).
+    #[serde(default)]
+    pub deck_accuracy: Vec<TypeDeckAccuracy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,4 +122,95 @@ pub struct TypeResume {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeResumeResponse {
     pub resume: Option<TypeResume>,
+}
+
+/// One word in the typing mistakes book (错题本).
+///
+/// `card` / `progress` mirror `StudyCard` so the typing page can practise the
+/// mistakes book through the very same code path as a normal deck.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeMistake {
+    pub card_id: String,
+    pub deck_id: String,
+    /// How many times this word entered the mistakes book.
+    pub wrong_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub last_wrong_at: DateTime<Utc>,
+    pub card: Card,
+    pub progress: Option<CardProgress>,
+    /// All-time per-card aggregates from `type_entries` (显示用的准确率/错字).
+    pub correct_chars: i64,
+    pub wrong_chars: i64,
+    pub accuracy: f64,
+    pub egregious_count: i64,
+}
+
+/// Raw row for `TypeMistake` (joined card + progress + entry aggregates).
+#[derive(Debug, Clone)]
+pub struct TypeMistakeRow {
+    pub card_id: String,
+    pub deck_id: String,
+    pub wrong_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub last_wrong_at: DateTime<Utc>,
+    pub correct_chars: i64,
+    pub wrong_chars: i64,
+    pub egregious_count: i64,
+    pub card: Card,
+    pub progress: Option<CardProgress>,
+}
+
+impl TypeMistakeRow {
+    pub fn into_mistake(self) -> TypeMistake {
+        let total = self.correct_chars + self.wrong_chars;
+        let accuracy = if total > 0 {
+            self.correct_chars as f64 / total as f64
+        } else {
+            0.0
+        };
+        TypeMistake {
+            card_id: self.card_id,
+            deck_id: self.deck_id,
+            wrong_count: self.wrong_count,
+            created_at: self.created_at,
+            last_wrong_at: self.last_wrong_at,
+            card: self.card,
+            progress: self.progress,
+            correct_chars: self.correct_chars,
+            wrong_chars: self.wrong_chars,
+            accuracy,
+            egregious_count: self.egregious_count,
+        }
+    }
+}
+
+/// Add/refresh one word in the mistakes book.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeMistakeAdd {
+    pub card_id: String,
+    pub deck_id: String,
+    /// Entry id of the wrong attempt; makes retries idempotent.
+    #[serde(default)]
+    pub entry_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeMistakeSyncRequest {
+    #[serde(default)]
+    pub add: Vec<TypeMistakeAdd>,
+    /// Card ids that reached 100% accuracy in this batch.
+    #[serde(default)]
+    pub remove: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeMistakeSyncResponse {
+    pub added: usize,
+    pub removed: usize,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeMistakeListResponse {
+    pub items: Vec<TypeMistake>,
 }

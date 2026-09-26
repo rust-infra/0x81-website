@@ -18,5 +18,9 @@ pub fn routes() -> Router<AppState> {
                 .get(typing::get_resume)
                 .delete(typing::delete_resume),
         )
+        .route(
+            "/mistakes",
+            get(typing::list_mistakes).post(typing::sync_mistakes),
+        )
         .layer(middleware::from_fn(jwt_middleware))
 }
