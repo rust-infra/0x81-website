@@ -92,6 +92,28 @@ Kimi 自己**复核这份 token（我们本地不验签——Kimi 不暴露 JWKS
    把已有账号的显示名/邮箱写回占位值，手工改名改不牢）。Kimi 修好 userinfo 后自动恢复
    首选路径；上游重新带回真资料时照旧覆盖，占位值能被改回。
 
+### 打字练习与错题本
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/type/sync` | 上传会话汇总 + 单词记录（幂等，单批上限 2000） |
+| GET | `/api/type/stats` | 近期会话 / 每日趋势 / 每卡掌握度（含 `front`）/ 每词库准确率 `deck_accuracy` |
+| PUT/GET/DELETE | `/api/type/resume` | 断点续训（按 `deck_id`；`?deck_id=` 空 = 全部词汇） |
+| GET | `/api/type/mistakes` | 错题本：打错过的词（卡片 + SRS 进度 + 每词累计准确率/错字次数） |
+| POST | `/api/type/mistakes` | 错题本增量同步：`{"add":[{card_id,deck_id,entry_id}],"remove":[card_id]}` |
+
+错题本（`type_mistakes` 表，迁移 009）的收录口径与打字统计一致（**逐键计数**）：
+
+- 一个词这次练习 `wrong_chars > 0` → 进错题本（打错后退格改对也算，与 `accuracy` 同口径）；
+- `wrong_chars = 0` 且确实敲过字 → 100% 准确率 → 移出错题本；
+- 按 Enter 跳过的词不参与：既不算打错、也不算练到 100%；
+- 同一个词在一批里出现多次时以最后一次为准；`entry_id` 用于让客户端重试同一批时
+  `wrong_count` 不重复累加；卡片被删除时靠 `cards` 的外键级联自动清掉。
+
+前端的「错题本」是**虚拟词库**（`deck_id = mistakes`，不是 `decks` 表里的真词库），
+入口在打字页词库选择器、`/decks` 列表与 `/mistakes` 页，可像普通词库一样单独练习；
+练习时的记录仍记在该词**原属词库**的 `deck_id` 上（所以词库准确率徽章不受影响）。
+
 ### 数据同步
 
 | 方法 | 路径 | 描述 |
