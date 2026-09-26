@@ -438,9 +438,6 @@ def main() -> int:
             args.client_secret or stored.get("client_secret", ""),
         )
 
-    if not os.path.exists(args.db):
-        raise SystemExit(f"找不到数据库：{args.db}")
-
     if args.check:
         credentials = load_credentials(args.oauth_file)
         token = access_token(credentials, args.oauth_file)
@@ -453,6 +450,9 @@ def main() -> int:
         log(f"Drive 配额：已用 {usage:.2f} GB / {limit:.2f} GB")
         log(f"备份文件夹：{args.drive_folder}")
         return 0
+
+    if not os.path.exists(args.db):
+        raise SystemExit(f"找不到数据库：{args.db}")
 
     os.makedirs(args.local_dir, mode=0o700, exist_ok=True)
     state = load_state(args.local_dir)
