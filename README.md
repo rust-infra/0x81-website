@@ -268,6 +268,7 @@ moyan-db-backup --check          # 自检：刷新令牌 + 打印 Drive 账号�
 systemctl start moyan-db-backup.service          # 立刻备份一次（含上传与校验）
 journalctl -u moyan-db-backup -n 20 --no-pager
 moyan-db-backup --no-upload      # 只做本地热备（演练）
+moyan-db-backup --force          # 即使数据没变化也生成一份新备份
 ```
 
 首次配置（**可选**，只在要上云时做；Google Cloud 控制台，约 3 分钟）：
@@ -306,6 +307,13 @@ moyan-db-backup --no-upload      # 只做本地热备（演练）
   快照，随后对快照跑 `PRAGMA integrity_check`，不 ok 就拒绝上传。
 - **上传即校验**：比对本地 gzip 的 md5 与 Drive 返回的 `md5Checksum` 及字节数，不一致当失败。
 - **失败不丢**：上传失败保留本地文件并返回非 0，下次运行补传（对象名带时间戳，不互相覆盖）。
+- **数据没变化就不重复备份**：每次先取快照并算内容指纹（md5），与状态文件
+  `/var/backups/moyan/.state.json` 里上一份的指纹一致时**直接跳过**（只打一行日志、
+  不生成新文件、也不重复上传），`--force` 可强制生成。指纹是**快照字节**的 md5，所以
+  任何真实写入（含增删后留下的空闲页变化）都会触发新备份——只会多备，不会漏备。
+  状态文件里还记着 `uploaded` 标记：数据没变但上一份没传成功时，会在下次运行补传。
+- **当前那份永不删除**：保留策略会跳过状态文件指向的那一份，避免"数据长期不变 → 唯一一份
+  备份被清理 → 反而没有备份"。
 - **只备份数据库**：`system_vocabulary.json` 在 git 里、`.env` 是密钥，都不上云；库内有用户
   邮箱/昵称，所以本地文件 0600、Drive 里也只放这一个文件夹。
 - 未授权阶段（`MOYAN_BACKUP_REQUIRE_UPLOAD` 未开）只警告不报错，本地备份照常每天跑。

@@ -302,11 +302,47 @@ def verify_snapshot(path: str) -> None:
         raise SystemExit(f"快照完整性检查失败：{result}")
 
 
-def prune_local(directory: str, keep_days: int) -> int:
+def md5_file(path: str) -> str:
+    digest = hashlib.md5()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def state_path(directory: str) -> str:
+    return os.path.join(directory, ".state.json")
+
+
+def load_state(directory: str) -> dict:
+    try:
+        with open(state_path(directory), "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_state(directory: str, state: dict) -> None:
+    path = state_path(directory)
+    temporary = f"{path}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2, ensure_ascii=False)
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
+def prune_local(directory: str, keep_days: int, protect: str | None = None) -> int:
+    """清掉超过保留期的本地备份。
+
+    `protect` 是当前那份备份的文件名：**永不删除**——否则"数据长期不变 → 唯一一份备份
+    被保留策略删掉 → 反而没有备份"。
+    """
     removed = 0
     for entry in os.listdir(directory):
         path = os.path.join(directory, entry)
         if entry.startswith("moyan-") and entry.endswith(".db.gz"):
+            if entry == protect:
+                continue
             if keep_days > 0 and os.path.getmtime(path) < time.time() - keep_days * 86400:
                 os.remove(path)
                 removed += 1
@@ -343,6 +379,11 @@ def main() -> int:
     parser.add_argument("--authorize", action="store_true", help="一次性设备码授权")
     parser.add_argument("--check", action="store_true", help="自检：刷新令牌 + 查 Drive 信息")
     parser.add_argument("--no-upload", action="store_true", help="只做本地热备")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="即使指纹未变也生成新备份（默认：数据无变化就跳过，不重复占位）",
+    )
     parser.add_argument(
         "--require-upload",
         action="store_true",
@@ -384,29 +425,63 @@ def main() -> int:
         return 0
 
     os.makedirs(args.local_dir, mode=0o700, exist_ok=True)
+    state = load_state(args.local_dir)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     snapshot = os.path.join(args.local_dir, f".moyan-{stamp}.db")
-    name = f"moyan-{stamp}.db.gz"
-    archive = os.path.join(args.local_dir, name)
 
-    log(f"热备 {args.db} → {name}")
+    log(f"热备 {args.db}（一致性快照）")
     hot_snapshot(args.db, snapshot)
     verify_snapshot(snapshot)
+    fingerprint = md5_file(snapshot)
     size = os.path.getsize(snapshot)
-    with open(snapshot, "rb") as src, gzip.GzipFile(
-        archive, "wb", compresslevel=9, mtime=0
-    ) as dst:
-        shutil.copyfileobj(src, dst)
-    os.remove(snapshot)
-    os.chmod(archive, 0o600)  # 库里有用户邮箱/昵称等个人信息
+
+    previous = state.get("file")
+    unchanged = (
+        not args.force
+        and state.get("fingerprint") == fingerprint
+        and previous
+        and os.path.exists(os.path.join(args.local_dir, previous))
+    )
+
+    if unchanged:
+        os.remove(snapshot)
+        log(
+            f"数据无变化（指纹 {fingerprint[:12]}，与 {state.get('created_at')} 的 "
+            f"{previous} 相同）→ 不生成新备份"
+        )
+        archive = os.path.join(args.local_dir, previous)
+        name = previous
+        removed_local = prune_local(args.local_dir, args.local_keep_days, protect=name)
+        if removed_local:
+            log(f"清理本地旧备份 {removed_local} 个（保留 {args.local_keep_days} 天，当前这份永久保留）")
+    else:
+        name = f"moyan-{stamp}.db.gz"
+        archive = os.path.join(args.local_dir, name)
+        with open(snapshot, "rb") as src, gzip.GzipFile(
+            archive, "wb", compresslevel=9, mtime=0
+        ) as dst:
+            shutil.copyfileobj(src, dst)
+        os.remove(snapshot)
+        os.chmod(archive, 0o600)  # 库里有用户邮箱/昵称等个人信息
+        with open(archive, "rb") as handle:
+            blob_size = len(handle.read())
+        state = {
+            "fingerprint": fingerprint,
+            "file": name,
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "snapshot_bytes": size,
+            "archive_bytes": blob_size,
+            "uploaded": False,
+        }
+        save_state(args.local_dir, state)
+        log(f"快照 {size} 字节 → gzip {blob_size} 字节，md5={fingerprint} → {name}")
+
+        removed_local = prune_local(args.local_dir, args.local_keep_days, protect=name)
+        if removed_local:
+            log(f"清理本地旧备份 {removed_local} 个（保留 {args.local_keep_days} 天，当前这份永久保留）")
+
     with open(archive, "rb") as handle:
         blob = handle.read()
-    local_md5 = hashlib.md5(blob).hexdigest()
-    log(f"快照 {size} 字节 → gzip {len(blob)} 字节，md5={local_md5}")
-
-    removed_local = prune_local(args.local_dir, args.local_keep_days)
-    if removed_local:
-        log(f"清理本地旧备份 {removed_local} 个（保留 {args.local_keep_days} 天）")
 
     if args.no_upload:
         log("完成（未上传）")
@@ -420,6 +495,10 @@ def main() -> int:
         )
         return 1 if args.require_upload else 0
 
+    if state.get("uploaded"):
+        log(f"该备份（{name}）此前已上传，跳过上传")
+        return 0
+
     credentials = load_credentials(args.oauth_file)
     token = access_token(credentials, args.oauth_file)
     folder_id = ensure_folder(token, args.drive_folder)
@@ -427,11 +506,14 @@ def main() -> int:
 
     remote_md5 = result.get("md5Checksum")
     remote_size = int(result.get("size", -1))
-    if remote_md5 != local_md5 or remote_size != len(blob):
+    if remote_md5 != hashlib.md5(blob).hexdigest() or remote_size != len(blob):
         raise SystemExit(
-            f"上传校验失败：本地 md5={local_md5} size={len(blob)}，"
+            f"上传校验失败：本地 md5={hashlib.md5(blob).hexdigest()} size={len(blob)}，"
             f"云端 md5={remote_md5} size={remote_size}"
         )
+    state["uploaded"] = True
+    state["uploaded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    save_state(args.local_dir, state)
     log(
         f"已上传 Drive：{args.drive_folder}/{name}"
         f"（md5 与字节数校验通过，文件 id={result.get('id')}）"
