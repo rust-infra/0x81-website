@@ -235,7 +235,7 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 ### 生产库备份（每日热备，本地；云上传可选但当前未启用）
 
-> **当前状态（2026-09-26）**：只做**本地**每日热备（`/var/backups/moyan/`，留 7 天），
+> **当前状态（2026-09-26）**：只做**本地**每日热备（`/data/storage-backup/`，留 7 天），
 > 云上传**未启用**——用户暂时不接云。脚本里的 Google Drive 上传路径（OAuth 设备码 + `drive.file`）
 > 已实现且离线自测通过，想上云时按下面「首次配置」走一遍授权即可，**不需要重新改代码**。
 > 注意：Google Cloud 的 **API 密钥（`?key=…`）无法用于备份**——它标识项目而非身份，
@@ -256,7 +256,8 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 | OAuth 凭据 | `/etc/moyan-backup/google-oauth.json`（`client_id`/`client_secret`/`refresh_token`，0600） |
 | Drive 目录 | 你的网盘里名为 `moyan-backups` 的文件夹（首次上传自动创建） |
 | 定时器 | `moyan-db-backup.timer`（本机时区 UTC → 每天 03:30 UTC = 北京 11:30，`Persistent=true`） |
-| 本地暂存 | `/var/backups/moyan/moyan-YYYYmmdd-HHMMSS.db.gz`（默认留 7 天，0600） |
+| 本地暂存 | `/data/storage-backup/moyan-YYYYmmdd-HHMMSS.db.gz`（默认留 7 天，0600） |
+| 说明 | 备份放在**数据盘**（`/data` = `/dev/vdb1`）上，与库同盘：整盘故障会一起丢。要异地/异盘冗余就得上云（见下）或再加一份到系统盘 |
 | 日志 | `journalctl -u moyan-db-backup` |
 
 常用命令：
@@ -308,7 +309,7 @@ moyan-db-backup --force          # 即使数据没变化也生成一份新备份
 - **上传即校验**：比对本地 gzip 的 md5 与 Drive 返回的 `md5Checksum` 及字节数，不一致当失败。
 - **失败不丢**：上传失败保留本地文件并返回非 0，下次运行补传（对象名带时间戳，不互相覆盖）。
 - **数据没变化就不重复备份**：每次先取快照并算内容指纹（md5），与状态文件
-  `/var/backups/moyan/.state.json` 里上一份的指纹一致时**直接跳过**（只打一行日志、
+  `/data/storage-backup/.state.json` 里上一份的指纹一致时**直接跳过**（只打一行日志、
   不生成新文件、也不重复上传），`--force` 可强制生成。指纹是**快照字节**的 md5，所以
   任何真实写入（含增删后留下的空闲页变化）都会触发新备份——只会多备，不会漏备。
   状态文件里还记着 `uploaded` 标记：数据没变但上一份没传成功时，会在下次运行补传。

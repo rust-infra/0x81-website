@@ -14,7 +14,7 @@
   --oauth-file / MOYAN_BACKUP_OAUTH_FILE 凭据文件，默认 /etc/moyan-backup/google-oauth.json
                                          （存 client_id / client_secret / refresh_token，0600）
   --drive-folder / MOYAN_BACKUP_DRIVE_FOLDER  Drive 里的目标文件夹名，默认 moyan-backups
-  --local-dir / MOYAN_BACKUP_LOCAL_DIR   本地暂存，默认 /var/backups/moyan
+  --local-dir / MOYAN_BACKUP_LOCAL_DIR   本地暂存，默认 /data/storage-backup
   --keep-days / MOYAN_BACKUP_KEEP_DAYS   云端（Drive 文件夹内）保留天数，默认 30；0 = 不清理
   --local-keep-days / MOYAN_BACKUP_LOCAL_KEEP_DAYS 本地保留天数，默认 7
 
@@ -52,8 +52,30 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 
 DEFAULT_DB = "/data/moyan-data/moyan.db"
 DEFAULT_OAUTH_FILE = "/etc/moyan-backup/google-oauth.json"
-DEFAULT_LOCAL_DIR = "/var/backups/moyan"
+DEFAULT_LOCAL_DIR = "/data/storage-backup"
 DEFAULT_FOLDER = "moyan-backups"
+CONFIG_FILE = "/etc/moyan-db-backup.conf"
+
+
+def read_config(path: str = CONFIG_FILE) -> dict:
+    """读 systemd 用的同一份配置，保证手工命令行跑与定时任务行为一致。
+
+    （否则会出现"手工跑写默认目录、定时任务写配置目录"这种两套备份目录的坑。）
+    优先级：命令行 > 环境变量 > 配置文件 > 内置默认值。
+    """
+    config: dict[str, str] = {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                value = value.strip().strip('"').strip("'")
+                config[key.strip()] = value
+    except OSError:
+        pass
+    return config
 
 
 def log(message: str) -> None:
@@ -354,27 +376,35 @@ def prune_local(directory: str, keep_days: int, protect: str | None = None) -> i
 
 
 def main() -> int:
+    config = read_config()
+
+    def configured(env_name: str, fallback: str = "") -> str:
+        """环境变量 > 配置文件 > 内置默认值（命令行参数优先级最高，由 argparse 处理）。"""
+        return os.environ.get(env_name) or config.get(env_name) or fallback
+
     parser = argparse.ArgumentParser(description="墨言 SQLite 热备 + 上传 Google Drive")
-    parser.add_argument("--db", default=os.environ.get("MOYAN_BACKUP_DB", DEFAULT_DB))
+    parser.add_argument("--db", default=configured("MOYAN_BACKUP_DB", DEFAULT_DB))
     parser.add_argument(
         "--oauth-file",
-        default=os.environ.get("MOYAN_BACKUP_OAUTH_FILE", DEFAULT_OAUTH_FILE),
+        default=configured("MOYAN_BACKUP_OAUTH_FILE", DEFAULT_OAUTH_FILE),
     )
     parser.add_argument(
         "--drive-folder",
-        default=os.environ.get("MOYAN_BACKUP_DRIVE_FOLDER", DEFAULT_FOLDER),
+        default=configured("MOYAN_BACKUP_DRIVE_FOLDER", DEFAULT_FOLDER),
     )
     parser.add_argument(
         "--local-dir",
-        default=os.environ.get("MOYAN_BACKUP_LOCAL_DIR", DEFAULT_LOCAL_DIR),
+        default=configured("MOYAN_BACKUP_LOCAL_DIR", DEFAULT_LOCAL_DIR),
     )
     parser.add_argument(
-        "--keep-days", type=int, default=int(os.environ.get("MOYAN_BACKUP_KEEP_DAYS", "30"))
+        "--keep-days",
+        type=int,
+        default=int(configured("MOYAN_BACKUP_KEEP_DAYS", "30")),
     )
     parser.add_argument(
         "--local-keep-days",
         type=int,
-        default=int(os.environ.get("MOYAN_BACKUP_LOCAL_KEEP_DAYS", "7")),
+        default=int(configured("MOYAN_BACKUP_LOCAL_KEEP_DAYS", "7")),
     )
     parser.add_argument("--authorize", action="store_true", help="一次性设备码授权")
     parser.add_argument("--check", action="store_true", help="自检：刷新令牌 + 查 Drive 信息")
