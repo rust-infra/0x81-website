@@ -1,5 +1,5 @@
 [Unit]
-Description=墨言 SQLite 热备并上传 Google Cloud Storage
+Description=墨言 SQLite 热备并上传 Google Drive
 Documentation=https://github.com/rust-infra/0x81-website
 After=network-online.target
 Wants=network-online.target
