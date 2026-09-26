@@ -1,0 +1,23 @@
+[Unit]
+Description=墨言 SQLite 热备并上传 Google Cloud Storage
+Documentation=https://github.com/rust-infra/0x81-website
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 配置（桶名 / 保留天数等，**不含**密钥内容；密钥本身是 JSON 文件，路径也在配置里）
+EnvironmentFile=-/etc/moyan-db-backup.conf
+ExecStart=/usr/local/bin/moyan-db-backup
+# 库只有几 MB，正常 1~2 秒；给足超时余量
+TimeoutStartSec=600
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectSystem=full
+# 需要读 /data/moyan-data/moyan.db 与 /root/.gcs-moyan-backup.json。
+# ProtectSystem=full 只把 /usr /boot /etc 变只读，/data 与 /root 仍可读，够用。
+
+[Install]
+WantedBy=multi-user.target

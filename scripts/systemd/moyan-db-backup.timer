@@ -1,0 +1,15 @@
+[Unit]
+Description=每天为墨言 SQLite 库做一次热备并上传 GCS
+Documentation=https://github.com/rust-infra/0x81-website
+
+[Timer]
+# 本机时区是 UTC（timedatectl: Etc/UTC），所以这是北京时间 11:30 —— 低峰时段。
+OnCalendar=*-*-* 03:30:00
+# 机器关机/休眠错过时间点，开机后补跑一次
+Persistent=true
+RandomizedDelaySec=300
+AccuracySec=1min
+Unit=moyan-db-backup.service
+
+[Install]
+WantedBy=timers.target

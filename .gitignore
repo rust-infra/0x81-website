@@ -11,3 +11,7 @@ data
 moyan-backend/data/
 .env
 bin/
+
+# Python
+__pycache__/
+*.py[cod]
