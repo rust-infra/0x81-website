@@ -417,7 +417,7 @@ def main() -> int:
     parser.add_argument(
         "--require-upload",
         action="store_true",
-        default=os.environ.get("MOYAN_BACKUP_REQUIRE_UPLOAD", "") not in ("", "0", "false"),
+        default=configured("MOYAN_BACKUP_REQUIRE_UPLOAD", "") not in ("", "0", "false"),
         help="已授权后打开：缺少凭据/上传失败都算失败（未授权阶段留空，避免每天报红）",
     )
     # 授权时用（一般写在凭据文件里，这里允许临时覆盖）

@@ -328,6 +328,8 @@ export default function TypeTraining() {
   const [pickerReady, setPickerReady] = useState(false);
   const [loadError, setLoadError] = useState<string>('');
   const [mistakesCount, setMistakesCount] = useState<number | null>(null);
+  /** 当前词库一张卡都没有（错题本打空后会走到这里） */
+  const [deckEmpty, setDeckEmpty] = useState(false);
   /** 本次训练对错题本的净影响（结束页展示） */
   const [mistakeDelta, setMistakeDelta] = useState({ added: 0, removed: 0 });
 
@@ -501,6 +503,7 @@ export default function TypeTraining() {
         // 错题本保持后端返回的顺序（最近打错的在前）
         if (cancelled) return;
         setCards(loaded);
+        setDeckEmpty(loaded.length === 0);
         if (loaded.length > 0) {
           const localResume = loadLocalResume(deckId);
           let resume: TypeResume | null = null;
@@ -760,11 +763,14 @@ export default function TypeTraining() {
    */
   const pushMistakes = async () => {
     if (!backend) return;
-    const pending = mistakesRef.current.slice(mistakesSyncedCountRef.current);
+    // 边界必须在 await 之前固定：mistakesRef 是活引用，请求飞行期间用户可能又敲完一个词
+    // （finalizeWord 会往它追加），用 await 之后的 .length 会把那条候选直接标成"已同步"而漏发。
+    const upTo = mistakesRef.current.length;
+    const pending = mistakesRef.current.slice(mistakesSyncedCountRef.current, upTo);
     if (pending.length === 0) return;
     const events = mistakeEventsOf(pending);
     if (events.add.length === 0 && events.remove.length === 0) {
-      mistakesSyncedCountRef.current = mistakesRef.current.length;
+      mistakesSyncedCountRef.current = upTo;
       return;
     }
     try {
@@ -772,7 +778,7 @@ export default function TypeTraining() {
         add: events.add,
         remove: events.remove,
       });
-      mistakesSyncedCountRef.current = mistakesRef.current.length;
+      mistakesSyncedCountRef.current = upTo;
       setMistakeDelta(prev => ({
         added: prev.added + result.added,
         removed: prev.removed + result.removed,
@@ -833,11 +839,13 @@ export default function TypeTraining() {
   /** Throttled sync of completed words + current checkpoint. */
   const syncIncremental = async () => {
     if (!backend || sessionFinishedRef.current) return;
-    const all = entriesRef.current;
-    const pending = all.slice(syncedCountRef.current);
+    // 与 pushMistakes 同理：快照 + 固定上界，避免飞行期间新完成的词被跳号
+    const all = [...entriesRef.current];
+    const upTo = all.length;
+    const pending = all.slice(syncedCountRef.current, upTo);
     if (pending.length === 0) return;
     if (await pushSync(all, pending)) {
-      syncedCountRef.current = all.length;
+      syncedCountRef.current = upTo;
       await applySrsAgain(pending);
       await pushMistakes();
     }
@@ -1148,6 +1156,31 @@ export default function TypeTraining() {
             )}
           </div>
         </main>
+      </div>
+    );
+  }
+
+  if (deckEmpty) {
+    const isMistakes = deckId === MISTAKES_DECK_ID;
+    return (
+      <div
+        className="min-h-[100dvh] flex flex-col items-center justify-center px-6 text-center"
+        style={{ backgroundColor: c.studyBg, color: c.studyText }}
+      >
+        <BookOpen size={44} style={{ color: c.studyMuted }} className="mb-4" />
+        <p className="font-serif-cn text-xl mb-2" style={{ color: c.studyText }}>
+          {isMistakes ? t('mistakes.empty') : t('type.no.cards')}
+        </p>
+        <p className="text-sm" style={{ color: c.studyMuted }}>
+          {isMistakes ? t('mistakes.empty.hint') : t('type.add.cards.first')}
+        </p>
+        <button
+          onClick={() => navigate(isMistakes ? '/mistakes' : '/decks')}
+          className="mt-8 px-6 py-3 rounded-full text-sm font-medium"
+          style={{ backgroundColor: c.accent, color: '#fff' }}
+        >
+          {isMistakes ? t('back') : t('type.select.deck')}
+        </button>
       </div>
     );
   }

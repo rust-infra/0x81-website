@@ -1,5 +1,5 @@
 [Unit]
-Description=每天为墨言 SQLite 库做一次热备并上传 GCS
+Description=每天为墨言 SQLite 库做一次热备（本地；配好凭据后同时上传 Google Drive）
 Documentation=https://github.com/rust-infra/0x81-website
 
 [Timer]

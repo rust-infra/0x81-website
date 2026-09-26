@@ -80,7 +80,11 @@ export default function Decks() {
         try {
           const stats = await getTypeStats();
           for (const row of stats.deck_accuracy ?? []) {
-            accuracyByDeck.set(row.deck_id, row.accuracy);
+            // 只有跳过记录（correct/wrong 都是 0）时后端给的 accuracy 是 1.0，
+            // 那不是"练对了"，所以不显示徽章
+            if (row.correct_chars + row.wrong_chars > 0) {
+              accuracyByDeck.set(row.deck_id, row.accuracy);
+            }
           }
         } catch {
           // stats unavailable → no badges
