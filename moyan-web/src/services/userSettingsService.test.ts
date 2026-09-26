@@ -408,4 +408,44 @@ describe("userSettingsService", () => {
 
     expect(getLatestSettingsSavedTimestamp()).toEqual(expect.any(Number));
   });
+
+  it("saves a theme change made right after the startup remote sync", async () => {
+    localStorage.setItem(
+      "moyan_user",
+      JSON.stringify({
+        id: "usr_6",
+        name: "Demo User",
+        email: "demo@example.com",
+        avatar: "",
+        provider: "kimi",
+      })
+    );
+    localStorage.setItem("moyan_token", "token-222");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { theme: "zhuqing", language: "en" } }),
+    });
+    Object.assign(globalThis, { fetch: fetchMock });
+
+    const { subscribeToSettingsSync } = await import("./userSettingsService");
+    const { setTheme, getThemeName } = await import("@/theme");
+
+    const unsubscribe = subscribeToSettingsSync();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    setTheme("dailan");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const puts = fetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PUT"
+    );
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(String((puts[0][1] as RequestInit).body))).toMatchObject({
+      settings: { theme: "dailan" },
+    });
+    expect(getThemeName()).toBe("dailan");
+
+    unsubscribe();
+  });
 });
