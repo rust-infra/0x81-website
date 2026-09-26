@@ -233,10 +233,18 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 > 不能只 `git pull`。缺失时 compose 会把 `./bin/<service>` 建成的空目录挂进容器，表现为
 > 容器起不来、日志里全是 exec 失败。
 
-### 生产库备份（每日热备 + Google Drive）
+### 生产库备份（每日热备，本地；云上传可选但当前未启用）
 
-墨言的 SQLite 生产库（`/data/moyan-data/moyan.db`，见 `MOYAN_DATA_DIR`）由宿主脚本每天热备一次并
-上传到 Google Drive。**不下载服务账号密钥**（Google 明确不推荐：长期、可移植、泄露后可在 GCP 里
+> **当前状态（2026-09-26）**：只做**本地**每日热备（`/var/backups/moyan/`，留 7 天），
+> 云上传**未启用**——用户暂时不接云。脚本里的 Google Drive 上传路径（OAuth 设备码 + `drive.file`）
+> 已实现且离线自测通过，想上云时按下面「首次配置」走一遍授权即可，**不需要重新改代码**。
+> 注意：Google Cloud 的 **API 密钥（`?key=…`）无法用于备份**——它标识项目而非身份，
+> Drive/Cloud Storage 的写操作一律要求 OAuth 2.0；上传/列目录/删除带 API 密钥只会得到
+> `401 Invalid Credentials`（实测：`key=` 的错误 domain 是 `usageLimits/keyInvalid`，
+> 而 OAuth 头的错误才是 `authError`）。
+
+墨言的 SQLite 生产库（`/data/moyan-data/moyan.db`，见 `MOYAN_DATA_DIR`）由宿主脚本每天热备一次；
+若配置了 Drive 凭据，还会把 gzip 快照上传到 Google Drive。**不下载服务账号密钥**（Google 明确不推荐：长期、可移植、泄露后可在 GCP 里
 横向使用），也不自建 OIDC 签发者——用你自己的 Google 账号做一次**设备码授权**，本机只保存一枚
 **refresh token**：作用域是 `drive.file`（只能看/管本应用创建的文件）、可在 Google 账号里随时撤销、
 不做任何 GCP 资源级授权。
@@ -254,14 +262,15 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 常用命令：
 
 ```bash
-moyan-db-backup --authorize      # 一次性授权：打印 URL + 用户码，你同意后落盘 refresh token
+moyan-db-backup --authorize      # 仅在要上云时：一次性授权，打印 URL + 用户码
+
 moyan-db-backup --check          # 自检：刷新令牌 + 打印 Drive 账号与配额
 systemctl start moyan-db-backup.service          # 立刻备份一次（含上传与校验）
 journalctl -u moyan-db-backup -n 20 --no-pager
 moyan-db-backup --no-upload      # 只做本地热备（演练）
 ```
 
-首次配置（Google Cloud 控制台，约 3 分钟）：
+首次配置（**可选**，只在要上云时做；Google Cloud 控制台，约 3 分钟）：
 
 1. 建项目（如 `moyan-backup`）→ **API 和服务 → 库** → 启用 **Google Drive API**。
 2. **OAuth 同意屏幕**：User type 选 External；填应用名与支持邮箱；**Scopes 只需加
