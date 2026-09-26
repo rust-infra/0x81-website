@@ -67,9 +67,16 @@ services:
       # Maps host.docker.internal to the docker bridge gateway (172.17.0.1).
       - "host.docker.internal:host-gateway"
     volumes:
+      # SQLite 数据目录。dev 默认用仓库内的 ./moyan-backend/data（不改 .env 就是它）；
+      # 生产在仓库根 .env 里设 MOYAN_DATA_DIR=/data/moyan-data，把库放到独立数据盘上
+      # （本机 /data 是 /dev/vdb1）。
+      #   改这个键等于换挂载源：必须 `docker compose up -d`（会重建容器）才生效，
+      #   `restart` 只重新解析同一个源路径，不会换目录。
+      #   迁移已有数据：停容器 → 把 moyan.db 拷到新目录 → up -d → 校验容器内
+      #   `stat -c %i /data` 与新目录 inode 相同、行数一致。
       # :Z relabels the bind mount to container_file_t so the container can
       # write the SQLite DB on SELinux-enforcing hosts (SQLITE_CANTOPEN otherwise)
-      - ./moyan-backend/data:/data:Z
+      - ${MOYAN_DATA_DIR:-./moyan-backend/data}:/data:Z
       # 二进制（scripts/fetch-rust.sh 从 release 拉取；本地构建则跑
       # scripts/build-rust.sh）。:Z 同上，SELinux 下可读可执行。
       # 注意：先跑 scripts/fetch-rust.sh，否则 compose 会把不存在的路径建成空目录。

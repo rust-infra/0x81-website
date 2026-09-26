@@ -202,7 +202,9 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
    moyan-backend   :4323      0x81/moyan-backend-runtime:local（另加 ffmpeg python3 yt-dlp libsqlite3-0）
                      ├ /app/moyan-backend ← bin/moyan-backend
-                     ├ /data              ← ./moyan-backend/data（SQLite）
+                     ├ /data              ← ${MOYAN_DATA_DIR:-./moyan-backend/data}（SQLite）
+                     │                       dev 默认在仓库里；生产在 .env 里指向数据盘
+                     │                       （本机 MOYAN_DATA_DIR=/data/moyan-data，/data 是 /dev/vdb1）
                      └ healthcheck GET /api/health
 
    前端 5 个      0xindex:4320 · website:4321 · crab-web:4322 · moyan-web:5000 · moyan-admin:5001
@@ -312,6 +314,12 @@ docker compose up -d                          # 改完 .env 要重建，只 rest
   `dev-run.sh` / `vite dev`，compose 完全不看它们。
 - **键名必须带 `MOYAN_` 前缀**：compose 里写的是 `ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}` 这种映射，
   直接写 `ADMIN_TOKEN=` 不会进容器。
+- **`MOYAN_DATA_DIR` = SQLite 数据目录（宿主侧，挂到容器 `/data`）**：不设 = `./moyan-backend/data`
+  （仓库内，dev 默认）；生产建议指到独立数据盘，本机填 `/data/moyan-data`（`/data` 是 `/dev/vdb1`，
+  与系统盘 `/dev/vda1` 分开）。⚠️ 改这个键**等于换挂载源**：只有
+  `docker compose up -d`（重建容器）才生效，`restart` 只会重新解析**同一个**源路径；
+  且必须先把旧的 `moyan.db` 拷进新目录，否则新目录是空库看起来像"数据丢了"。
+  校验：`docker exec 0x81-website-moyan-backend-1 stat -c %i /data` 与宿主目标目录 inode 相同。
 - **`MOYAN_ADMIN_TOKEN` 不能空**：它是管理后台登录页要填的 `X-Admin-Token`；空值下后端对
   `/api/admin/*` 一律回 503（`"ADMIN_TOKEN is not configured"`，设计上禁止空密钥放行）。
 - **后台登不上，先按状态码分流**（不用登服务器，`moyan-backend/src/middleware/admin_auth.rs:7-12`）：
