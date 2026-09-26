@@ -117,7 +117,9 @@ export default function DeckDetail() {
           const stats = await getTypeStats();
           const map = new Map<string, number>();
           for (const row of stats.mastery) {
-            map.set(row.card_id, row.accuracy);
+            // 只有跳过记录（字符数都是 0）时后端 accuracy 是 1.0，那不是"练对了"，不显示徽章
+            const chars = (row.correct_chars ?? 0) + (row.wrong_chars ?? 0);
+            if (chars > 0) map.set(row.card_id, row.accuracy);
           }
           setAccuracyByCard(map);
         } catch {

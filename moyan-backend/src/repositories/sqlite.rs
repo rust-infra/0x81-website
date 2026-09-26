@@ -9,9 +9,10 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardData, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, DeckData,
     DraftCard, ImportMode, ImportResult, ReviewLog, ReviewLogData, StudyCard, StudyQueue, SyncData,
-    SyncStatusResponse, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeRow,
-    TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
-    UserIdentity, UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
+    SyncStatusResponse, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeAdd,
+    TypeMistakeRow, TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest,
+    UpsertCardProgressRequest, User, UserIdentity, UserSettings, UserStats, DailyTrendPoint,
+    SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
@@ -1798,6 +1799,7 @@ struct TypeMasteryRowDb {
     front: Option<String>,
 }
 
+
 impl From<TypeMasteryRowDb> for TypeMasteryRow {
     fn from(row: TypeMasteryRowDb) -> Self {
         let total = row.correct_chars + row.wrong_chars;
@@ -1806,12 +1808,16 @@ impl From<TypeMasteryRowDb> for TypeMasteryRow {
         } else {
             1.0
         };
+        // 字符数原样带出：都为 0 说明只有"跳过"记录，accuracy=1.0 不代表练对了
+        let (correct_chars, wrong_chars) = (row.correct_chars, row.wrong_chars);
         Self {
             card_id: row.card_id,
             accuracy,
             egregious_count: row.egregious_count,
             last_practiced_at: row.last_practiced_at,
             front: row.front,
+            correct_chars,
+            wrong_chars,
         }
     }
 }
@@ -2191,60 +2197,78 @@ impl TypeRepository for SqliteRepositories {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn type_mistake_upsert(
+    async fn type_mistakes_apply(
         &self,
         user_id: &str,
-        card_id: &str,
-        deck_id: &str,
-        entry_id: Option<&str>,
-    ) -> Result<(), RepositoryError> {
+        adds: &[TypeMistakeAdd],
+        removes: &[String],
+    ) -> Result<(usize, usize, usize), RepositoryError> {
         let now = Utc::now();
-        // Re-sending the same entry id (client retry of a batch) must not bump
-        // wrong_count again, hence the CASE on last_entry_id.
-        sqlx::query(
-            "INSERT INTO type_mistakes (
-                owner_user_id, card_id, deck_id, wrong_count, last_entry_id,
-                created_at, last_wrong_at
-             ) VALUES (?, ?, ?, 1, ?, ?, ?)
-             ON CONFLICT(owner_user_id, card_id) DO UPDATE SET
-                deck_id = excluded.deck_id,
-                wrong_count = type_mistakes.wrong_count
-                    + CASE
-                        WHEN ? IS NOT NULL AND type_mistakes.last_entry_id = ? THEN 0
-                        ELSE 1
-                      END,
-                last_entry_id = excluded.last_entry_id,
-                last_wrong_at = excluded.last_wrong_at",
-        )
-        .bind(user_id)
-        .bind(card_id)
-        .bind(deck_id)
-        .bind(entry_id)
-        .bind(now)
-        .bind(now)
-        .bind(entry_id)
-        .bind(entry_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
+        let mut transaction = self.pool.begin().await?;
+        let mut added = 0usize;
+        let mut deduplicated = 0usize;
 
-    async fn type_mistake_delete(
-        &self,
-        user_id: &str,
-        card_ids: &[String],
-    ) -> Result<usize, RepositoryError> {
+        // 先移出（幂等：删除不存在的行只是 0 行），一次批量 DELETE 而不是逐条往返
         let mut removed = 0usize;
-        for card_id in card_ids {
-            let result =
-                sqlx::query("DELETE FROM type_mistakes WHERE owner_user_id = ? AND card_id = ?")
-                    .bind(user_id)
-                    .bind(card_id)
-                    .execute(&self.pool)
-                    .await?;
-            removed += result.rows_affected() as usize;
+        if !removes.is_empty() {
+            let placeholders = vec!["?"; removes.len()].join(",");
+            let sql = format!(
+                "DELETE FROM type_mistakes WHERE owner_user_id = ? AND card_id IN ({placeholders})"
+            );
+            let mut query = sqlx::query(&sql).bind(user_id);
+            for card_id in removes {
+                query = query.bind(card_id);
+            }
+            removed = query.execute(&mut *transaction).await?.rows_affected() as usize;
         }
-        Ok(removed)
+
+        for add in adds {
+            // entry_id 是"这条打字记录已经计过数"的凭据：(owner, entry_id) 主键
+            // 保证同一条记录只允许计数一次，重复提交变成 no-op。
+            if let Some(entry_id) = add.entry_id.as_deref() {
+                let claimed = sqlx::query(
+                    "INSERT INTO type_mistake_entries (owner_user_id, entry_id, card_id, created_at)
+                     VALUES (?, ?, ?, ?)
+                     ON CONFLICT(owner_user_id, entry_id) DO NOTHING",
+                )
+                .bind(user_id)
+                .bind(entry_id)
+                .bind(&add.card_id)
+                .bind(now)
+                .execute(&mut *transaction)
+                .await?;
+                if claimed.rows_affected() == 0 {
+                    deduplicated += 1;
+                    continue;
+                }
+            }
+
+            let result = sqlx::query(
+                "INSERT INTO type_mistakes (
+                    owner_user_id, card_id, deck_id, wrong_count, last_entry_id,
+                    created_at, last_wrong_at
+                 ) VALUES (?, ?, ?, 1, ?, ?, ?)
+                 ON CONFLICT(owner_user_id, card_id) DO UPDATE SET
+                    deck_id = excluded.deck_id,
+                    wrong_count = type_mistakes.wrong_count + 1,
+                    last_entry_id = excluded.last_entry_id,
+                    last_wrong_at = excluded.last_wrong_at",
+            )
+            .bind(user_id)
+            .bind(&add.card_id)
+            .bind(&add.deck_id)
+            .bind(add.entry_id.as_deref())
+            .bind(now)
+            .bind(now)
+            .execute(&mut *transaction)
+            .await?;
+            if result.rows_affected() > 0 {
+                added += 1;
+            }
+        }
+
+        transaction.commit().await?;
+        Ok((added, removed, deduplicated))
     }
 
     async fn type_mistake_list(
@@ -3992,15 +4016,37 @@ mod tests {
             .await?;
 
         assert_eq!(repo.type_mistake_count(&user.id).await?, 0);
-        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_1"))
-            .await?;
-        // Same entry id again (client retry) must not bump the counter.
-        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_1"))
-            .await?;
+        let add = |entry: &str| TypeMistakeAdd {
+            card_id: card.id.clone(),
+            deck_id: deck.id.clone(),
+            entry_id: Some(entry.to_string()),
+        };
+        // 第一次打错 → 进错题本
+        assert_eq!(
+            repo.type_mistakes_apply(&user.id, &[add("te_1")], &[]).await?,
+            (1, 0, 0)
+        );
+        // 同一批重发（响应丢失后重试）→ 幂等，不重复计数
+        assert_eq!(
+            repo.type_mistakes_apply(&user.id, &[add("te_1")], &[]).await?,
+            (0, 0, 1)
+        );
         assert_eq!(repo.type_mistake_count(&user.id).await?, 1);
-        // A later, different wrong attempt counts.
-        repo.type_mistake_upsert(&user.id, &card.id, &deck.id, Some("te_2"))
-            .await?;
+        // 后来一次不同的打错 → 计数 +1
+        assert_eq!(
+            repo.type_mistakes_apply(&user.id, &[add("te_2")], &[]).await?,
+            (1, 0, 0)
+        );
+        // 没有 entry_id 时不去重（每次 +1），保持旧行为
+        let anonymous = TypeMistakeAdd {
+            card_id: card.id.clone(),
+            deck_id: deck.id.clone(),
+            entry_id: None,
+        };
+        assert_eq!(
+            repo.type_mistakes_apply(&user.id, &[anonymous], &[]).await?,
+            (1, 0, 0)
+        );
 
         let entries = vec![TypeEntry {
             id: "te_2".into(),
@@ -4021,7 +4067,7 @@ mod tests {
         assert_eq!(items.len(), 1);
         let item = &items[0];
         assert_eq!(item.card_id, card.id);
-        assert_eq!(item.wrong_count, 2);
+        assert_eq!(item.wrong_count, 3);
         assert_eq!(item.card.front, "hello");
         assert_eq!(item.card.back, "你好");
         assert_eq!(item.correct_chars, 3);
@@ -4037,12 +4083,24 @@ mod tests {
         assert!((deck_accuracy[0].accuracy - 0.6).abs() < 1e-9);
         assert_eq!(deck_accuracy[0].entries, 1);
 
+        // mastery 也带字符数（前端据此判断"是否真的练过"）
+        let mastery = repo.type_mastery_rows(&user.id).await?;
+        assert_eq!(mastery.len(), 1);
+        assert_eq!(mastery[0].correct_chars, 3);
+        assert_eq!(mastery[0].wrong_chars, 2);
+        assert_eq!(mastery[0].front.as_deref(), Some("hello"));
+
+        // 批量移除 + 幂等（删不存在的行只是 0 行）
+        let missing = "card_missing".to_string();
         assert_eq!(
-            repo.type_mistake_delete(&user.id, &[card.id.clone()])
+            repo.type_mistakes_apply(&user.id, &[], &[card.id.clone(), missing.clone()])
                 .await?,
-            1
+            (0, 1, 0)
         );
-        assert_eq!(repo.type_mistake_delete(&user.id, &[card.id]).await?, 0);
+        assert_eq!(
+            repo.type_mistakes_apply(&user.id, &[], &[card.id.clone()]).await?,
+            (0, 0, 0)
+        );
         assert!(repo.type_mistake_list(&user.id).await?.is_empty());
         Ok(())
     }

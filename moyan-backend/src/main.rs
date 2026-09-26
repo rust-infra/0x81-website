@@ -409,7 +409,7 @@ mod tests {
         assert_eq!(body["data"]["removed"], 0);
         assert_eq!(body["data"]["total"], 1);
 
-        // 重试同一批 → 幂等
+        // 重试同一批 → 幂等：不重复计数，且响应里能看到被去重的条数
         let response = app
             .clone()
             .oneshot(
@@ -422,6 +422,9 @@ mod tests {
             )
             .await?;
         assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["deduplicated"], 1);
+        assert_eq!(body["data"]["total"], 1);
 
         let response = app
             .clone()

@@ -175,6 +175,9 @@ export interface TypeMastery {
   last_practiced_at: string | null;
   /** 卡片正面词；卡片被删除时为 null */
   front?: string | null;
+  /** 累计字符数：都为 0 说明只有"跳过"记录，accuracy 1.0 并非"练对了" */
+  correct_chars?: number;
+  wrong_chars?: number;
 }
 
 /** 某个词库的历史打字准确率（词库列表徽章用） */
@@ -227,6 +230,8 @@ export interface TypeMistakeSyncResponse {
   added: number;
   removed: number;
   total: number;
+  /** 因 entry_id 已记过而没重复计数的条数（幂等生效的证据） */
+  deduplicated?: number;
 }
 
 export interface TypeMistakeList {

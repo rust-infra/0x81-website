@@ -16,7 +16,8 @@ use crate::models::{
     AdminVocabularyImportCard, AdminVocabularyImportDeck, Card, CardExample, CardProgress,
     CollectJob, CreateCardRequest, CreateDeckRequest, CreateReviewLogRequest, Deck, ImportMode,
     ImportResult, ReviewLog, StudyCard, StudyQueue, SyncData, SyncStatusResponse,
-    DailyTrendPoint, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeRow,
+    DailyTrendPoint, TypeDailyTrend, TypeDeckAccuracy, TypeEntry, TypeMasteryRow, TypeMistakeAdd,
+    TypeMistakeRow,
     TypeResume, TypeSession, UpdateCardRequest, UpdateDeckRequest, UpsertCardProgressRequest, User,
     UserIdentity, UserSettings, UserStats,
 };
@@ -304,21 +305,17 @@ pub trait TypeRepository: Send + Sync {
         user_id: &str,
         deck_id: &str,
     ) -> Result<bool, RepositoryError>;
-    /// Insert/refresh a mistakes-book row. `entry_id` (the wrong attempt's entry
-    /// id) makes client retries of the same batch idempotent.
-    async fn type_mistake_upsert(
+    /// 整批应用错题本变更（单事务）：
+    /// - `adds`：本批打错的词；`entry_id` 已记过的会被跳过（幂等），不重复累加 wrong_count；
+    /// - `removes`：本批练到 100% 准确率的词，一次批量删除。
+    ///
+    /// 返回 (实际新增行数, 实际删除行数, 因幂等跳过的条数)。
+    async fn type_mistakes_apply(
         &self,
         user_id: &str,
-        card_id: &str,
-        deck_id: &str,
-        entry_id: Option<&str>,
-    ) -> Result<(), RepositoryError>;
-    /// Remove cards from the mistakes book; returns the number actually removed.
-    async fn type_mistake_delete(
-        &self,
-        user_id: &str,
-        card_ids: &[String],
-    ) -> Result<usize, RepositoryError>;
+        adds: &[TypeMistakeAdd],
+        removes: &[String],
+    ) -> Result<(usize, usize, usize), RepositoryError>;
     /// Mistakes book, most recently missed first, with card + progress + accuracy.
     async fn type_mistake_list(
         &self,

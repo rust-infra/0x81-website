@@ -51,6 +51,10 @@ pub struct TypeMasteryRow {
     pub last_practiced_at: Option<DateTime<Utc>>,
     /// Card front text, joined for display (None when the card was deleted).
     pub front: Option<String>,
+    /// 累计字符数：都为 0 说明只有"跳过"记录，此时 accuracy 会是 1.0 但并非"练对了"，
+    /// 调用方要据此决定是否外显准确率。
+    pub correct_chars: i64,
+    pub wrong_chars: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +89,11 @@ pub struct TypeMastery {
     /// Card front text (None when the card no longer exists).
     #[serde(default)]
     pub front: Option<String>,
+    /// 累计字符数（correct + wrong == 0 = 只有跳过记录，accuracy 1.0 不代表练对）
+    #[serde(default)]
+    pub correct_chars: i64,
+    #[serde(default)]
+    pub wrong_chars: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,9 +214,15 @@ pub struct TypeMistakeSyncRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeMistakeSyncResponse {
+    /// 本批提交的打错条数（= 前端展示的"本次打错 N 次"）
     pub added: usize,
+    /// 真正从错题本移除的行数
     pub removed: usize,
+    /// 错题本当前词数
     pub total: i64,
+    /// 其中因 entry_id 已经记过而**没有**重复计数的条数（幂等生效的证据）
+    #[serde(default)]
+    pub deduplicated: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

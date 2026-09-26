@@ -134,27 +134,19 @@ impl TypeService {
             }
         }
 
-        // Removal runs first so a card present in both lists ends up in the book
-        // (only possible when the client sent a stale batch).
-        let removed = self
+        // 整批一次事务：内部先 remove 后 add（同批同词都出现时留在错题本里），
+        // 且 entry_id 已记过的 add 会被幂等跳过。正常前端只发连续切片，不会出现同批同现。
+        // 入参条数即"本次打错次数"（added 字段语义就是这个），仓储返回的新增行数不直接用
+        let (_inserted, removed, deduplicated) = self
             .repository
-            .type_mistake_delete(user_id, &removes)
+            .type_mistakes_apply(user_id, &adds, &removes)
             .await?;
-        for add in &adds {
-            self.repository
-                .type_mistake_upsert(
-                    user_id,
-                    &add.card_id,
-                    &add.deck_id,
-                    add.entry_id.as_deref(),
-                )
-                .await?;
-        }
         let total = self.repository.type_mistake_count(user_id).await?;
         Ok(TypeMistakeSyncResponse {
             added: adds.len(),
             removed,
             total,
+            deduplicated,
         })
     }
 
@@ -264,5 +256,7 @@ fn mastery_from_row(row: TypeMasteryRow) -> TypeMastery {
         score,
         last_practiced_at: row.last_practiced_at,
         front: row.front,
+        correct_chars: row.correct_chars,
+        wrong_chars: row.wrong_chars,
     }
 }

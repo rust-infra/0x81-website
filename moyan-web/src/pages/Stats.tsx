@@ -233,6 +233,10 @@ export default function Stats() {
           <div className="bg-[var(--card)] rounded-2xl p-5 shadow-sm">
             <ul className="space-y-2.5">
               {[...typeStats.mastery]
+                .filter(
+                  (card) =>
+                    (card.correct_chars ?? 0) + (card.wrong_chars ?? 0) > 0
+                )
                 .sort((a, b) => a.accuracy - b.accuracy)
                 .slice(0, 10)
                 .map((card) => (
