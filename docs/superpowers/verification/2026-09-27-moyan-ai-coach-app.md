@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 30 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 31 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -89,6 +89,18 @@ Branch: `feat/ai-agent`
 - 陪练根页增加一个设计稿未画出的“AI 面试官”紧凑入口，否则面试功能无法从 App 内进入。
 
 验证：`npm test` → 30 passed；`npx tsc --noEmit` 和 `npx expo export --platform web` 均通过；并在 iPhone 15 Pro 模拟器逐页复核首页、陪练、会话、总结、AI 面试官、来源面板、材料确认、档案、场景编辑器、陪练设置、练习记录、播客和统计页。
+
+### 多语言复核：已执行
+
+本轮 UI 修正没有停留在只翻译页面标题，同时补齐了：
+
+- 陪练枚举显示：场景类型、语气、场景、难度、口音提示全部通过 i18n key 渲染。
+- AI 模板中英文两套内容；英文模板有独立的标题、描述和练习重点，避免英文界面出现中文模板。
+- 主题名称/描述、语言选项、全局设置、登录状态、词库空态、学习模式、确认弹窗和 API fallback 错误。
+- 会话轮数、纠错数、历史次数、识别图片数、删除条数等数量词增加单复数 key。
+- 新增全量 `zh-CN` / `en` key parity 测试，以及英文模板不得含中文的测试。
+
+模拟器切换英文后复核了首页、陪练根页、场景编辑器、主题列表和设置页；随后已恢复为中文偏好。
 
 ### 原生图片上传缺陷修复
 
