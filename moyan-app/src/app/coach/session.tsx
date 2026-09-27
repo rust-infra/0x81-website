@@ -20,7 +20,7 @@ import {
   initialSession,
   sessionReducer,
 } from '../../lib/coach-session';
-import { loadCustomScenarios } from '../../lib/coach-storage';
+import { loadCoachPrefs, loadCustomScenarios } from '../../lib/coach-storage';
 import type {
   CoachFeedback,
   CoachScenario,
@@ -59,6 +59,7 @@ export default function CoachSessionScreen() {
   const [error, setError] = useState('');
   const [showEnd, setShowEnd] = useState(false);
   const [turnIndex, setTurnIndex] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(true);
   const [startedAt] = useState(() => Date.now());
 
   useEffect(() => {
@@ -74,6 +75,13 @@ export default function CoachSessionScreen() {
       setHistory([{ role: 'coach', content: found.opening_line }]);
     })();
   }, [lang, params.scenarioId]);
+
+  useEffect(() => {
+    void loadCoachPrefs().then((prefs) => {
+      setAutoPlay(prefs.autoPlay);
+      if (!params.interviewKind) setMode(prefs.defaultMode);
+    });
+  }, [params.interviewKind]);
 
   useEffect(() => {
     void getCoachQuota()
@@ -132,7 +140,7 @@ export default function CoachSessionScreen() {
         appendHistory(nextHistory, { role: 'coach', content: response.reply })
       );
       dispatch({ type: 'TURN_SUCCESS', id });
-      await play(response.reply);
+      if (autoPlay) await play(response.reply);
       dispatch({ type: 'START_LISTENING' });
       dispatch({ type: 'STOP_LISTENING' });
       void getCoachQuota()
