@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::middleware::error::AppError;
 use crate::models::{
     validate_history, validate_scenario, CoachExpression, CoachFeedback, CoachMode, CoachRole,
-    CoachScenario, CoachSummaryRequest, CoachSummaryResponse, CoachSummaryStats, CoachTurn,
-    CoachTurnRequest, CoachTurnResponse,
+    CoachScenario, CoachScenarioDraftRequest, CoachSummaryRequest, CoachSummaryResponse,
+    CoachSummaryStats, CoachTurn, CoachTurnRequest, CoachTurnResponse,
 };
 use crate::repositories::Repository;
 use crate::services::admin_collect::AdminCollectService;
@@ -200,6 +200,79 @@ pub fn parse_summary_payload(
             corrections,
         },
     })
+}
+
+const DRAFT_SYSTEM_PROMPT: &str = "You design English speaking-practice scenarios for software \
+engineers working remotely with international colleagues. Take the user's Chinese description and \
+return JSON only, in this exact shape:\n\
+{\"category\":\"daily|engineering|high_stakes\",\"title\":\"...\",\"description\":\"...\",\
+\"persona\":{\"name\":\"...\",\"role\":\"...\",\"locale\":\"en-US|en-GB|en-IN|en-AU|zh-CN\",\
+\"tone\":\"friendly|neutral|direct|challenging\"},\
+\"setting\":\"meeting|one_on_one|coffee_chat|phone_call\",\"opening_line\":\"...\",\
+\"focus_points\":[\"...\"],\"difficulty\":\"easy|core|challenge\",\"max_turns\":6}\n\
+Rules: title and description and focus_points in Simplified Chinese; opening_line and persona.role in English; \
+focus_points at most 5, each under 40 characters; max_turns between 3 and 20.";
+
+impl CoachService {
+    pub async fn draft_scenario(
+        &self,
+        user_id: &str,
+        req: CoachScenarioDraftRequest,
+    ) -> Result<CoachScenario, AppError> {
+        let description = req.description.trim();
+        if description.is_empty() {
+            return Err(AppError::BadRequest("description is required".into()));
+        }
+        if description.chars().count() > 200 {
+            return Err(AppError::BadRequest(
+                "description must be at most 200 characters".into(),
+            ));
+        }
+        self.quota.check_and_consume(user_id).await?;
+
+        let settings = self.admin_collect.llm_settings().await?;
+        let raw = llm_client::chat_json(&settings, DRAFT_SYSTEM_PROMPT, description, None, Some(900))
+            .await
+            .map_err(|_| {
+                AppError::ServiceUnavailable("AI scenario drafting is temporarily unavailable".into())
+            })?;
+        let id = format!("custom_{}", uuid::Uuid::new_v4().simple());
+        parse_draft_payload(&raw, &id)
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct LlmDraftPayload {
+    category: crate::models::CoachCategory,
+    title: String,
+    description: String,
+    persona: crate::models::CoachPersona,
+    setting: String,
+    opening_line: String,
+    #[serde(default)]
+    focus_points: Vec<String>,
+    difficulty: String,
+    max_turns: u32,
+}
+
+pub fn parse_draft_payload(raw: &str, id: &str) -> Result<CoachScenario, AppError> {
+    let cleaned = strip_code_fences(raw);
+    let payload: LlmDraftPayload = serde_json::from_str(&cleaned)
+        .map_err(|e| AppError::BadRequest(format!("invalid scenario draft JSON: {e}")))?;
+    let scenario = CoachScenario {
+        id: id.to_string(),
+        source: crate::models::CoachScenarioSource::Custom,
+        category: payload.category,
+        title: payload.title,
+        description: payload.description,
+        persona: payload.persona,
+        setting: payload.setting,
+        opening_line: payload.opening_line,
+        focus_points: payload.focus_points,
+        difficulty: payload.difficulty,
+        max_turns: payload.max_turns,
+    };
+    validate_scenario(&scenario).map_err(AppError::BadRequest)
 }
 
 /// LLM 返回不可解析时的降级：保留原文作为回复，放弃反馈。
@@ -418,6 +491,28 @@ mod tests {
         assert!(out.limit_reached);
         assert_eq!(out.turn_index, 3);
         assert_eq!(out.mood, "neutral");
+    }
+
+    #[test]
+    fn draft_payload_is_forced_to_custom_source() {
+        let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
+        let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
+        assert!(matches!(
+            scenario.source,
+            crate::models::CoachScenarioSource::Custom
+        ));
+        assert_eq!(scenario.id, "custom_abc");
+        assert_eq!(scenario.title, "跨时区交接");
+        assert!(crate::models::validate_scenario(&scenario).is_ok());
+    }
+
+    #[test]
+    fn draft_rejects_overlong_title() {
+        let raw = format!(
+            r#"{{"category":"daily","title":"{}","description":"d","persona":{{"name":"A","role":"R","locale":"en-US","tone":"friendly"}},"setting":"meeting","opening_line":"Hi","focus_points":[],"difficulty":"easy","max_turns":6}}"#,
+            "x".repeat(80)
+        );
+        assert!(parse_draft_payload(&raw, "custom_x").is_err());
     }
 
     #[test]

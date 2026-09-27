@@ -219,6 +219,13 @@ pub struct CoachSummaryResponse {
     pub stats: CoachSummaryStats,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CoachScenarioDraftRequest {
+    pub description: String,
+    #[serde(default)]
+    pub locale: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

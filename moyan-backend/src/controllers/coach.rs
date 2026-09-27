@@ -36,3 +36,12 @@ pub async fn summary(
     let result = state.services.coach.summary(req).await?;
     Ok(Json(serde_json::json!({ "success": true, "data": result })))
 }
+
+pub async fn scenario_draft(
+    State(state): State<AppState>,
+    axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
+    axum::Json(req): axum::Json<crate::models::CoachScenarioDraftRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let scenario = state.services.coach.draft_scenario(&claims.sub, req).await?;
+    Ok(Json(serde_json::json!({ "success": true, "data": scenario })))
+}
