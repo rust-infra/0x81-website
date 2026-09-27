@@ -135,6 +135,62 @@ pub fn validate_history(history: &[CoachTurn], user_text: &str) -> Result<(), St
     Ok(())
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CoachTurnRequest {
+    pub scenario: CoachScenario,
+    #[serde(default)]
+    pub scenario_id: Option<String>,
+    #[serde(default)]
+    pub history: Vec<CoachTurn>,
+    pub user_text: String,
+    #[serde(default)]
+    pub coach_mode: CoachMode,
+    #[serde(default)]
+    pub locale: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoachCorrection {
+    pub original: String,
+    pub corrected: String,
+    #[serde(default)]
+    pub explanation_zh: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoachBetterPhrasing {
+    pub original: String,
+    pub natural: String,
+    #[serde(default)]
+    pub note_zh: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoachExpression {
+    pub en: String,
+    pub zh: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoachFeedback {
+    #[serde(default)]
+    pub corrections: Vec<CoachCorrection>,
+    #[serde(default)]
+    pub better_phrasing: Option<CoachBetterPhrasing>,
+    #[serde(default)]
+    pub expressions: Vec<CoachExpression>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoachTurnResponse {
+    pub reply: String,
+    pub mood: String,
+    pub turn_index: u32,
+    pub limit_reached: bool,
+    #[serde(default)]
+    pub feedback: Option<CoachFeedback>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,5 +9,6 @@ use crate::middleware::error::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/scenarios", get(coach::list_scenarios))
+        .route("/turn", axum::routing::post(coach::turn))
         .layer(middleware::from_fn(jwt_middleware))
 }

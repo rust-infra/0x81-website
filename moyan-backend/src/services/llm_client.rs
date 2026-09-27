@@ -549,6 +549,17 @@ async fn chat_completion(
     Ok(content.to_string())
 }
 
+/// 供陪练等通用场景使用：走 OpenAI-compatible chat completions，要求 JSON 输出。
+pub async fn chat_json(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user: &str,
+    proxy: Option<&str>,
+    max_tokens: Option<u32>,
+) -> Result<String, AppError> {
+    chat_completion(settings, system, user, proxy, true, max_tokens).await
+}
+
 fn app_error_message(err: &AppError) -> String {
     match err {
         AppError::Unauthorized(m)

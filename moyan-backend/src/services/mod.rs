@@ -1,6 +1,7 @@
 //! Business services that coordinate controllers and repositories.
 
 mod admin;
+mod coach;
 mod coach_quota;
 mod coach_settings;
 mod admin_collect;
@@ -21,6 +22,7 @@ use std::sync::Arc;
 use crate::repositories::Repository;
 
 pub use admin::AdminService;
+pub use coach::CoachService;
 pub use coach_quota::{CoachQuotaService, CoachSettings};
 pub use coach_settings::CoachSettingsService;
 pub mod coach_scenarios;
@@ -43,8 +45,9 @@ pub struct Services {
     pub vocabulary: VocabularyService,
     pub system_decks: SystemDecksService,
     pub admin: AdminService,
-    pub admin_collect: AdminCollectService,
+    pub admin_collect: Arc<AdminCollectService>,
     pub coach_quota: CoachQuotaService,
+    pub coach: CoachService,
     pub coach_settings: CoachSettingsService,
     pub podcast: PodcastService,
     pub typing: TypeService,
@@ -53,7 +56,16 @@ pub struct Services {
 impl Services {
     pub fn new(repository: Arc<dyn Repository>) -> Self {
         let admin = AdminService::new(Arc::clone(&repository));
-        let admin_collect = AdminCollectService::new(Arc::clone(&repository), admin.clone());
+        let admin_collect =
+            Arc::new(AdminCollectService::new(Arc::clone(&repository), admin.clone()));
+        let coach_quota = CoachQuotaService::new(Arc::clone(&repository));
+        let coach = CoachService::new(
+            Arc::clone(&repository),
+            coach_quota.clone(),
+            Arc::clone(&admin_collect),
+        );
+        let coach_settings = CoachSettingsService::new(Arc::clone(&repository));
+
         Self {
             auth: AuthService::new(Arc::clone(&repository)),
             health: HealthService::new(Arc::clone(&repository)),
@@ -63,8 +75,9 @@ impl Services {
             system_decks: SystemDecksService::new(Arc::clone(&repository)),
             admin,
             admin_collect,
-            coach_quota: CoachQuotaService::new(Arc::clone(&repository)),
-            coach_settings: CoachSettingsService::new(Arc::clone(&repository)),
+            coach_quota,
+            coach,
+            coach_settings,
             podcast: PodcastService::new(Arc::clone(&repository)),
             typing: TypeService::new(Arc::clone(&repository)),
         }
