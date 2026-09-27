@@ -415,7 +415,7 @@ async function speakWithProvider(
 
 export async function speak(
   text: string,
-  opts?: { language?: string; rate?: number }
+  opts?: { language?: string; rate?: number; voiceId?: string }
 ): Promise<void> {
   if (!text.trim()) return;
   await ensurePlaybackAudioMode();
@@ -434,11 +434,12 @@ export async function speak(
     if (token !== speakToken) return;
     if (!played) {
       const voiceId =
-        settings.provider === 'webspeech'
+        opts?.voiceId ??
+        (settings.provider === 'webspeech'
           ? segLang === 'zh'
             ? settings.speech_zh_voice
             : settings.speech_voice
-          : undefined;
+          : undefined);
       try {
         await speakWithNative(
           seg.text,

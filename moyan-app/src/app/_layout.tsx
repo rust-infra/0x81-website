@@ -38,6 +38,7 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="decks" />
           <Stack.Screen name="coach/session" />
+          <Stack.Screen name="coach/summary" />
           <Stack.Screen name="coach/editor" />
           <Stack.Screen name="deck/[id]" />
           <Stack.Screen name="study/[deckId]" />
