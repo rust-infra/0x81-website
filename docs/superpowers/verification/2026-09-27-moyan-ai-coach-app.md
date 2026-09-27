@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 32 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 33 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -89,6 +89,14 @@ Branch: `feat/ai-agent`
 - 陪练根页增加一个设计稿未画出的“AI 面试官”紧凑入口，否则面试功能无法从 App 内进入。
 
 验证：`npm test` → 30 passed；`npx tsc --noEmit` 和 `npx expo export --platform web` 均通过；并在 iPhone 15 Pro 模拟器逐页复核首页、陪练、会话、总结、AI 面试官、来源面板、材料确认、档案、场景编辑器、陪练设置、练习记录、播客和统计页。
+
+### 会话退出与丢弃：已执行
+
+- 只是进入会话、尚未发送任何用户轮次时：返回键、右上角“结束”和 iOS 左滑都会直接离开，不生成总结、不弹结束面板。
+- 已经产生至少一个用户轮次后：返回键、结束按钮和系统左滑统一打开结束面板。
+- 结束面板现在提供三种结果：结束并查看总结、丢弃本次会话、继续练习。
+- “丢弃本次会话”不调用总结接口、不写本地历史，直接回到陪练首页。
+- 新增 `hasUserTurn` 纯逻辑测试，覆盖只进入页面与已经聊天两种判断。
 
 ### 返回导航统一：已执行
 
