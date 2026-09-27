@@ -1,0 +1,1931 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="xuanzhi" data-contrast="after">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>墨言 · AI 陪练 页面设计</title>
+<style>
+/* ------------------------------------------------------------------
+   色值全部取自 moyan-app/src/lib/theme.ts，未新造任何颜色。
+   新增主题时必须同时验证这四套，避免硬编码。
+------------------------------------------------------------------ */
+[data-theme="xuanzhi"]{
+  --paper:#F7F5F0; --card:#FFFFFF; --ink:#2B2B2B; --ink-light:#5A5A5A; --ink-muted:#8A8A8A;
+  --accent:#8C3B3B; --accent-light:#8C3B3B18; --border:#E8E4D9; --nav-bg:#FFFFFF; --nav-text:#5A5A5A;
+  --study-bg:#F7F5F0; --study-card:#FFFFFF; --study-text:#2B2B2B; --study-muted:rgba(43,43,43,.55);
+  --tag-bg:rgba(43,43,43,.08); --tag-text:#5A5A5A; --button-bg:#2B2B2B; --button-text:#FFFFFF;
+  --divider:#E8E4D9; --hover:#F0EDE6; --input-bg:#F7F5F0;
+}
+[data-theme="shenyemo"]{
+  --paper:#1C1C1E; --card:#2C2C2E; --ink:#E8E4DC; --ink-light:#A09A92; --ink-muted:#6A6560;
+  --accent:#C07060; --accent-light:#C0706020; --border:#3A3A3C; --nav-bg:#2C2C2E; --nav-text:#A09A92;
+  --study-bg:#121214; --study-card:#1C1C1E; --study-text:#E8E4DC; --study-muted:rgba(232,228,220,.35);
+  --tag-bg:rgba(232,228,220,.08); --tag-text:#A09A92; --button-bg:#E8E4DC; --button-text:#1C1C1E;
+  --divider:#3A3A3C; --hover:#363638; --input-bg:#2C2C2E;
+}
+[data-theme="ios"]{
+  --paper:#F2F2F7; --card:#FFFFFF; --ink:#000000; --ink-light:#3C3C43; --ink-muted:#8E8E93;
+  --accent:#007AFF; --accent-light:#007AFF18; --border:#E5E5EA; --nav-bg:#F9F9F9; --nav-text:#3C3C43;
+  --study-bg:#F2F2F7; --study-card:#FFFFFF; --study-text:#000000; --study-muted:rgba(0,0,0,.55);
+  --tag-bg:rgba(0,122,255,.08); --tag-text:#3C3C43; --button-bg:#007AFF; --button-text:#FFFFFF;
+  --divider:#E5E5EA; --hover:#E9E9EB; --input-bg:#FFFFFF;
+}
+[data-theme="ios-dark"]{
+  --paper:#000000; --card:#1C1C1E; --ink:#FFFFFF; --ink-light:#EBEBF5; --ink-muted:#98989D;
+  --accent:#0A84FF; --accent-light:#0A84FF26; --border:#38383A; --nav-bg:#1C1C1E; --nav-text:#EBEBF5;
+  --study-bg:#000000; --study-card:#1C1C1E; --study-text:#FFFFFF; --study-muted:rgba(255,255,255,.55);
+  --tag-bg:rgba(10,132,255,.12); --tag-text:#EBEBF5; --button-bg:#0A84FF; --button-text:#FFFFFF;
+  --divider:#38383A; --hover:#2C2C2E; --input-bg:#1C1C1E;
+}
+
+/* ------------------------------------------------------------------
+   对比度修正（data-contrast="after"）
+   目标：muted 文字在它实际出现的底色上达到 WCAG AA 4.5:1。
+   修正前的值就是上面主题里的原值，切到「修改前」可对比。
+------------------------------------------------------------------ */
+[data-contrast="after"][data-theme="xuanzhi"]{
+  --ink-muted:#757575;          /* 原 #8A8A8A → 卡片底 4.61:1（原 3.45） */
+  --study-muted:rgba(43,43,43,.65);   /* 原 .55 → 4.61:1（原 3.45） */
+}
+[data-contrast="after"][data-theme="shenyemo"]{
+  --ink-muted:#96928E;          /* 原 #6A6560 → 卡片底 4.51:1（原 2.95） */
+  --study-muted:rgba(232,228,220,.53); /* 原 .35 → 4.69:1（原 2.79） */
+}
+[data-contrast="after"][data-theme="ios"]{
+  --ink-muted:#747479;          /* 原 #8E8E93 → 卡片底 4.65:1（原 2.92） */
+}
+/* ios-dark 原值已达标（7.31:1），不动 */
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+html,body{height:100%}
+body{
+  background:#EDEBE6; color:#2B2B2B;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC",sans-serif;
+  padding:0 0 56px;
+}
+.board-toolbar{
+  position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; gap:14px; align-items:center;
+  padding:16px 28px; background:rgba(237,235,230,.88); backdrop-filter:blur(12px);
+  border-bottom:1px solid #DEDBD3;
+}
+.board-toolbar h1{font-size:15px;font-weight:600;letter-spacing:.01em}
+.board-toolbar .hint{font-size:12px;color:#6B675F;max-width:520px;line-height:1.5}
+.group{display:flex;align-items:center;gap:6px}
+.group>span{font-size:11px;color:#6B675F}
+button.tab{
+  font:inherit; font-size:12px; padding:5px 11px; border-radius:999px; cursor:pointer;
+  border:1px solid #D6D2C9; background:#fff; color:#3B3833;
+}
+button.tab[aria-pressed="true"]{background:#2B2B2B;border-color:#2B2B2B;color:#fff}
+
+.board{display:flex; flex-wrap:wrap; gap:32px; align-items:flex-start; padding:28px; justify-content:center}
+.board .row-label{
+  flex:0 0 100%; margin-top:8px; padding-bottom:7px; border-bottom:1px solid #DEDBD3;
+  font-size:13px; font-weight:700; letter-spacing:.04em; color:#3B3833;
+}
+.board .row-label span{font-weight:400;color:#7A756C;font-size:12px;margin-left:8px}
+.slot{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:14px}
+.caption{font-size:13px;font-weight:600;color:#3B3833}
+.caption small{display:block;font-weight:400;font-size:11px;color:#7A756C;margin-top:3px;text-align:center;max-width:390px;line-height:1.5}
+
+/* ---------------- 手机外壳 ---------------- */
+.phone{
+  position:relative; width:390px; height:844px; border-radius:46px; overflow:hidden;
+  background:var(--paper); border:1px solid var(--border);
+  box-shadow:0 22px 54px rgba(0,0,0,.16); transition:background .25s ease,border-color .25s ease;
+}
+.statusbar{
+  height:46px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 24px; font-size:13px; font-weight:600; color:var(--ink);
+}
+.statusbar .icons{display:flex;align-items:center;gap:5px;color:var(--ink)}
+.statusbar svg{display:block}
+.screen{position:absolute;inset:46px 0 0 0;display:flex;flex-direction:column;overflow:hidden}
+.scroll{flex:1;overflow-y:auto;padding:0 20px 22px}
+.scroll::-webkit-scrollbar{width:0}
+
+/* ---------------- 通用页头 ---------------- */
+.nav{display:flex;align-items:center;gap:10px;padding:2px 20px 14px}
+.nav .back{width:34px;height:34px;border-radius:17px;display:grid;place-items:center;color:var(--ink);flex:0 0 auto}
+.nav .title{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:.01em}
+.nav .right{margin-left:auto;font-size:12px;color:var(--ink-muted)}
+.serif{font-family:"Songti SC","STSong",serif}
+
+/* ---------------- 场景选择 ---------------- */
+.quota{
+  margin:0 20px 16px;padding:11px 14px;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+}
+.quota .line{display:flex;align-items:baseline;gap:6px}
+.quota .bar{margin-top:8px;height:5px;border-radius:3px;background:var(--tag-bg);overflow:hidden}
+.quota .bar i{display:block;height:100%;width:96%;background:var(--accent);border-radius:3px}
+.quota .txt{font-size:11px;color:var(--ink-muted);white-space:nowrap}
+.quota .num{font-size:13px;font-weight:700;color:var(--ink)}
+
+.section-label{
+  display:flex;align-items:center;gap:8px;margin:16px 2px 8px;
+  font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--ink-muted);text-transform:uppercase;
+}
+.section-label::after{content:"";flex:1;height:1px;background:var(--divider)}
+.section-label .zh{letter-spacing:.02em;font-size:12px;text-transform:none;color:var(--ink-light)}
+
+.card{
+  display:flex;gap:13px;padding:14px;border-radius:16px;margin-bottom:10px;
+  background:var(--card);border:1px solid var(--border);
+}
+.card .ic{
+  flex:0 0 44px;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;
+  background:var(--tag-bg);color:var(--ink);border:1px solid var(--border);
+}
+.card .body{flex:1;min-width:0}
+.card h3{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:.01em}
+.card p{margin-top:3px;font-size:12px;line-height:1.5;color:var(--ink-muted)}
+.card .meta{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.chip{
+  font-size:10.5px;padding:3px 8px;border-radius:999px;background:var(--tag-bg);color:var(--tag-text);
+}
+.chip.accent{background:var(--accent-light);color:var(--accent);font-weight:600}
+.card.add{justify-content:center;align-items:center;gap:8px;border-style:dashed;color:var(--accent)}
+.card.add .ic{background:var(--accent-light);border-color:transparent;color:var(--accent)}
+.card.add strong{font-size:13px;font-weight:600}
+
+.recent{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:var(--card);border:1px solid var(--border);margin-bottom:8px}
+.recent .dot{width:7px;height:7px;border-radius:4px;background:var(--accent);flex:0 0 auto}
+.recent .t{flex:1;font-size:13px;color:var(--ink)}
+.recent .s{font-size:11px;color:var(--ink-muted)}
+
+/* ---------------- 紧凑列表行（场景选择 / 面试入口） ---------------- */
+.list{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;margin-bottom:2px;
+}
+.row{position:relative;display:flex;align-items:center;gap:11px;padding:10px 13px}
+.row + .row::before{
+  content:"";position:absolute;left:13px;right:0;top:0;height:1px;background:var(--divider);
+}
+.row .ic{
+  flex:0 0 32px;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+  background:var(--tag-bg);color:var(--ink);
+}
+.row .body{flex:1;min-width:0}
+.row .t{display:flex;align-items:center;gap:7px}
+.row h3{
+  font-size:14px;font-weight:600;color:var(--ink);letter-spacing:.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.row .meta{margin-left:auto;font-size:10.5px;color:var(--ink-muted);white-space:nowrap;flex:0 0 auto}
+.row p{
+  font-size:11.5px;line-height:1.35;color:var(--ink-muted);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.badge{
+  flex:0 0 auto;font-size:9.5px;padding:2px 6px;border-radius:5px;font-weight:600;
+  background:var(--accent-light);color:var(--accent);
+}
+.row.add{justify-content:center;gap:8px;color:var(--accent);border-style:dashed}
+.row.add .ic{background:var(--accent-light);color:var(--accent)}
+.row.add strong{font-size:13px;font-weight:600}
+.row.plain{padding:9px 13px}
+.row.plain .ic{background:transparent;width:20px;flex:0 0 20px}
+
+/* ---------------- 会话页 ---------------- */
+.session{display:flex;flex-direction:column;height:100%;background:var(--study-bg)}
+.session .top{display:flex;align-items:center;gap:9px;padding:6px 20px 12px;color:var(--study-text)}
+.session .top .name{font-size:14px;font-weight:600}
+.session .top .counts{margin-left:auto;display:flex;gap:6px}
+.session .top .pill{
+  font-size:10.5px;padding:3px 8px;border-radius:999px;
+  background:var(--tag-bg);color:var(--study-muted);white-space:nowrap;
+}
+.session .top .end{
+  font-size:11px;color:var(--ink-muted);padding:4px 10px;border-radius:999px;border:1px solid var(--border);
+}
+
+.stage{
+  position:relative;flex:1;min-height:0;margin:0 16px;border-radius:22px;
+  background:var(--study-card);border:1px solid var(--border);overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.stage .who{position:absolute;top:13px;left:16px;font-size:11.5px;color:var(--study-muted)}
+.stage .accent-line{position:absolute;top:13px;right:16px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--study-muted)}
+.stage .accent-line .live{width:6px;height:6px;border-radius:3px;background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+.avatar-wrap{flex:1;display:grid;place-items:center;padding-top:14px}
+.avatar{width:196px;height:196px;color:var(--study-text);overflow:visible;transform-box:fill-box;transform-origin:center}
+.avatar .eye{fill:currentColor;stroke:none}
+.avatar .head,.avatar .body-shape,.avatar .mouth-open{transform-box:fill-box;transform-origin:center}
+.avatar .mouth-open{fill:currentColor;stroke:none;opacity:0}
+.avatar .waves,.avatar .dots{opacity:0;transition:opacity .2s ease}
+.avatar .head,.avatar .body-shape{animation:breathe 4.4s ease-in-out infinite}
+
+@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-3.5px)}}
+@keyframes nod{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(2.5px) rotate(-1.4deg)}}
+@keyframes talk{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1.2)}}
+
+.state-listening .avatar .head,.state-listening .avatar .body-shape{animation:nod 2.6s ease-in-out infinite}
+.state-speaking .avatar .mouth-arc{opacity:0}
+.state-speaking .avatar .mouth-open{opacity:1;animation:talk .3s ease-in-out infinite}
+.state-speaking .avatar .waves{opacity:1}
+.state-speaking .avatar .waves path{animation:wave 1.15s ease-in-out infinite}
+.state-speaking .avatar .waves path:nth-child(2){animation-delay:.16s}
+@keyframes wave{0%,100%{opacity:.25}35%{opacity:1}}
+.state-thinking .avatar .dots{opacity:1}
+.state-thinking .avatar .dots circle{animation:blink 1.5s ease-in-out infinite}
+.state-thinking .avatar .dots circle:nth-child(2){animation-delay:.2s}
+.state-thinking .avatar .dots circle:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+
+.subtitle{
+  margin:12px 16px 0;padding:13px 15px;border-radius:16px;
+  background:var(--study-card);border:1px solid var(--border);
+}
+.subtitle .en{font-size:15px;line-height:1.55;color:var(--study-text);letter-spacing:.005em}
+.subtitle .row{display:flex;align-items:center;gap:8px;margin-top:9px}
+.subtitle .zh{font-size:11.5px;color:var(--study-muted);flex:1}
+.ghost{
+  font:inherit;font-size:11px;padding:4px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--ink-light);
+  display:inline-flex;align-items:center;gap:4px;
+}
+.ghost.accent{color:var(--accent);border-color:var(--accent-light);background:var(--accent-light);font-weight:600}
+
+.feedback{
+  margin:10px 16px 0;padding:13px 15px;border-radius:16px;
+  background:var(--study-card);border:1px solid var(--border);border-left:3px solid var(--accent);
+}
+.feedback .fb-head{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--accent)}
+.feedback .fix{margin-top:10px;font-size:12.5px;line-height:1.6;color:var(--ink)}
+.feedback .fix .from{color:var(--ink-muted);text-decoration:line-through}
+.feedback .fix .to{color:var(--ink);font-weight:600}
+.feedback .note{margin-top:5px;font-size:11.5px;line-height:1.55;color:var(--ink-light)}
+.feedback .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+
+.userline{margin:12px 16px 0;display:flex;align-items:center;gap:11px}
+.userline .ring{
+  position:relative;width:38px;height:38px;border-radius:19px;flex:0 0 auto;
+  background:var(--accent-light);display:grid;place-items:center;color:var(--accent);
+}
+.userline .ring::after{
+  content:"";position:absolute;inset:-4px;border-radius:24px;border:1.5px solid var(--accent);
+  opacity:.55;animation:ripple 1.8s ease-out infinite;
+}
+@keyframes ripple{0%{transform:scale(.86);opacity:.6}100%{transform:scale(1.18);opacity:0}}
+.userline .heard{flex:1;min-width:0}
+.userline .heard .live-text{font-size:13.5px;line-height:1.5;color:var(--ink)}
+.userline .heard .live-text .dim{color:var(--ink-muted)}
+.userline .heard .tag{font-size:10.5px;color:var(--ink-muted);margin-top:3px}
+
+.controls{margin-top:auto;padding:16px 20px 26px;background:var(--study-bg);border-top:1px solid var(--divider)}
+.controls .modes{display:flex;justify-content:center;gap:6px;margin-bottom:14px}
+.controls .modes button{
+  font:inherit;font-size:11.5px;padding:5px 13px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--ink-muted);
+}
+.controls .modes button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper);font-weight:600}
+.controls .row{display:flex;align-items:center;justify-content:center;gap:22px}
+.controls .icon-btn{
+  width:44px;height:44px;border-radius:22px;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--border);background:var(--card);color:var(--ink);
+}
+.controls .mic{
+  position:relative;width:68px;height:68px;border-radius:34px;display:grid;place-items:center;cursor:pointer;
+  background:var(--ink);color:var(--paper);border:none;box-shadow:0 8px 20px rgba(0,0,0,.14);
+}
+/* 只有「正在听」时才是红色——红 = 正在进行，不兼任主按钮 */
+.controls .mic::after{
+  content:"";position:absolute;inset:-4px;border-radius:38px;
+  border:2px solid var(--accent);opacity:0;transition:opacity .18s ease;
+}
+.state-listening .controls .mic::after{opacity:1;animation:micRing 1.9s ease-out infinite}
+@keyframes micRing{0%{transform:scale(.94);opacity:.9}100%{transform:scale(1.2);opacity:0}}
+.controls .label{text-align:center;font-size:11px;color:var(--ink-muted);margin-top:11px}
+
+/* ---------------- 场景编辑器 ---------------- */
+.field{margin-bottom:15px}
+.field>label{display:block;font-size:11.5px;font-weight:600;color:var(--ink-light);margin-bottom:6px}
+.input,.textarea{
+  width:100%;font:inherit;font-size:13.5px;color:var(--ink);background:var(--input-bg);
+  border:1px solid var(--border);border-radius:12px;padding:11px 13px;
+}
+.textarea{min-height:74px;resize:none;line-height:1.5}
+.input.placeholder,.textarea.placeholder{color:var(--ink-muted)}
+.segmented{display:flex;gap:6px;flex-wrap:wrap}
+.segmented button{
+  font:inherit;font-size:12px;padding:7px 12px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--border);background:var(--input-bg);color:var(--ink-light);
+}
+.segmented button[aria-pressed="true"]{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:600}
+.gen-box{padding:15px;border-radius:16px;background:var(--accent-light);margin-bottom:6px}
+.gen-box h3{font-size:13px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px}
+.gen-box p{font-size:11.5px;color:var(--ink-light);margin-top:5px;line-height:1.55}
+.gen-box .textarea{margin-top:10px;background:var(--card);border-color:transparent}
+.btn{
+  width:100%;font:inherit;font-size:14px;font-weight:600;padding:14px;border-radius:14px;cursor:pointer;
+  border:none;background:var(--button-bg);color:var(--button-text);
+}
+.btn.accent{background:var(--accent);color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
+.counter{font-size:10.5px;color:var(--ink-muted);text-align:right;margin-top:5px}
+.focus-add{display:flex;gap:8px;align-items:center;margin-top:8px}
+.focus-add .input{flex:1}
+.stepper{display:flex;align-items:center;gap:14px}
+.stepper button{width:34px;height:34px;border-radius:11px;border:1px solid var(--border);background:var(--input-bg);color:var(--ink);font-size:17px;cursor:pointer}
+.stepper .val{font-size:15px;font-weight:700;color:var(--ink);min-width:64px;text-align:center}
+
+/* ---------------- 材料确认页（面试 v1.5） ---------------- */
+.src-line{display:flex;align-items:center;gap:7px;margin-bottom:10px;font-size:11.5px;color:var(--ink-muted)}
+.src-line .dot{width:6px;height:6px;border-radius:3px;background:var(--accent);flex:0 0 auto}
+.material{min-height:290px;font-size:12.5px;line-height:1.7;white-space:pre-wrap}
+.sensitive{margin-top:10px;padding:11px 13px;border-radius:13px;background:var(--accent-light);border-left:3px solid var(--accent)}
+.sensitive .head{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--accent)}
+.sensitive .hits{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sensitive .hit{font-size:11px;padding:3px 8px;border-radius:7px;background:var(--card);color:var(--ink);border:1px solid var(--border);font-family:ui-monospace,Menlo,monospace}
+.sensitive .acts{display:flex;align-items:center;gap:8px;margin-top:10px}
+.sensitive .acts .note{font-size:10.5px;color:var(--ink-muted);flex:1;line-height:1.45}
+.risk{margin-top:10px;padding:10px 12px;border-radius:11px;background:var(--input-bg);border:1px solid var(--border);font-size:11px;line-height:1.55;color:var(--ink-light)}
+.risk b{color:var(--ink)}
+.field-count{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-muted);margin-top:6px}
+
+/* 空态盒子 */
+.empty{
+  padding:24px 16px;border-radius:14px;border:1px dashed var(--border);
+  background:var(--card);text-align:center;
+}
+.empty p{font-size:12.5px;color:var(--ink-light)}
+.empty .sub{font-size:11.5px;color:var(--ink-muted);margin-top:4px}
+
+/* ---------------- 底部弹层 ---------------- */
+.sheet-scrim{position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:5}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--card);
+  border-radius:22px 22px 0 0;padding:10px 0 22px;box-shadow:0 -8px 30px rgba(0,0,0,.18);
+}
+.sheet .handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 12px}
+.sheet h3{font-size:14px;font-weight:700;color:var(--ink);padding:0 20px 10px}
+.sheet-row{display:flex;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--divider)}
+.sheet-row .ic{
+  flex:0 0 34px;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
+  background:var(--tag-bg);color:var(--ink);
+}
+.sheet-row .body{flex:1;min-width:0}
+.sheet-row b{display:block;font-size:14px;font-weight:600;color:var(--ink)}
+.sheet-row i{display:block;font-style:normal;font-size:11px;color:var(--ink-muted);margin-top:2px}
+.sheet-cancel{
+  margin:12px 16px 0;padding:12px;border-radius:12px;background:var(--input-bg);
+  text-align:center;font-size:14px;font-weight:600;color:var(--ink-light);
+}
+
+/* ---------------- 扫描中 ---------------- */
+.scan-box{
+  position:relative;width:150px;height:184px;border-radius:20px;background:var(--card);
+  border:1px solid var(--border);display:grid;place-items:center;overflow:hidden;
+}
+.scan-line{
+  position:absolute;left:8%;right:8%;height:2px;border-radius:2px;background:var(--accent);
+  box-shadow:0 0 12px 2px var(--accent-light);animation:scan 2.1s ease-in-out infinite;
+}
+@keyframes scan{0%,100%{top:12%}50%{top:86%}}
+
+/* ---------------- 评分 ---------------- */
+.rate-row{padding:10px 0}
+.rate-row + .rate-row{border-top:1px solid var(--divider)}
+.rate-head{display:flex;align-items:center;gap:10px}
+.rate-head b{font-size:13px;font-weight:600;color:var(--ink)}
+.rate-head .dots{margin-left:auto;display:flex;gap:4px}
+.rate-head .dots i{width:7px;height:7px;border-radius:4px;background:var(--tag-bg)}
+.rate-head .dots i.on{background:var(--accent)}
+.rate-row p{font-size:11.5px;line-height:1.5;color:var(--ink-muted);margin-top:5px}
+
+/* ---------------- 键盘 ---------------- */
+.kbd{background:var(--input-bg);border-top:1px solid var(--divider);padding:8px 4px 14px}
+.krow{display:flex;justify-content:center;gap:5px;margin-bottom:7px}
+.krow b{
+  flex:0 0 30px;height:38px;border-radius:7px;background:var(--card);border:1px solid var(--border);
+  display:grid;place-items:center;font-size:13px;font-weight:500;color:var(--ink);
+}
+.krow b.wide{flex:0 0 44px;font-size:11px;color:var(--ink-muted)}
+.krow b.space{flex:1}
+.typed{margin-top:auto;padding:12px 16px 10px;background:var(--study-bg);border-top:1px solid var(--divider)}
+.typed-input{
+  display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:14px;
+  background:var(--study-card);border:1px solid var(--border);
+}
+.typed-input p{flex:1;font-size:13.5px;color:var(--study-text)}
+.typed-send{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap}
+.typed-hint{font-size:10.5px;color:var(--study-muted);margin-top:7px}
+
+/* ---------------- 沉浸说明 / 出错 ---------------- */
+.imm-hint{
+  margin:12px 16px 0;padding:10px 13px;border-radius:12px;background:var(--tag-bg);
+  font-size:11.5px;line-height:1.55;color:var(--ink-muted);
+}
+.imm-hint b{color:var(--ink-light)}
+.error-banner{
+  margin:12px 16px 0;padding:13px 15px;border-radius:14px;
+  background:var(--accent-light);border-left:3px solid var(--accent);
+}
+.error-banner b{font-size:12.5px;color:var(--ink)}
+.error-banner p{font-size:11.5px;line-height:1.6;color:var(--ink-light);margin-top:5px}
+
+/* ---------------- 设置页小控件 ---------------- */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.seg-mini{display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.seg-mini i{font-style:normal;font-size:10px;padding:3px 7px;color:var(--ink-muted);background:var(--input-bg)}
+.seg-mini i.on{background:var(--accent-light);color:var(--accent);font-weight:600}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--tag-bg);position:relative;display:inline-block}
+.sw::after{
+  content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:8px;
+  background:var(--card);border:1px solid var(--border);
+}
+.sw.on{background:var(--accent)}
+.sw.on::after{left:16px;background:#fff;border-color:transparent}
+
+/* ---------------- Tab 根页页头 ---------------- */
+.tabhead{display:flex;align-items:center;gap:10px;padding:2px 20px 14px}
+.tabhead h1{font-size:24px;font-weight:700;color:var(--ink);letter-spacing:.01em}
+.tabhead .q{
+  margin-left:auto;display:flex;align-items:baseline;gap:3px;font-size:10.5px;color:var(--ink-muted);
+  padding:5px 10px;border-radius:999px;background:var(--tag-bg);
+}
+.tabhead .q b{font-size:13px;color:var(--ink)}
+
+/* ---------------- App 首页（入口） ---------------- */
+.home-header{padding:2px 4px 18px}
+.home-header h1{font-size:25px;font-weight:700;color:var(--ink);letter-spacing:.01em}
+.home-header p{font-size:12.5px;color:var(--ink-light);margin-top:7px}
+.home-progress{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding:20px;border-radius:24px;background:var(--button-bg);margin-bottom:14px;
+}
+.home-progress .lbl{font-size:12px;color:var(--button-text);opacity:.72}
+.home-progress .val{display:block;font-size:26px;font-weight:700;color:var(--button-text);margin-top:5px}
+.home-progress .right{text-align:right}
+.home-progress .num{display:block;font-size:18px;font-weight:600;color:var(--button-text);margin-top:5px}
+.home-cta{position:relative;padding:20px;border-radius:24px;background:var(--button-bg);margin-bottom:14px;overflow:hidden}
+.home-cta .gw{
+  position:absolute;top:12px;right:15px;font-size:20px;color:var(--button-text);
+  opacity:.18;transform:rotate(-8deg);
+}
+.home-cta h2{font-size:17px;font-weight:700;color:var(--button-text)}
+.home-cta p{font-size:12.5px;color:var(--button-text);opacity:.72;margin-top:7px}
+.home-cta .go{display:block;font-size:12.5px;font-weight:500;color:var(--button-text);opacity:.85;margin-top:16px}
+.entry{
+  display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;
+  background:var(--card);border:1px solid var(--border);margin-bottom:14px;
+}
+.entry .ic{
+  flex:0 0 38px;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+  background:var(--accent-light);color:var(--accent);
+}
+.entry .body{flex:1;min-width:0}
+.entry h3{font-size:15px;font-weight:600;color:var(--ink)}
+.entry p{font-size:11.5px;color:var(--ink-muted);margin-top:3px}
+.entry .meta{margin-left:auto;font-size:10.5px;color:var(--ink-muted);text-align:right;line-height:1.5}
+.entry .meta b{display:block;font-size:13px;color:var(--ink)}
+.home-grid{display:flex;flex-wrap:wrap;gap:10px}
+.home-grid .sc{width:calc(50% - 5px);border-radius:16px;padding:15px;background:var(--card);border:1px solid var(--border)}
+.home-grid .v{font-size:22px;font-weight:700;color:var(--ink)}
+.home-grid .l{font-size:11.5px;color:var(--ink-light);margin-top:4px}
+.tabbar{
+  position:absolute;left:22px;right:22px;bottom:16px;height:56px;border-radius:999px;
+  background:var(--nav-bg);border:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-around;box-shadow:0 6px 20px rgba(0,0,0,.10);z-index:4;
+}
+.tabbar .tb{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;color:var(--nav-text)}
+.tabbar .tb.on{color:var(--ink);font-weight:600}
+
+/* ---------------- 总结页 ---------------- */
+.hero{padding:18px;border-radius:18px;background:var(--card);border:1px solid var(--border);text-align:center}
+.hero .scene{font-size:11px;letter-spacing:.12em;color:var(--ink-muted);text-transform:uppercase}
+.hero h2{font-size:19px;font-weight:700;color:var(--ink);margin-top:7px}
+.stats{display:flex;margin-top:16px;border-top:1px solid var(--divider);padding-top:14px}
+.stats div{flex:1;text-align:center;border-right:1px solid var(--divider)}
+.stats div:last-child{border-right:none}
+.stats .n{font-size:19px;font-weight:700;color:var(--ink)}
+.stats .l{font-size:10.5px;color:var(--ink-muted);margin-top:3px}
+.panel{margin-top:12px;padding:15px;border-radius:16px;background:var(--card);border:1px solid var(--border)}
+.panel h3{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-muted);text-transform:uppercase;margin-bottom:10px}
+.panel p{font-size:13px;line-height:1.65;color:var(--ink)}
+.panel p+p{margin-top:7px}
+.panel .en{color:var(--ink-muted);font-size:12.5px}
+.list{display:flex;flex-direction:column;gap:9px}
+.list .item{display:flex;gap:9px;font-size:13px;line-height:1.55;color:var(--ink)}
+.list .item .mk{flex:0 0 16px;color:var(--accent);font-weight:700}
+.phrase{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:var(--input-bg);border:1px solid var(--border)}
+.phrase+.phrase{margin-top:8px}
+.phrase .txt{flex:1;min-width:0}
+.phrase .en{font-size:13px;color:var(--ink);font-weight:500}
+.phrase .zh{font-size:11.5px;color:var(--ink-muted);margin-top:2px}
+.actions{margin-top:16px;display:flex;flex-direction:column;gap:9px}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important;transition:none!important}
+  .state-speaking .avatar .mouth-open{opacity:1;transform:scaleY(.8)}
+  .state-speaking .avatar .waves,.state-thinking .avatar .dots{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="board-toolbar">
+  <h1>墨言 · AI 陪练</h1>
+  <div class="group">
+    <span>主题</span>
+    <button class="tab" data-theme-btn="xuanzhi" aria-pressed="true">宣纸白</button>
+    <button class="tab" data-theme-btn="shenyemo" aria-pressed="false">神野墨</button>
+    <button class="tab" data-theme-btn="ios" aria-pressed="false">iOS</button>
+    <button class="tab" data-theme-btn="ios-dark" aria-pressed="false">iOS Dark</button>
+  </div>
+  <div class="group">
+    <span>会话状态</span>
+    <button class="tab" data-state-btn="listening" aria-pressed="true">倾听</button>
+    <button class="tab" data-state-btn="thinking" aria-pressed="false">思考</button>
+    <button class="tab" data-state-btn="speaking" aria-pressed="false">说话</button>
+  </div>
+  <div class="group">
+    <span>对比度修正</span>
+    <button class="tab" data-contrast-btn="after" aria-pressed="true">修改后</button>
+    <button class="tab" data-contrast-btn="before" aria-pressed="false">修改前</button>
+  </div>
+  <p class="hint">色值全部取自 <code>moyan-app/src/lib/theme.ts</code>；手机 390×844，竖屏。<strong>红色只表示「正在进行」</strong>——麦克风改成墨色主按钮，红色只留在听取环、直播点和进度上。</p>
+</div>
+
+<main class="board">
+
+  <p class="row-label">首页入口与基础陪练<br><span>首页 → 场景选择 → 会话 → 总结</span></p>
+
+  <!-- ================= 0. App 首页 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="scroll" style="padding-top:2px;padding-bottom:86px">
+          <div class="home-header">
+            <h1 class="serif">你好，Alice。</h1>
+            <p>2026年9月27日 · 周日 · 还有 12 个词汇待浸润</p>
+          </div>
+
+          <div class="home-progress">
+            <div><span class="lbl">总词汇量</span><span class="val serif">68%</span></div>
+            <div class="right"><span class="lbl">今日浸润</span><span class="num">32 词</span></div>
+          </div>
+
+          <div class="home-cta">
+            <span class="gw serif">idempotent</span>
+            <h2 class="serif">每日必修</h2>
+            <p>还有 12 个词汇待浸润</p>
+            <span class="go">选择词库</span>
+          </div>
+
+          <div class="home-grid">
+            <div class="sc"><div class="v">12</div><div class="l">待复习</div></div>
+            <div class="sc"><div class="v">8</div><div class="l">新词</div></div>
+            <div class="sc"><div class="v">640</div><div class="l">总词汇</div></div>
+            <div class="sc"><div class="v">32</div><div class="l">今日浸润</div></div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tb on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg><span>首页</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><circle cx="9.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M11 14.4c.6.5 1.4.5 2 0"/></svg><span>陪练</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg><span>播客</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="13" width="3.5" height="6" rx="1.5"/><rect x="10.25" y="8" width="3.5" height="11" rx="1.5"/><rect x="15.5" y="11" width="3.5" height="8" rx="1.5"/></svg><span>统计</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.3 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V1a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 17 2.3"/></svg><span>设置</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">1 · App 首页<small>词库移出 Tab 后回到 5 项，每项约 68px；「选择词库」改为跳全屏词库页（原弹层已删）</small></p>
+  </section>
+
+  <!-- ================= 1. 场景选择 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="tabhead">
+          <h1 class="serif">AI 陪练</h1>
+          <span class="q">今日 <b>96</b> / 100</span>
+        </div>
+        <div class="scroll" style="padding-bottom:86px">
+          <div class="section-label"><span class="zh">日常与协作</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><circle cx="9.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M11 14.4c.6.5 1.4.5 2 0"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>远程茶水间</h3><span class="meta">en-GB · 8 轮</span></div>
+                <p>寒暄、接话，别让话题掉地上</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 3.3-6 6.5-6s5.9 2 6.5 6"/><circle cx="10.8" cy="7.6" r=".7" fill="currentColor" stroke="none"/><circle cx="13.2" cy="7.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>向资深同事求助</h3><span class="meta">en-IN · 10 轮</span></div>
+                <p>说清卡点，带着已尝试方案求助</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M8 20v2M16 20v2"/><circle cx="10" cy="11" r=".8" fill="currentColor" stroke="none"/><circle cx="14" cy="11" r=".8" fill="currentColor" stroke="none"/><path d="M10.4 13.8c.9.7 2.3.7 3.2 0"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>和主管 1:1</h3><span class="meta">en-AU · 10 轮</span></div>
+                <p>反馈、工作量、成长诉求</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">工程沟通</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10H8.5L4 19z"/><path d="M8 9.5h8M8 12h5"/><circle cx="16.5" cy="12" r=".8" fill="currentColor" stroke="none"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>每日站会 · 进度同步</h3><span class="badge">推荐</span><span class="meta">en-US · 10 轮</span></div>
+                <p>进度 / 阻塞 / 下一步，短而清楚</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5h10v15H7z"/><path d="M9.5 8h5M9.5 11h5M9.5 14h3"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>Code Review 讨论</h3><span class="meta">en-IN · 12 轮</span></div>
+                <p>接受或坚持意见、解释技术理由</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>技术方案讨论</h3><span class="meta">en-GB · 12 轮</span></div>
+                <p>讲清 trade-off、被质疑时回应</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">高压场景</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 17v.01"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>线上故障同步</h3><span class="meta">en-US · 12 轮</span></div>
+                <p>影响面、当前进展、ETA</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M5 8h14"/><path d="M5 8 2.5 14h5zM19 8l-2.5 6h5z"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>需求与排期</h3><span class="meta">en-US · 12 轮</span></div>
+                <p>拒绝不合理 deadline，谈范围</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">我的场景</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><circle cx="9.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M11 14.4c.6.5 1.4.5 2 0"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>跨时区需求交接</h3><span class="meta">en-AU · 8 轮</span></div>
+                <p>和澳洲同事交接未完成任务</p>
+              </div>
+            </div>
+            <div class="row add">
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></span>
+              <strong>新建场景</strong>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">最近练习</span></div>
+          <div class="list">
+            <div class="row plain">
+              <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/></svg></span>
+              <div class="body"><div class="t"><h3>每日站会 · 进度同步</h3><span class="meta">8 轮 · 6 处纠错</span></div></div>
+            </div>
+            <div class="row plain">
+              <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/></svg></span>
+              <div class="body"><div class="t"><h3>Code Review 讨论</h3><span class="meta">10 轮 · 9 处纠错</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg><span>首页</span></div>
+          <div class="tb on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><circle cx="9.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M11 14.4c.6.5 1.4.5 2 0"/></svg><span>陪练</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg><span>播客</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="13" width="3.5" height="6" rx="1.5"/><rect x="10.25" y="8" width="3.5" height="11" rx="1.5"/><rect x="15.5" y="11" width="3.5" height="8" rx="1.5"/></svg><span>统计</span></div>
+          <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.3 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V1a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 17 2.3"/></svg><span>设置</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">2 · 场景选择（Tab 根页）<small>去掉返回按钮，页头改用 Tab 根页写法；今日次数收进页头省一张卡的高度</small></p>
+  </section>
+
+  <!-- ================= 2. 会话页 ================= -->
+  <section class="slot">
+    <div class="phone" id="sessionPhone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="session">
+          <div class="top">
+            <span class="name serif">每日站会 · 进度同步</span>
+            <span class="counts"><span class="pill">本场 3 / 10</span><span class="pill">今日 96</span></span>
+            <span class="end">结束</span>
+          </div>
+
+          <div class="stage">
+            <span class="who">Alex · Tech Lead · en-US</span>
+            <span class="accent-line"><i class="live"></i><span class="state-label">正在说</span></span>
+            <div class="avatar-wrap">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="AI 同事 Alex">
+                <!-- 肩 -->
+                <path class="body-shape" d="M36 194c7-27 30-44 64-44s57 17 64 44"/>
+                <!-- 领口 -->
+                <path class="body-shape" d="M84 152l16 17 16-17"/>
+                <!-- 脖子 -->
+                <path class="head" d="M86 143v9M114 143v9"/>
+                <!-- 脸 -->
+                <path class="head" d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <!-- 头发 -->
+                <path class="head" d="M63 88c-2-27 14-48 37-48s39 21 37 48c-5-13-17-19-37-19s-32 6-37 19z"/>
+                <!-- 眼（圆点，沿用 TabIcons 的小脸母题） -->
+                <circle class="eye head" cx="87" cy="94" r="1.9"/>
+                <circle class="eye head" cx="113" cy="94" r="1.9"/>
+                <!-- 嘴：弧线（非说话态） -->
+                <path class="mouth-arc head" d="M92 114c4 4.5 12 4.5 16 0"/>
+                <!-- 嘴：张开（说话态） -->
+                <ellipse class="mouth-open" cx="100" cy="115" rx="8" ry="5"/>
+                <!-- 声波 -->
+                <g class="waves" stroke="currentColor" stroke-width="1.8">
+                  <path d="M148 98c5.5 7 5.5 15 0 22"/>
+                  <path d="M159 90c8.5 10.5 8.5 27 0 38"/>
+                </g>
+                <!-- 思考 -->
+                <g class="dots" fill="currentColor" stroke="none">
+                  <circle cx="146" cy="72" r="2.2"/><circle cx="158" cy="63" r="2.8"/><circle cx="172" cy="52" r="3.4"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <div class="subtitle">
+            <p class="en">Nice! So the API's done — any blockers on the UI side?</p>
+            <div class="row">
+              <span class="zh">太好了，API 完成了。UI 那边有阻塞吗？</span>
+              <button class="ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>重听</button>
+            </div>
+          </div>
+
+          <div class="feedback">
+            <div class="fb-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v6c0 5 3.4 8 8 8s8-3 8-8V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg>
+              更自然的说法
+            </div>
+            <div class="fix">
+              <span class="from">We finish the API yesterday and today do the UI.</span><br>
+              <span class="to">We finished the API yesterday, and today I'm on the UI.</span>
+            </div>
+            <p class="note">过去完成的动作用过去式 finished；说今天正在做的事用现在进行时更自然。</p>
+            <div class="chips">
+              <span class="chip">finish → finished</span>
+              <span class="chip">I'm on the UI</span>
+            </div>
+          </div>
+
+          <div class="userline">
+            <span class="ring">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>
+            </span>
+            <div class="heard">
+              <p class="live-text">I'm working on the login page, but I<span class="dim">—</span></p>
+              <p class="tag">正在聆听 · 说完点一下麦克风，或停顿后自动提交</p>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="modes">
+              <button aria-pressed="true">逐轮纠错</button>
+              <button aria-pressed="false">沉浸模式</button>
+            </div>
+            <div class="row">
+              <button class="icon-btn" title="键盘输入">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M6 13.5h12"/></svg>
+              </button>
+              <button class="mic" title="麦克风">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>
+              </button>
+              <button class="icon-btn" title="停止朗读">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+              </button>
+            </div>
+            <p class="label">说话中可直接打断</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">3 · 会话中<small>水墨线条头像与 Tab 图标同一套笔触；倾听点头 / 思考停顿 / 说话口型 + 声波</small></p>
+  </section>
+
+  <!-- ================= 3. 场景编辑器 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">新建场景</span>
+          <span class="right">保存</span>
+        </div>
+        <div class="scroll">
+          <div class="gen-box">
+            <h3>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>
+              用一句话生成场景
+            </h3>
+            <p>描述你想练的情形，AI 会补全角色、开场白和练习重点。</p>
+            <textarea class="textarea placeholder">例如：练一下线上故障时给美国同事同步进展</textarea>
+            <button class="btn accent" style="margin-top:10px;padding:11px">生成草稿</button>
+          </div>
+
+          <div class="section-label"><span class="zh">或手动填写</span></div>
+
+          <div class="field">
+            <label>场景名</label>
+            <input class="input" value="跨时区需求交接">
+            <p class="counter">11 / 60</p>
+          </div>
+          <div class="field">
+            <label>一句话描述</label>
+            <input class="input" value="和澳洲同事交接未完成任务">
+            <p class="counter">13 / 200</p>
+          </div>
+          <div class="field">
+            <label>AI 同事姓名 / 职位</label>
+            <div style="display:flex;gap:8px">
+              <input class="input" value="Emma" style="flex:0 0 38%">
+              <input class="input" value="Teammate" style="flex:1">
+            </div>
+          </div>
+          <div class="field">
+            <label>口音</label>
+            <div class="segmented">
+              <button aria-pressed="false">en-US</button>
+              <button aria-pressed="false">en-GB</button>
+              <button aria-pressed="false">en-IN</button>
+              <button aria-pressed="true">en-AU</button>
+              <button aria-pressed="false">zh-CN</button>
+            </div>
+            <p class="counter" style="text-align:left">zh-CN = 中文母语者说英文（用中文音色读英文）</p>
+          </div>
+          <div class="field">
+            <label>语气</label>
+            <div class="segmented">
+              <button aria-pressed="true">友好</button>
+              <button aria-pressed="false">中性</button>
+              <button aria-pressed="false">直接</button>
+              <button aria-pressed="false">有挑战性</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>场景类型</label>
+            <div class="segmented">
+              <button aria-pressed="true">会议</button>
+              <button aria-pressed="false">1:1</button>
+              <button aria-pressed="false">茶水间</button>
+              <button aria-pressed="false">电话</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>开场白（英文）</label>
+            <textarea class="textarea">Hey, got a minute to hand over the rest of the task?</textarea>
+          </div>
+          <div class="field">
+            <label>练习重点（最多 5 个）</label>
+            <div class="chips" style="margin-bottom:8px">
+              <span class="chip">说清当前状态</span>
+              <span class="chip">留下后续问题</span>
+            </div>
+            <div class="focus-add">
+              <input class="input placeholder" placeholder="再加一个重点…">
+              <button class="ghost accent">添加</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>难度</label>
+            <div class="segmented">
+              <button aria-pressed="false">简单</button>
+              <button aria-pressed="true">常规</button>
+              <button aria-pressed="false">挑战</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>每场轮数</label>
+            <div class="stepper">
+              <button>−</button><span class="val">8 轮</span><button>＋</button>
+            </div>
+          </div>
+          <button class="btn">保存到我的场景</button>
+          <p class="counter" style="text-align:center;margin-top:10px">保存后只存在这台设备上</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">4 · 场景编辑器<small>口音多了 zh-CN——中文母语者说英文，靠中文音色朗读英文实现，不额外调模型</small></p>
+  </section>
+
+  <!-- ================= 4. 总结页 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">本次练习</span>
+        </div>
+        <div class="scroll">
+          <div class="hero">
+            <p class="scene">Engineering · Daily Standup</p>
+            <h2 class="serif">每日站会 · 进度同步</h2>
+            <div class="stats">
+              <div><p class="n">8</p><p class="l">轮数</p></div>
+              <div><p class="n">6</p><p class="l">纠错</p></div>
+              <div><p class="n">4:12</p><p class="l">时长</p></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>总评</h3>
+            <p>表达清楚，能完整汇报进度和下一步；时态和衔接词还需要加强。</p>
+            <p class="en">Clear overall — you got the update across. Watch your tenses when talking about finished work.</p>
+          </div>
+
+          <div class="panel">
+            <h3>做得好</h3>
+            <div class="list">
+              <div class="item"><span class="mk">✓</span><span>三轮内都主动说明了下一步计划</span></div>
+              <div class="item"><span class="mk">✓</span><span>提出阻塞时给出了具体原因</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>待改进</h3>
+            <div class="list">
+              <div class="item"><span class="mk">→</span><span>过去式不稳定：finish / finish 混用</span></div>
+              <div class="item"><span class="mk">→</span><span>句子偏书面，缺少 so / but 这类口语连接词</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>带走这几句</h3>
+            <div class="phrase">
+              <div class="txt"><p class="en">I'm currently working on the UI.</p><p class="zh">我目前在处理 UI。</p></div>
+              <button class="ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>朗读</button>
+            </div>
+            <div class="phrase">
+              <div class="txt"><p class="en">I'm blocked on the API — I'll follow up in the thread.</p><p class="zh">我卡在 API 上，会在话题里跟进。</p></div>
+              <button class="ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>朗读</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn accent">再来一次</button>
+            <button class="btn ghost">换个场景</button>
+          </div>
+          <p class="counter" style="text-align:center;margin-top:12px">已保存到本地历史</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">5 · 会话总结<small>总评 + 亮点 + 待改进 + 可朗读的推荐句型；数据来自本次会话</small></p>
+  </section>
+
+  <p class="row-label">面试模拟（v1.5）<br><span>选面试官 → 导入材料 → 确认 → 档案 → 面试</span></p>
+
+  <!-- ================= 5. 面试入口 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">AI 面试官</span>
+        </div>
+        <div class="scroll">
+          <div class="gen-box">
+            <h3>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>
+              传简历和职位，AI 针对这个岗位面你
+            </h3>
+            <p>面试中不逐轮纠错，结束后统一给复盘。</p>
+          </div>
+
+          <div class="section-label"><span class="zh">选择面试官</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 3.3-6 6.5-6s5.9 2 6.5 6"/><circle cx="10.8" cy="7.6" r=".7" fill="currentColor" stroke="none"/><circle cx="13.2" cy="7.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>行为面 · STAR</h3><span class="badge">已选</span><span class="meta">Marcus · en-GB</span></div>
+                <p>深挖经历、看结构和量化结果</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 3.3-6 6.5-6s5.9 2 6.5 6"/><circle cx="10.8" cy="7.6" r=".7" fill="currentColor" stroke="none"/><circle cx="13.2" cy="7.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>HR 初筛</h3><span class="meta">Rachel · en-US</span></div>
+                <p>动机、匹配度、期望薪资</p>
+              </div>
+            </div>
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 3.3-6 6.5-6s5.9 2 6.5 6"/><circle cx="10.8" cy="7.6" r=".7" fill="currentColor" stroke="none"/><circle cx="13.2" cy="7.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>技术深挖</h3><span class="meta">Priya · en-IN</span></div>
+                <p>架构取舍、失败场景、边界</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">面试材料</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5h10v15H7z"/><path d="M9.5 8h5M9.5 11h5M9.5 14h3"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>我的简历</h3><span class="meta">档案 780 字</span></div>
+                <p>Alice_Chen_Resume.pdf</p>
+              </div>
+            </div>
+            <div class="row add">
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></span>
+              <strong>上传目标职位（可选）</strong>
+            </div>
+          </div>
+          <p class="counter" style="text-align:left;margin-top:9px;line-height:1.6">支持拍照、截图、PDF、DOCX，或直接粘贴文本。材料只存在这台设备上。</p>
+
+          <div style="margin-top:14px">
+            <button class="btn accent">开始面试</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">6 · 面试入口<small>同一套紧凑行；简历和目标职位都可选，两个都传最贴合岗位</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">AI 面试官</span></div>
+        <div class="scroll">          <div class="section-label"><span class="zh">选择面试官</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.6-4 3.3-6 6.5-6s5.9 2 6.5 6"/></svg></span>
+              <div class="body"><div class="t"><h3>行为面 · STAR</h3><span class="badge">已选</span><span class="meta">Marcus · en-GB</span></div><p>深挖经历、看结构和量化结果</p></div>
+            </div>
+          </div>
+          <div class="section-label"><span class="zh">面试材料</span></div>
+          <div class="list">
+            <div class="row add"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12M6 12h12"/></svg></span><strong>添加简历</strong></div>
+          </div></div>
+        <div class="sheet-scrim"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <h3>添加简历</h3>
+          <div class="sheet-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3v10H4z"/><circle cx="12" cy="13" r="3"/></svg></span><div class="body"><b>拍照</b><i>现在拍一张，最省事</i></div></div>
+          <div class="sheet-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.4"/><path d="M5 17l4.5-4 3.5 3 2.5-2 3.5 3"/></svg></span><div class="body"><b>从相册选择</b><i>截图、照片，最多 5 张</i></div></div>
+          <div class="sheet-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5h10v15H7z"/><path d="M9.5 8h5M9.5 11h5"/></svg></span><div class="body"><b>选择文件</b><i>PDF、DOCX</i></div></div>
+          <div class="sheet-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><path d="M8 11h8M8 14h4"/></svg></span><div class="body"><b>粘贴文本</b><i>自己粘贴，不会上传文件</i></div></div>
+          <div class="sheet-cancel">取消</div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">7 · 材料来源<small>拍照排第一——用户最懒的路径应该最显眼；粘贴文本放在最后并说明不上传文件</small></p>
+  </section>
+
+  <!-- ================= 6. 材料确认 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">确认材料</span>
+          <span class="right">重新识别</span>
+        </div>
+        <div class="scroll">
+          <div class="src-line"><i class="dot"></i>来自 3 张照片 · 已识别，可编辑</div>
+
+          <textarea class="textarea material">Alice Chen
+Backend Engineer · 5 years
+
+138 0013 8000
+alice.chen@example.com
+
+EXPERIENCE
+2021 – now  Payments Platform · Senior Engineer
+· Led the gateway rewrite, P99 800ms → 120ms
+· Migrated 12 services to Rust
+
+EDUCATION
+2016 – 2020  BSc Computer Science</textarea>
+          <div class="field-count"><span>已删除 0 处</span><span>186 / 20000</span></div>
+
+          <div class="sensitive">
+            <div class="head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v6c0 5 3.4 8 8 8s8-3 8-8V7z"/><path d="M12 8v5M12 16.5v.01"/></svg>
+              检测到 2 处疑似敏感信息
+            </div>
+            <div class="hits">
+              <span class="hit">138 0013 8000</span>
+              <span class="hit">alice.chen@example.com</span>
+            </div>
+            <div class="acts">
+              <p class="note">点了才删，不自动处理</p>
+              <button class="ghost accent">全部删除</button>
+            </div>
+          </div>
+
+          <div class="risk">
+            <b>识别可能有误</b>，请核对姓名、时间、数字。敏感信息检测为尽力而为，<b>可能有遗漏</b>——面试用不到联系方式，建议直接删掉。
+          </div>
+
+          <div style="margin-top:16px">
+            <button class="btn accent">生成面试档案</button>
+          </div>
+          <p class="counter" style="text-align:center;margin-top:12px">本机图片将在生成后删除 · 本步消耗 1 次（识别已用 1 次）</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">8 · 材料确认<small>识别与结构化之间留一道人工闸门：先校对错字，再删掉电话邮箱，最后才生成档案</small></p>
+  </section>
+
+  <!-- ================= 7. 档案预览 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">面试档案</span>
+          <span class="right">重新生成</span>
+        </div>
+        <div class="scroll">
+          <div class="sensitive" style="background:var(--card);border-left-color:var(--accent)">
+            <div class="head">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v6c0 5 3.4 8 8 8s8-3 8-8V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg>
+              已从你的简历生成档案
+            </div>
+            <p class="note" style="margin-top:6px">面试只使用这份档案，不再使用原文，也不会再用到图片。可编辑。</p>
+          </div>
+
+          <textarea class="textarea material" style="min-height:330px;margin-top:12px">5 年后端 · 支付与交易系统
+
+技术栈
+Rust、Go、Kafka、PostgreSQL
+
+核心亮点
+· 主导支付网关重写，P99 从 800ms 降到 120ms
+· 迁移 12 个服务到 Rust，机器成本降 30%
+· 带过 3 人小组，负责排期与评审
+
+面试官可能追问
+· 网关重写的迁移策略与回滚方案
+· 12 个服务的迁移优先级怎么排的
+· 有没有失败过的项目
+
+目标职位
+高级后端工程师（金融科技方向）</textarea>
+          <div class="field-count"><span style="color:var(--accent)">● 已编辑</span><span>780 / 800 字</span></div>
+
+          <div class="risk">
+            <b>这份档案会决定面试官问什么。</b>如果某段经历不想被问，直接删掉即可。
+          </div>
+
+          <div style="margin-top:16px">
+            <button class="btn accent">开始面试</button>
+          </div>
+          <p class="counter" style="text-align:center;margin-top:12px">面试官：Marcus · Hiring Manager · en-GB</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">9 · 档案预览<small>档案也可以改——它决定了面试官会往哪儿追问，所以这里值得花 30 秒</small></p>
+  </section>
+
+  <!-- ================= 8. 面试中 ================= -->
+  <section class="slot">
+    <div class="phone state-listening">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="session">
+          <div class="top">
+            <span class="name serif">行为面 · 面试</span>
+            <span class="counts"><span class="pill">4 / 12</span><span class="pill">今日 94</span></span>
+            <span class="end">结束</span>
+          </div>
+
+          <div class="stage">
+            <span class="who">Marcus · Hiring Manager · en-GB</span>
+            <span class="accent-line"><i class="live"></i><span class="state-label">正在听</span></span>
+            <div class="avatar-wrap">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="面试官 Marcus">
+                <path class="body-shape" d="M36 194c7-27 30-44 64-44s57 17 64 44"/>
+                <path class="body-shape" d="M84 152l16 17 16-17"/>
+                <path class="head" d="M86 143v9M114 143v9"/>
+                <path class="head" d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <path class="head" d="M63 88c-2-27 14-48 37-48s39 21 37 48c-5-13-17-19-37-19s-32 6-37 19z"/>
+                <circle class="eye head" cx="87" cy="94" r="1.9"/>
+                <circle class="eye head" cx="113" cy="94" r="1.9"/>
+                <path class="mouth-arc head" d="M92 114c4 4.5 12 4.5 16 0"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="subtitle">
+            <p class="en">Tell me about a time you had to push back on a deadline. What did you do?</p>
+            <div class="row">
+              <span class="zh">讲一次你不得不对截止时间提出异议的经历，你当时怎么做的？</span>
+              <button class="ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>重听</button>
+            </div>
+          </div>
+
+          <div class="risk" style="margin:12px 16px 0;background:var(--study-card)">
+            <b>面试模式不逐轮纠错</b>，结束后统一给复盘——中途打断会破坏面试状态。
+          </div>
+
+          <div class="userline">
+            <span class="ring">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>
+            </span>
+            <div class="heard">
+              <p class="live-text">Last quarter we were asked to ship in two weeks, so I mapped out<span class="dim">—</span></p>
+              <p class="tag">正在回答 · 说完点一下麦克风</p>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="row">
+              <button class="icon-btn" title="键盘输入">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M6 13.5h12"/></svg>
+              </button>
+              <button class="mic" title="麦克风">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>
+              </button>
+              <button class="icon-btn" title="停止朗读">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+              </button>
+            </div>
+            <p class="label">面试中的表达问题会在结束后一起给</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">10 · 面试中<small>与陪练页同一套版式，但去掉纠错面板——面试要的是连续状态，不是逐句被打断</small></p>
+  </section>
+
+  <p class="row-label">面试成果与导入异常<br><span>复盘、识别中、两条失败分支</span></p>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">面试复盘</span></div>
+        <div class="scroll">
+          <div class="hero">
+            <p class="scene">Interview · Behavioural</p>
+            <h2 class="serif">行为面 · STAR</h2>
+            <div class="stats">
+              <div><p class="n">12</p><p class="l">轮数</p></div>
+              <div><p class="n">4:38</p><p class="l">时长</p></div>
+              <div><p class="n">3</p><p class="l">追问未答住</p></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>面试官评估</h3>
+            <div class="rate-row">
+              <div class="rate-head"><b>STAR 结构</b><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></div>
+              <p>情境和行动说清楚了，但结果部分偏模糊</p>
+            </div>            <div class="rate-row">
+              <div class="rate-head"><b>量化成果</b><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div>
+              <p>只有 2 次给出具体数字，其余用「快了很多」带过</p>
+            </div>            <div class="rate-row">
+              <div class="rate-head"><b>追问承受度</b><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div>
+              <p>被追问「为什么这么排优先级」时开始绕</p>
+            </div>          </div>
+
+          <div class="panel">
+            <h3>答得好的</h3>
+            <div class="list" style="background:transparent;border:none">
+              <div class="item"><span class="mk">✓</span><span>讲排期冲突时给了具体时间点，不是泛泛而谈</span></div>
+              <div class="item"><span class="mk">✓</span><span>主动说出自己那次判断错了，反而加了分</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>面试官可能的顾虑</h3>
+            <div class="list" style="background:transparent;border:none">
+              <div class="item"><span class="mk">→</span><span>「快了很多」没有数字，会被怀疑不是自己主导的</span></div>
+              <div class="item"><span class="mk">→</span><span>跨团队协调只提了一次，深度不够</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>补上这三句</h3>
+            <div class="phrase">
+              <div class="txt"><p class="en">We cut P99 from 800ms to 120ms.</p><p class="zh">我们把 P99 从 800ms 降到 120ms。</p></div>
+              <button class="ghost">朗读</button>
+            </div>
+            <div class="phrase">
+              <div class="txt"><p class="en">I owned that decision end to end.</p><p class="zh">这个决定从始至终是我负责的。</p></div>
+              <button class="ghost">朗读</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn accent">再面一次</button>
+            <button class="btn ghost">换个岗位</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">11 · 面试复盘<small>和陪练总结分开：面试看的是 STAR、量化、抗追问，不是时态对不对</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">识别中</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 34px 50px;text-align:center">
+          <div class="scan-box">
+            <svg width="120" height="150" viewBox="0 0 80 100" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-light)">
+              <rect x="10" y="8" width="60" height="84" rx="6"/>
+              <path d="M20 26h40M20 36h28M20 52h40M20 62h34M20 72h24"/>
+            </svg>
+            <div class="scan-line"></div>
+          </div>
+          <h2 class="serif" style="font-size:19px;font-weight:700;color:var(--ink);margin-top:26px">正在识别 3 张图片</h2>
+          <p style="font-size:12.5px;line-height:1.7;color:var(--ink-light);margin-top:10px">
+            逐字转录，通常需要 5–10 秒。<br>识别完会先把文字给你校对，不会直接生成档案。
+          </p>
+          <button class="btn ghost" style="margin-top:26px;width:auto;padding:11px 26px;font-size:13px">取消</button>
+        </div>
+      </div>
+    </div>
+    <p class="caption">12 · 识别中<small>说明还要多久、说明下一步会先给校对而不是直接生成——等待焦虑主要来自不知道接下来发生什么</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">导入失败</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 32px 40px">
+          <div style="text-align:center">
+            <div style="width:88px;height:88px;margin:0 auto;border-radius:26px;background:var(--card);border:1px solid var(--border);display:grid;place-items:center;color:var(--ink)">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8l3 3v14h-11z"/><path d="M9.5 8h5M9.5 11.5h5"/><path d="M12 14.5v3M12 19.5v.01"/></svg>
+            </div>
+            <h2 class="serif" style="font-size:20px;font-weight:700;color:var(--ink);margin-top:22px">这份 PDF 是扫描件</h2>
+            <p style="font-size:13px;line-height:1.7;color:var(--ink-light);margin-top:10px">整份文件没有可提取的文字，看起来是扫描或导出的图片。<br>改用拍照或截图，识别效果一样。</p>
+            <p style="font-size:11.5px;line-height:1.6;color:var(--ink-muted);margin-top:14px">PDF 只在有文字层时能直接抽取，服务端不做 PDF 转图片。</p>
+          </div>
+          <div style="margin-top:26px;display:flex;flex-direction:column;gap:10px"><button class="btn accent">拍照 / 选图</button><button class="btn ghost">粘贴文本</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">13 · 导入失败 · 扫描件<small>不是报错而是给替代路径。这条分支对应后端的 likely_scanned</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">导入失败</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 32px 40px">
+          <div style="text-align:center">
+            <div style="width:88px;height:88px;margin:0 auto;border-radius:26px;background:var(--accent-light);border:none;display:grid;place-items:center;color:var(--accent)">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M7 15l3.5-4 3 3.5"/><circle cx="9" cy="9.5" r="1.2"/><path d="M3.5 3.5l17 17"/></svg>
+            </div>
+            <h2 class="serif" style="font-size:20px;font-weight:700;color:var(--ink);margin-top:22px">当前模型不支持图片</h2>
+            <p style="font-size:13px;line-height:1.7;color:var(--ink-light);margin-top:10px">管理员配置的模型读不了图片。<br>可以让他换成支持视觉的（如 <b>deepseek-flash</b>），或者改用粘贴文本——效果一样。</p>
+            <p style="font-size:11.5px;line-height:1.6;color:var(--ink-muted);margin-top:14px">对应后端的 422 vision_not_supported。这是配置问题，不该让用户以为是自己的错。</p>
+          </div>
+          <div style="margin-top:26px;display:flex;flex-direction:column;gap:10px"><button class="btn accent">粘贴文本</button><button class="btn ghost">知道了</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">14 · 导入失败 · 模型不支持图片<small>把「谁该去解决」说清楚：用户换路径，管理员换模型</small></p>
+  </section>
+
+  <p class="row-label">会话状态<br><span>键盘、沉浸、出错、结束</span></p>
+
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="session">
+          <div class="top"><span class="name serif">技术方案讨论</span><span class="counts"><span class="pill">4 / 12</span></span><span class="end">结束</span></div>
+          <div class="stage" style="flex:1">
+            <span class="who">Daniel · Staff Engineer · en-GB</span>
+            <span class="accent-line"><i class="live"></i><span class="state-label">等待你回复</span></span>
+            <div class="avatar-wrap">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:118px;height:118px">
+                <path d="M36 194c7-27 30-44 64-44s57 17 64 44"/><path d="M84 152l16 17 16-17"/>
+                <path d="M86 143v9M114 143v9"/>
+                <path d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <path d="M63 88c-2-27 14-48 37-48s39 21 37 48c-5-13-17-19-37-19s-32 6-37 19z"/>
+                <circle cx="87" cy="94" r="1.9" fill="currentColor" stroke="none"/><circle cx="113" cy="94" r="1.9" fill="currentColor" stroke="none"/>
+                <path d="M92 114c4 4.5 12 4.5 16 0"/>
+              </svg>
+            </div>
+          </div>
+          <div class="subtitle" style="padding:11px 14px">
+            <p class="en" style="font-size:14px">Why not just keep the queue and add a second consumer?</p>
+          </div>
+          <div class="typed">
+            <div class="typed-input">
+              <p>Because that doesn't fix the <span style="color:var(--accent)">|</span></p>
+              <span class="typed-send">发送</span>
+            </div>
+            <p class="typed-hint">键盘输入和语音是完全一样的练习，只是不用开口</p>
+          </div>
+            <div class="kbd">
+              <div class="krow"><b>Q</b><b>W</b><b>E</b><b>R</b><b>T</b><b>Y</b><b>U</b><b>I</b><b>O</b><b>P</b></div>
+              <div class="krow"><b>A</b><b>S</b><b>D</b><b>F</b><b>G</b><b>H</b><b>J</b><b>K</b><b>L</b></div>
+              <div class="krow"><b class="wide">⇧</b><b>Z</b><b>X</b><b>C</b><b>V</b><b>B</b><b>N</b><b>M</b><b class="wide">⌫</b></div>
+              <div class="krow"><b class="wide">123</b><b class="space">space</b><b class="wide">return</b></div>
+            </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">15 · 键盘输入态<small>麦克风不可用时这是完整替代，不是残废版：头像缩小让位，输入框顶在键盘上方</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone state-listening">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+<div class="session state-listening">          <div class="top"><span class="name serif">远程茶水间</span><span class="counts"><span class="pill">5 / 8</span><span class="pill">今日 96</span></span><span class="end">结束</span></div>
+          <div class="stage" style="flex:1">
+            <span class="who">Emma · Designer · en-GB</span>
+            <span class="accent-line"><i class="live"></i><span class="state-label">正在说</span></span>
+            <div class="avatar-wrap">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path class="body-shape" d="M36 194c7-27 30-44 64-44s57 17 64 44"/><path class="body-shape" d="M84 152l16 17 16-17"/>
+                <path class="head" d="M86 143v9M114 143v9"/>
+                <path class="head" d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <path class="head" d="M63 88c-2-27 14-48 37-48s39 21 37 48c-5-13-17-19-37-19s-32 6-37 19z"/>
+                <circle class="eye head" cx="87" cy="94" r="1.9"/><circle class="eye head" cx="113" cy="94" r="1.9"/>
+                <path class="mouth-arc head" d="M92 114c4 4.5 12 4.5 16 0"/>
+                <ellipse class="mouth-open" cx="100" cy="115" rx="8" ry="5"/>
+                <g class="waves" stroke="currentColor"><path d="M148 98c5.5 7 5.5 15 0 22"/><path d="M159 90c8.5 10.5 8.5 27 0 38"/></g>
+              </svg>
+            </div>
+          </div>
+          <div class="subtitle">
+            <p class="en">Oh nice — so you finally got that standing desk?</p>
+            <div class="row"><span class="zh">不错啊，你终于买到那个升降桌了？</span><button class="ghost">重听</button></div>
+          </div>
+          <div class="imm-hint">
+            <b>沉浸模式</b>：不逐轮打断，表达问题留到结束后一起给。
+          </div>
+          <div class="userline">
+            <span class="ring" style="background:var(--tag-bg);color:var(--ink-light)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></span>
+            <div class="heard"><p class="live-text">Yeah! Took three weeks to ship<span class="dim">—</span></p><p class="tag">正在听</p></div>
+          </div>
+          <div class="controls">
+            <div class="modes"><button aria-pressed="false">逐轮纠错</button><button aria-pressed="true">沉浸模式</button></div>
+            <div class="row">
+              <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M6 13.5h12"/></svg></button>
+              <button class="mic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></button>
+              <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
+            </div>
+          </div></div>
+      </div>
+    </div>
+    <p class="caption">16 · 沉浸模式<small>反馈面板消失后头像磁贴变大——空间是留给对话的，不是留给纠错的</p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+<div class="session">          <div class="top"><span class="name serif">每日站会 · 进度同步</span><span class="counts"><span class="pill">3 / 10</span></span><span class="end">结束</span></div>
+          <div class="stage" style="flex:0 0 300px">
+            <span class="who">Alex · Tech Lead · en-US</span>
+            <span class="accent-line" style="color:var(--accent)"><i class="live" style="background:var(--accent)"></i><span>没收到回复</span></span>
+            <div class="avatar-wrap" style="opacity:.35">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M36 194c7-27 30-44 64-44s57 17 64 44"/><path d="M84 152l16 17 16-17"/>
+                <path d="M86 143v9M114 143v9"/>
+                <path d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <circle cx="87" cy="94" r="1.9" fill="currentColor" stroke="none"/><circle cx="113" cy="94" r="1.9" fill="currentColor" stroke="none"/>
+              </svg>
+            </div>
+          </div>
+          <div class="error-banner">
+            <b>这一轮没发出去</b>
+            <p>网络超时。前面 2 轮和刚才说的这句话都还在，重试不会重来一遍。</p>
+            <button class="ghost accent" style="margin-top:9px">重试</button>
+          </div>
+          <div class="userline">
+            <span class="ring" style="background:var(--tag-bg);color:var(--ink-light)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></span>
+            <div class="heard"><p class="live-text">I'm still working on the login page.</p><p class="tag">已保留</p></div>
+          </div>
+          <div class="controls"><div class="row">
+            <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M6 13.5h12"/></svg></button>
+            <button class="mic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></button>
+            <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></button>
+          </div></div></div>
+      </div>
+    </div>
+    <p class="caption">17 · 出错重试<small>最关键的一句是「重试不会重来一遍」——否则用户不敢点，直接退出就全丢了</p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+<div class="session">          <div class="top"><span class="name serif">每日站会 · 进度同步</span><span class="counts"><span class="pill">4 / 10</span><span class="pill">今日 96</span></span><span class="end">结束</span></div>
+          <div class="stage" style="flex:0 0 250px"><span class="who">Alex · Tech Lead · en-US</span>
+            <div class="avatar-wrap" style="opacity:.4">
+              <svg class="avatar" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:150px;height:150px">
+                <path d="M36 194c7-27 30-44 64-44s57 17 64 44"/><path d="M84 152l16 17 16-17"/>
+                <path d="M86 143v9M114 143v9"/>
+                <path d="M63 90c0-30 16-50 37-50s37 20 37 50-16 52-37 52-37-22-37-52z"/>
+                <circle cx="87" cy="94" r="1.9" fill="currentColor" stroke="none"/><circle cx="113" cy="94" r="1.9" fill="currentColor" stroke="none"/>
+              </svg>
+            </div>
+          </div>
+        <div class="sheet-scrim"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <h3>结束这次练习？</h3>
+          <p style="padding:0 20px 14px;font-size:12.5px;line-height:1.6;color:var(--ink-light)">已经练了 4 轮。结束后会根据这 4 轮生成本次总结，不会丢。</p>
+          <div style="padding:0 16px;display:flex;flex-direction:column;gap:9px">
+            <button class="btn accent">结束并查看总结</button>
+            <button class="btn ghost">继续练习</button>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <p class="caption">18 · 结束确认<small>「结束」就在右上角，误触一次整场没了。文案要说明不会丢，否则用户不敢结束</small></p>
+  </section>
+
+  <p class="row-label">历史与设置<br><span>记录、偏好、草稿</span></p>
+
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">练习记录</span></div>
+        <div class="scroll">
+          <div class="chips" style="margin-bottom:6px">
+            <span class="chip accent">全部</span><span class="chip">陪练</span><span class="chip">面试</span>
+          </div>
+          <div class="section-label"><span class="zh">本周</span></div>
+          <div class="list">
+            <div class="row plain"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/></svg></span><div class="body"><div class="t"><h3>每日站会 · 进度同步</h3><span class="meta">今天 · 8 轮</span></div><p>6 处纠错 · 4:12</p></div></div>
+            <div class="row plain"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/></svg></span><div class="body"><div class="t"><h3>行为面 · STAR</h3><span class="badge">面试</span><span class="meta">周三 · 12 轮</span></div><p>3 处追问未答住 · 4:38</p></div></div>
+            <div class="row plain"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/></svg></span><div class="body"><div class="t"><h3>Code Review 讨论</h3><span class="meta">周二 · 10 轮</span></div><p>9 处纠错 · 6:05</p></div></div>
+          </div>
+          <div class="section-label"><span class="zh">更早</span></div>
+          <div class="list">
+            <div class="row plain"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/></svg></span><div class="body"><div class="t"><h3>技术方案讨论</h3><span class="meta">9月21日 · 12 轮</span></div><p>11 处纠错 · 7:20</p></div></div>
+            <div class="row plain"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/></svg></span><div class="body"><div class="t"><h3>远程茶水间</h3><span class="meta">9月19日 · 8 轮</span></div><p>2 处纠错 · 3:40</p></div></div>
+          </div>
+          <p class="counter" style="text-align:center;margin-top:16px">记录只存在这台设备上 · 共 5 次</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">19 · 历史练习<small>第 1 屏的「最近练习」和第 10 屏的「查看历史练习」都需要落地到这里</small></p>
+  </section>
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">设置</span></div>
+        <div class="scroll">
+          <div class="section-label"><span class="zh">AI 陪练</span></div>
+          <div class="list">
+            <div class="row"><div class="body"><div class="t"><h3>默认练习模式</h3><span class="meta"><span class="seg-mini"><i class="on">逐轮</i><i>沉浸</i></span></span></div><p>逐轮纠错会在每轮后给建议；沉浸模式只在结束后复盘</p></div></div>            <div class="row"><div class="body"><div class="t"><h3>口音偏好</h3><span class="meta"><span class="seg-mini"><i class="on">en-US</i><i>en-IN</i></span></span></div><p>决定预置场景优先给哪种口音</p></div></div>            <div class="row"><div class="body"><div class="t"><h3>自动播放 AI 回复</h3><span class="meta"><span class="sw on"></span></span></div><p>关闭后需要手动点播放</p></div></div>            <div class="row"><div class="body"><div class="t"><h3>面试材料</h3><span class="meta">管理 ›</span></div><p>已存 1 份简历档案</p></div></div>          </div>
+
+          <div class="section-label"><span class="zh">语音</span></div>
+          <div class="list">
+            <div class="row"><div class="body"><div class="t"><h3>朗读音色</h3><span class="meta">Cherry ›</span></div><p>沿用现有语音设置</p></div></div>            <div class="row"><div class="body"><div class="t"><h3>语速</h3><span class="meta">调整 ›</span></div><p>0.9×</p></div></div>          </div>
+          <p class="counter" style="text-align:left;margin-top:14px;line-height:1.6">陪练相关设置放在一起，不与主题、账号混排。</p>
+        </div>
+      </div>
+    </div>
+    <p class="caption">20 · 设置 · AI 陪练<small>默认模式、口音偏好这些是长期设定，属于设置页，不该塞进每次开始前的选择</small></p>
+  </section>
+
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">新建场景</span><span class="right">保存</span></div>
+        <div class="scroll">
+          <div class="gen-box">
+            <h3><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg> AI 已生成，可以改</h3>
+            <p>根据「和澳洲同事交接未完成任务」补全了角色、开场白和练习重点。</p>
+            <textarea class="textarea" style="background:var(--card);border-color:transparent">和澳洲同事交接未完成任务</textarea>
+            <button class="btn accent" style="margin-top:10px;padding:11px">重新生成</button>
+          </div>
+
+          <div class="section-label"><span class="zh">AI 填好的字段</span></div>
+          <div class="list">
+            <div class="row"><div class="body"><div class="t"><h3>AI 同事</h3><span class="meta">Emma · Teammate</span></div><p>en-AU · 友好</p></div></div>
+            <div class="row"><div class="body"><div class="t"><h3>开场白</h3><span class="meta">已填</span></div><p>Hey, got a minute to hand over the rest of the task?</p></div></div>
+            <div class="row"><div class="body"><div class="t"><h3>练习重点</h3><span class="meta">2 项</span></div><p>说清当前状态 · 留下后续问题</p></div></div>
+            <div class="row"><div class="body"><div class="t"><h3>难度 / 轮数</h3><span class="meta">常规 · 8 轮</span></div></div></div>
+          </div>
+          <p class="counter" style="text-align:left;margin-top:10px;line-height:1.6">下面每个字段都能单独改，改完再保存。</p>
+
+          <div style="margin-top:14px">
+            <button class="btn accent">保存到我的场景</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">21 · AI 生成草稿<small>生成后不是直接存，而是填进表单让你改——AI 写的人设经常要微调</small></p>
+  </section>
+
+  <p class="row-label">状态与降级<br><span>权限、配额、首次使用</span></p>
+
+  <!-- ================= 9. 权限引导 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen" style="justify-content:center;padding:0 32px 60px">
+        <div style="text-align:center">
+          <div style="width:88px;height:88px;margin:0 auto;border-radius:26px;background:var(--card);border:1px solid var(--border);display:grid;place-items:center;color:var(--ink)">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M3.5 3.5l17 17"/>
+            </svg>
+          </div>
+          <h2 class="serif" style="font-size:20px;font-weight:700;color:var(--ink);margin-top:22px">需要麦克风权限</h2>
+          <p style="font-size:13px;line-height:1.7;color:var(--ink-light);margin-top:10px">
+            陪练要听你说话才能给纠错。没有麦克风也可以用键盘打字练习，功能一样完整。
+          </p>
+          <p style="font-size:11.5px;line-height:1.6;color:var(--ink-muted);margin-top:14px">
+            语音识别由系统提供（iOS / Android）。在 iOS 上这两个权限是分开的：麦克风 + 语音识别。
+          </p>
+        </div>
+        <div style="margin-top:26px;display:flex;flex-direction:column;gap:10px">
+          <button class="btn accent">去系统设置开启</button>
+          <button class="btn ghost">用键盘练习</button>
+        </div>
+      </div>
+    </div>
+    <p class="caption">22 · 权限引导<small>必须有的兜底：权限被拒时流程不能断，键盘是完整替代而不是降级</small></p>
+  </section>
+
+  <!-- ================= 10. 配额用尽 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen" style="justify-content:center;padding:0 32px 60px">
+        <div style="text-align:center">
+          <div style="width:88px;height:88px;margin:0 auto;border-radius:26px;background:var(--accent-light);display:grid;place-items:center;color:var(--accent)">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>
+            </svg>
+          </div>
+          <h2 class="serif" style="font-size:20px;font-weight:700;color:var(--ink);margin-top:22px">今天的次数用完了</h2>
+          <p style="font-size:13px;line-height:1.7;color:var(--ink-light);margin-top:10px">
+            每天 100 次，明天 00:00（UTC+8）重置。已经练过的记录都还在。
+          </p>
+          <div style="margin-top:20px;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--border);text-align:left">
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <span style="font-size:11.5px;color:var(--ink-muted)">今日已用</span>
+              <span style="margin-left:auto;font-size:15px;font-weight:700;color:var(--ink)">100</span>
+              <span style="font-size:11.5px;color:var(--ink-muted)">/ 100</span>
+            </div>
+            <div style="margin-top:8px;height:5px;border-radius:3px;background:var(--tag-bg);overflow:hidden">
+              <i style="display:block;height:100%;width:100%;background:var(--accent);border-radius:3px"></i>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:24px;display:flex;flex-direction:column;gap:10px">
+          <button class="btn ghost" style="opacity:.5">明天再来</button>
+          <button class="btn ghost">查看历史练习</button>
+        </div>
+      </div>
+    </div>
+    <p class="caption">23 · 配额用尽<small>429 之后不是一句报错：说清还剩多少、什么时候恢复、已练的还在</small></p>
+  </section>
+
+  <!-- ================= 11. 首次使用空态 ================= -->
+  <section class="slot">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav">
+          <span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span>
+          <span class="title">AI 陪练</span>
+          <span class="right">和同事开口说话</span>
+        </div>
+        <div class="quota">
+          <div class="line"><span class="txt">今日剩余</span><span class="num" style="margin-left:auto">100</span><span class="txt">/ 100</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <div class="scroll">
+          <div class="section-label"><span class="zh">日常与协作</span></div>
+          <div class="list">
+            <div class="row">
+              <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16v11H8.5L4 21z"/><circle cx="9.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M11 14.4c.6.5 1.4.5 2 0"/></svg></span>
+              <div class="body">
+                <div class="t"><h3>远程茶水间</h3><span class="badge">从这里开始</span><span class="meta">en-GB · 8 轮</span></div>
+                <p>寒暄、接话，别让话题掉地上</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label"><span class="zh">我的场景</span></div>
+          <div class="list">
+            <div class="row add">
+              <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></span>
+              <strong>新建场景</strong>
+            </div>
+          </div>
+          <p class="counter" style="text-align:left;margin-top:9px;line-height:1.6">
+            还没有自己的场景。可以从预置场景复制一个再改，或者用一句话让 AI 帮你写。
+          </p>
+
+          <div class="section-label"><span class="zh">最近练习</span></div>
+          <div class="empty">
+            <p>还没有练习记录</p>
+            <p class="sub">选一个场景，先聊 3 轮试试</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">24 · 首次使用空态<small>新用户第一眼看到的东西。两个空态都给下一步动作，不是一句「暂无」</small></p>
+  </section>
+
+
+  <section class="slot">
+    <div class="phone ">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="nav"><span class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></span><span class="title">AI 陪练</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 32px 40px">
+          <div style="text-align:center">
+            <div style="width:88px;height:88px;margin:0 auto;border-radius:26px;background:var(--card);border:1px solid var(--border);display:grid;place-items:center;color:var(--ink)">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+            </div>
+            <h2 class="serif" style="font-size:20px;font-weight:700;color:var(--ink);margin-top:22px">陪练暂不可用</h2>
+            <p style="font-size:13px;line-height:1.7;color:var(--ink-light);margin-top:10px">管理员还没有配置模型，或者服务正在维护。<br>词库、打字训练和播客不受影响。</p>
+            <p style="font-size:11.5px;line-height:1.6;color:var(--ink-muted);margin-top:14px">对应后端 503。入口应该是禁用态，而不是让用户点进去才失败。</p>
+          </div>
+          <div style="margin-top:26px;display:flex;flex-direction:column;gap:10px"><button class="btn accent">返回首页</button><button class="btn ghost">联系管理员</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">25 · 服务不可用<small>未配置 LLM 时的全局状态：说清影响范围（只有陪练不可用），并给退路</small></p>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  var html = document.documentElement;
+
+  // 主题切换
+  var themeBtns = document.querySelectorAll('[data-theme-btn]');
+  themeBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      html.dataset.theme = btn.dataset.themeBtn;
+      themeBtns.forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+
+  // 会话状态切换：倾听 / 思考 / 说话
+  var phone = document.getElementById('sessionPhone');
+  var stateBtns = document.querySelectorAll('[data-state-btn]');
+  var stateLabel = phone.querySelector('.state-label');
+  var labels = { listening:'正在听', thinking:'思考中', speaking:'正在说' };
+
+  function setState(state){
+    phone.classList.remove('state-listening','state-thinking','state-speaking');
+    phone.classList.add('state-' + state);
+    stateLabel.textContent = labels[state] || '';
+    stateBtns.forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.stateBtn === state)); });
+  }
+  stateBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){ setState(btn.dataset.stateBtn); });
+  });
+
+  // 点麦克风在「说话 / 倾听」之间切换，便于评审打断逻辑
+  phone.querySelector('.mic').addEventListener('click', function(){
+    setState(phone.classList.contains('state-speaking') ? 'listening' : 'speaking');
+  });
+
+  // 支持 ?theme=shenyemo&state=listening，方便评审时直接分享某一个主题 / 状态
+  var params = new URLSearchParams(location.search);
+  var wantedTheme = params.get('theme');
+  if (wantedTheme) {
+    var match = document.querySelector('[data-theme-btn="' + wantedTheme + '"]');
+    if (match) match.click();
+  }
+  // ?only=14 只显示第 14 屏，方便放大评审单屏
+  var only = params.get('only');
+  if (only) {
+    var slots = document.querySelectorAll('.slot');
+    slots.forEach(function(sl){ sl.style.display = 'none'; });
+    var idx = parseInt(only, 10) - 1;
+    if (slots[idx]) slots[idx].style.display = 'flex';
+    document.querySelectorAll('.row-label').forEach(function(l){ l.style.display = 'none'; });
+    document.querySelector('.board').style.paddingTop = '10px';
+  }
+
+  var wantedState = params.get('state');
+  // 对比度修正前后切换
+  var contrastBtns = document.querySelectorAll('[data-contrast-btn]');
+  contrastBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      html.dataset.contrast = btn.dataset.contrastBtn;
+      contrastBtns.forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+  var wantedContrast = params.get('contrast');
+  if (wantedContrast === 'before' || wantedContrast === 'after') {
+    var cBtn = document.querySelector('[data-contrast-btn="' + wantedContrast + '"]');
+    if (cBtn) cBtn.click();
+  }
+
+  setState(['listening','thinking','speaking'].indexOf(wantedState) >= 0 ? wantedState : 'speaking');
+})();
+</script>
+</body>
+</html>
