@@ -7,7 +7,7 @@ Branch: `feat/ai-agent`
 
 | 项目 | 命令 | 结果 |
 |------|------|------|
-| 后端全量测试 | `cd moyan-backend && cargo test` | 159 passed，0 failed，1 ignored（真实上游 smoke） |
+| 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
 | App 纯逻辑测试 | `cd moyan-app && npm test` | 26 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
@@ -54,10 +54,25 @@ Branch: `feat/ai-agent`
 - Android content:// 文件 URI
 - 8 套主题与 Reduce Motion 截图对比
 
-### 真实 LLM 上游验收仍阻塞
+### 真实 LLM 上游验收：已通过
 
-`cargo test real_llm_contract_smoke -- --ignored --nocapture` 已运行，但本机 `OPENAI_API_KEY` 与 `DEEPSEEK_API_KEY` 都返回 HTTP 401 invalid。真实模型的 `response_format` 接受情况和 schema 质量仍未被外部上游证明。
+管理员后台配置为 OpenCode Go 兼容接口后，补齐 `x-opencode-session` / `x-opencode-request` / `x-opencode-client` 路由头，并运行：
+
+```bash
+cd moyan-backend
+cargo test real_llm_contract_smoke -- --ignored --nocapture
+```
+
+验证结果：
+
+- `/turn`：返回自然英文回复，实际纠正 `finish → finished` 等 2 处错误
+- `/summary`：返回结构化总评、优缺点和表达建议
+- `/scenario/draft`：返回 `custom_` 场景，开场白为英文
+- `/interview/profile`：返回 157 字的紧凑档案
+- `/interview/text`：视觉模型成功读取含 “HELLO 123” 的 PNG，OCR 返回 5 个字符
+
+真实模型的上游契约、JSON 解析与 Vision OCR 已全部闭环。
 
 ## 结论
 
-所有不需要新增原生依赖、真实 LLM 凭据或真机的工作已完成并通过当前测试/构建。剩余项需要先恢复依赖安装审批，并提供有效模型 Key 与真机环境。
+所有不需要新增原生依赖或真机的工作已完成并通过当前测试/构建。真实 LLM 凭据与上游验收已经闭环；剩余项需要先恢复原生依赖安装审批，并提供真机环境。
