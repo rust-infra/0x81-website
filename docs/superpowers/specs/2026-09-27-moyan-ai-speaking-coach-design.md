@@ -319,6 +319,22 @@ PUT  /api/admin/settings/coach
 { "daily_turn_limit": 100, "enabled": true }
 ```
 
+App 启动场景页前读取当前用户用量（需用户 JWT）：
+
+```json
+GET /api/coach/quota
+{
+  "limit": 100,
+  "used": 4,
+  "remaining": 96,
+  "resets_at": "2026-09-28T00:00:00+08:00",
+  "enabled": true,
+  "llm_configured": true
+}
+```
+
+`enabled` 表示是否启用每日配额，`false` 不是关闭 AI 陪练；`enabled=false` 或 `limit=0` 都表示不限量，此时 `remaining=null`。`llm_configured=false` 时 App 禁用开始并提示管理员配置模型。
+
 复用现有 `admin_settings` KV，新增键 `coach`；非法值夹取到 `0–100000`。
 
 ### 4.7 面试模拟与材料解析
@@ -421,6 +437,8 @@ PUT  /api/admin/settings/coach
 ```
 
 - `interview` 可选；带上时给面试官 prompt 追加面试维度（STAR 追问、量化成果、技术细节）
+- `kind` ∈ `resume` / `job` / `resume_job`；`resume_job` 表示 App 已把两份经用户确认的紧凑档案合并，后端只把它当数据标签
+- `profile` 上限 3,000 字符；简历和目标职位都上传时，App 用 `[RESUME PROFILE]` / `[JOB PROFILE]` 标记合并，不发送原始材料
 - **每轮只发紧凑档案，不发简历原文、不发图片**——省 token，也让图片只在提取阶段出现一次
 - 面试总结额外评估：是否用了 STAR 结构、成果是否量化、哪些回答经不起追问
 
