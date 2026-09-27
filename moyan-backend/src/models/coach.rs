@@ -135,6 +135,40 @@ pub fn validate_history(history: &[CoachTurn], user_text: &str) -> Result<(), St
     Ok(())
 }
 
+pub const MAX_INTERVIEW_PROFILE_CHARS: usize = 3_000;
+
+pub fn validate_interview_context(context: &InterviewContext) -> Result<(), String> {
+    if !matches!(context.kind.as_str(), "resume" | "job" | "resume_job") {
+        return Err("interview.kind must be resume, job, or resume_job".into());
+    }
+    let profile = context.profile.trim();
+    if profile.is_empty() {
+        return Err("interview.profile is required".into());
+    }
+    if context.profile.chars().count() > MAX_INTERVIEW_PROFILE_CHARS {
+        return Err(format!(
+            "interview.profile must be at most {MAX_INTERVIEW_PROFILE_CHARS} characters"
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_summary_history(history: &[CoachTurn]) -> Result<(), String> {
+    if history.is_empty() {
+        return Err("history is required".into());
+    }
+    if history.len() > MAX_HISTORY_TURNS {
+        return Err("history is too long".into());
+    }
+    let total: usize = history.iter().map(|turn| turn.content.chars().count()).sum();
+    if total > MAX_TOTAL_CHARS {
+        return Err(format!(
+            "history must be at most {MAX_TOTAL_CHARS} characters"
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InterviewContext {
     pub kind: String,
@@ -281,6 +315,45 @@ mod tests {
             difficulty: "core".into(),
             max_turns: 10,
         }
+    }
+
+    #[test]
+    fn validates_interview_context_shape_and_budget() {
+        assert!(validate_interview_context(&InterviewContext {
+            kind: "resume".into(),
+            profile: "ok".into(),
+        })
+        .is_ok());
+        assert!(validate_interview_context(&InterviewContext {
+            kind: "resume_job".into(),
+            profile: "ok".into(),
+        })
+        .is_ok());
+        assert!(validate_interview_context(&InterviewContext {
+            kind: "raw_resume".into(),
+            profile: "ok".into(),
+        })
+        .is_err());
+        assert!(validate_interview_context(&InterviewContext {
+            kind: "resume".into(),
+            profile: " ".into(),
+        })
+        .is_err());
+        assert!(validate_interview_context(&InterviewContext {
+            kind: "resume".into(),
+            profile: "字".repeat(MAX_INTERVIEW_PROFILE_CHARS + 1),
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn summary_history_has_an_explicit_character_budget() {
+        let too_long = vec![CoachTurn {
+            role: CoachRole::User,
+            content: "x".repeat(MAX_TOTAL_CHARS + 1),
+        }];
+        assert!(validate_summary_history(&too_long).is_err());
+        assert!(validate_summary_history(&[]).is_err());
     }
 
     #[test]

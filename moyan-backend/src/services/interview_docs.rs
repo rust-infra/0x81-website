@@ -63,11 +63,18 @@ fn parse_docx(bytes: &[u8]) -> Result<String, AppError> {
     let mut archive = zip::ZipArchive::new(cursor)
         .map_err(|_| AppError::BadRequest("invalid docx archive".into()))?;
     let mut xml = String::new();
-    archive
+    let entry = archive
         .by_name("word/document.xml")
-        .map_err(|_| AppError::BadRequest("docx is missing word/document.xml".into()))?
+        .map_err(|_| AppError::BadRequest("docx is missing word/document.xml".into()))?;
+    entry
+        .take(MAX_UPLOAD_BYTES as u64 + 1)
         .read_to_string(&mut xml)
         .map_err(|_| AppError::BadRequest("docx document.xml is not valid UTF-8".into()))?;
+    if xml.len() > MAX_UPLOAD_BYTES {
+        return Err(AppError::BadRequest(
+            "docx document.xml expands beyond the upload limit".into(),
+        ));
+    }
     Ok(docx_xml_to_text(&xml))
 }
 
@@ -133,6 +140,23 @@ mod tests {
     fn short_text_is_flagged_as_likely_scanned() {
         assert!(is_likely_scanned("page 1"));
         assert!(!is_likely_scanned(&"字".repeat(SCANNED_TEXT_THRESHOLD + 1)));
+    }
+
+    #[test]
+    fn rejects_docx_xml_that_expands_past_limit() {
+        use std::io::Write as _;
+
+        let cursor = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(cursor);
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(&vec![b'a'; MAX_UPLOAD_BYTES + 1]).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        assert!(parse_document("resume.docx", &bytes).is_err());
     }
 
     #[test]

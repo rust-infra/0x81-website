@@ -588,6 +588,20 @@ async fn chat_completion(
     Ok(content.to_string())
 }
 
+/// Validate the admin-provided client before a request is sent. This keeps
+/// unconfigured deployments from consuming quota for a call that cannot work.
+pub fn ensure_configured(settings: &LlmSettingsStored) -> Result<(), AppError> {
+    if settings.base_url.trim().is_empty()
+        || settings.api_key.trim().is_empty()
+        || settings.model.trim().is_empty()
+    {
+        return Err(AppError::ServiceUnavailable(
+            "AI service is not configured".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// 供陪练等通用场景使用：走 OpenAI-compatible chat completions，要求 JSON 输出。
 pub async fn chat_json(
     settings: &LlmSettingsStored,
@@ -772,6 +786,20 @@ mod tests {
         assert_eq!(cards[0].pronunciation.as_deref(), Some("/həˈləʊ/"));
         assert!(cards[0].tags.contains(&"youtube".into()));
         assert!(cards[0].tags.contains(&"vid".into()));
+    }
+
+    #[test]
+    fn rejects_unconfigured_llm_before_network_use() {
+        assert!(ensure_configured(&LlmSettingsStored::default()).is_err());
+        assert!(matches!(
+            ensure_configured(&LlmSettingsStored {
+                base_url: "https://api.example.com/v1".into(),
+                api_key: "sk-test".into(),
+                model: "model".into(),
+                temperature: 0.3,
+            }),
+            Ok(())
+        ));
     }
 
     #[test]

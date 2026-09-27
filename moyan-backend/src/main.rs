@@ -279,6 +279,41 @@ mod tests {
         Ok(())
     }
 
+    /// Missing LLM configuration returns 503 before quota is consumed.
+    #[tokio::test]
+    async fn coach_turn_unconfigured_llm_does_not_consume_quota() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let _api = EnvGuard::set("MOYAN_LLM_API_KEY", "");
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(coach_turn_payload("Hello there").to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0);
+        Ok(())
+    }
+
     /// 配额用尽返回 429，且带上 limit / used / resets_at。
     #[tokio::test]
     async fn coach_quota_returns_429_with_details() -> anyhow::Result<()> {
@@ -286,6 +321,18 @@ mod tests {
             SqliteRepositories::connect("sqlite::memory:").await?,
         ));
         let sub = seed_test_user(&state).await;
+        state
+            .services
+            .admin_collect
+            .update_llm_settings(crate::models::UpdateLlmSettingsRequest {
+                base_url: Some("https://api.example.com/v1".into()),
+                api_key: Some("test-key".into()),
+                model: Some("test-model".into()),
+                temperature: None,
+                clear_api_key: false,
+            })
+            .await
+            .expect("configure fake llm for quota test");
         state
             .services
             .coach_settings

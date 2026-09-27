@@ -46,6 +46,8 @@ impl InterviewProfileService {
         req: InterviewProfileRequest,
     ) -> Result<InterviewProfileResponse, AppError> {
         validate_request(&req)?;
+        let settings = self.admin_collect.llm_settings().await?;
+        llm_client::ensure_configured(&settings)?;
         self.quota.check_and_consume(user_id).await?;
 
         let system = if req.kind == "job" {
@@ -53,7 +55,6 @@ impl InterviewProfileService {
         } else {
             RESUME_PROMPT
         };
-        let settings = self.admin_collect.llm_settings().await?;
         let raw = llm_client::chat_json(
             &settings,
             system,

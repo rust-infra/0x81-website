@@ -37,9 +37,10 @@ impl InterviewOcrService {
 
     pub async fn ocr(&self, user_id: &str, images: Vec<ImagePart>) -> Result<String, AppError> {
         validate_images(&images)?;
+        let settings = self.admin_collect.llm_settings().await?;
+        llm_client::ensure_configured(&settings)?;
         self.quota.check_and_consume(user_id).await?;
 
-        let settings = self.admin_collect.llm_settings().await?;
         let result = llm_client::chat_json_with_images(
             &settings,
             OCR_SYSTEM_PROMPT,

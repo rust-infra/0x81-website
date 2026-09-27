@@ -57,6 +57,7 @@ pub fn resets_at(now: DateTime<Utc>) -> DateTime<FixedOffset> {
 }
 
 /// 返回 `Some(limit)` 表示已用尽；`None` 表示仍可用。
+#[cfg(test)]
 pub fn would_exceed(settings: &CoachSettings, used: u32) -> Option<u32> {
     if !settings.enabled || settings.daily_turn_limit == 0 {
         return None;
@@ -100,16 +101,30 @@ impl CoachQuotaService {
         let settings = self.settings().await?;
         let now = Utc::now();
         let day = day_key(now);
-        let used = self.repository.coach_usage_get(user_id, &day).await?;
-        if let Some(limit) = would_exceed(&settings, used) {
-            return Err(AppError::QuotaExceeded {
-                limit,
-                used,
-                resets_at: resets_at(now).to_rfc3339(),
-            });
+        let limit = settings.daily_turn_limit;
+        if !settings.enabled || limit == 0 {
+            self.repository.coach_usage_increment(user_id, &day).await?;
+            return Ok(());
         }
-        self.repository.coach_usage_increment(user_id, &day).await?;
-        Ok(())
+
+        // Check + increment must be one atomic repository operation: a read
+        // followed by an increment lets concurrent requests all pass at the
+        // boundary and exceed the configured daily limit.
+        if self
+            .repository
+            .coach_usage_try_consume(user_id, &day, limit)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let used = self.repository.coach_usage_get(user_id, &day).await?;
+        Err(AppError::QuotaExceeded {
+            limit,
+            used: used.min(limit),
+            resets_at: resets_at(now).to_rfc3339(),
+        })
     }
 }
 
