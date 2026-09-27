@@ -1,19 +1,18 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  CoachGlyph,
+  CoachGroup,
+  CoachRow,
+  type CoachGlyphName,
+  SectionLabel,
+} from '../../components/coach/CoachUi';
 import { UnavailableState } from '../../components/coach/UnavailableState';
 import { getCoachQuota, listCoachScenarios } from '../../lib/coach-api-runtime';
 import { canStartCoach, groupScenarios, quotaLabel } from '../../lib/coach-selection';
 import {
-  deleteCustomScenario,
   loadCoachHistory,
   loadCustomScenarios,
   saveCustomScenario,
@@ -21,8 +20,7 @@ import {
 import type { CoachHistoryRecord, CoachQuotaStatus, CoachScenario } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
-import { confirmAsync, useToast } from '../../lib/toast';
-import { cardStyle, screen, serif } from '../../lib/ui';
+import { serif } from '../../lib/ui';
 
 const CATEGORY_LABEL = {
   daily: 'coachCategoryDaily',
@@ -30,11 +28,35 @@ const CATEGORY_LABEL = {
   high_stakes: 'coachCategoryHighStakes',
 } as const;
 
+const SCENARIO_ORDER: Record<string, number> = {
+  remote_small_talk: 0,
+  ask_for_help: 1,
+  one_on_one: 2,
+  standup_update: 0,
+  code_review: 1,
+  design_discussion: 2,
+  incident_sync: 0,
+  scope_deadline: 1,
+};
+
+const SCENARIO_ICONS: Record<string, CoachGlyphName> = {
+  ask_for_help: 'person',
+  one_on_one: 'manager',
+  remote_small_talk: 'chat',
+  standup_update: 'standup',
+  code_review: 'review',
+  design_discussion: 'design',
+  incident_sync: 'alert',
+  scope_deadline: 'deadline',
+  interview_screening: 'person',
+  interview_behavioral: 'person',
+  interview_technical: 'person',
+};
+
 export default function CoachScreen() {
   const router = useRouter();
   const { t, lang } = useI18n();
   const { theme } = useTheme();
-  const toast = useToast();
   const c = theme.colors;
   const [quota, setQuota] = useState<CoachQuotaStatus | null>(null);
   const [presets, setPresets] = useState<CoachScenario[]>([]);
@@ -91,245 +113,221 @@ export default function CoachScreen() {
     router.push({ pathname: '/coach/editor', params: { scenarioId: copy.id } });
   };
 
-  const removeCustom = async (scenario: CoachScenario) => {
-    const ok = await confirmAsync(t('coachDelete'), scenario.title);
-    if (!ok) return;
-    await deleteCustomScenario(scenario.id);
-    setCustomScenarios((items) => items.filter((item) => item.id !== scenario.id));
-    toast(t('saved'));
-  };
-
   const startReason = quota ? canStartCoach({ quota, scenario: presets[0] }) : null;
+  const available = !!quota && !!startReason?.ok;
+  const groups = groupScenarios(
+    presets.filter((scenario) => !scenario.id.startsWith('interview_'))
+  );
+  const unavailableKind = loadError
+    ? 'network'
+    : quota && startReason && !startReason.ok
+      ? startReason.reason
+      : null;
 
   return (
-    <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
-      <View style={screen.header}>
-        <View style={styles.headerRow}>
-          <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            {t('tabCoach')}
-          </Text>
-          <View style={[styles.quotaPill, { backgroundColor: c.accentLight }]}>
-            <Text style={{ color: c.accent, fontSize: 12, fontWeight: '600' }}>
-              {!quota
-                ? '—'
-                : quotaLabel(quota) === 'unlimited'
-                  ? t('coachUnlimited')
-                  : t('coachQuota', {
-                      remaining: quota.remaining ?? 0,
-                      limit: quota.limit,
-                    })}
-            </Text>
-          </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top']}>
+      <View style={styles.tabHead}>
+        <Text style={[styles.tabTitle, { color: c.ink, fontFamily: serif }]}>{t('coachPageTitle')}</Text>
+        <View style={[styles.quotaPill, { backgroundColor: c.tagBg }]}>
+          {!quota ? (
+            <Text style={[styles.quotaText, { color: c.inkMuted }]}>—</Text>
+          ) : quotaLabel(quota) === 'unlimited' ? (
+            <Text style={[styles.quotaText, { color: c.inkMuted }]}>{t('coachUnlimited')}</Text>
+          ) : (
+            <>
+              <Text style={[styles.quotaText, { color: c.inkMuted }]}>{t('coachToday')} </Text>
+              <Text style={[styles.quotaStrong, { color: c.ink }]}>{quota.remaining ?? 0}</Text>
+              <Text style={[styles.quotaText, { color: c.inkMuted }]}> / {quota.limit}</Text>
+            </>
+          )}
         </View>
       </View>
 
       {loading ? (
         <ActivityIndicator color={c.accent} style={styles.center} />
+      ) : unavailableKind ? (
+        <UnavailableState
+          kind={unavailableKind}
+          resetsAt={quota?.resets_at}
+          quota={quota ?? undefined}
+          onRetry={() => void load()}
+          onHistory={() => router.push('/coach/history')}
+        />
       ) : (
-        <ScrollView contentContainerStyle={[screen.body, styles.body]}>
-          {loadError ? <UnavailableState kind="network" /> : null}
-          {quota && startReason && !startReason.ok ? (
-            <UnavailableState kind={startReason.reason} resetsAt={quota.resets_at} />
-          ) : null}
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
 
           <Pressable
+            accessibilityRole="button"
             onPress={() => router.push('/coach/interview')}
-            style={[cardStyle(c.card, c.border), styles.interviewCard]}
+            style={[styles.entry, { backgroundColor: c.card, borderColor: c.border }]}
           >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardTitle, { color: c.ink, fontFamily: serif }]}>
-                {t('coachInterviewTitle')}
-              </Text>
-              <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 5 }}>
+            <View style={[styles.entryIcon, { backgroundColor: c.accentLight }]}>
+              <CoachGlyph name="person" color={c.accent} size={20} />
+            </View>
+            <View style={styles.entryBody}>
+              <Text style={[styles.entryTitle, { color: c.ink }]}>{t('coachInterviewTitle')}</Text>
+              <Text numberOfLines={1} style={[styles.entryDesc, { color: c.inkMuted }]}>
                 {t('coachInterviewIntro')}
               </Text>
             </View>
-            <Text style={{ color: c.accent, fontSize: 20 }}>›</Text>
+            <CoachGlyph name="arrowRight" color={c.accent} size={18} />
           </Pressable>
 
-          <Text style={[styles.sectionTitle, { color: c.inkLight }]}>
-            {t('coachPresetScenarios')}
-          </Text>
-          {groupScenarios(presets).map((group) => (
-            <View key={group.category} style={styles.group}>
-              <Text style={[styles.groupTitle, { color: c.inkMuted }]}>
-                {t(CATEGORY_LABEL[group.category])}
-              </Text>
-              {group.items.map((scenario) => (
-                <ScenarioCard
-                  key={scenario.id}
-                  scenario={scenario}
-                  disabled={!!startReason && !startReason.ok}
-                  onStart={() => start(scenario)}
-                  onCopy={() => void copyToMine(scenario)}
-                />
-              ))}
+          {groups.map((group) => (
+            <View key={group.category}>
+              <SectionLabel>{t(CATEGORY_LABEL[group.category])}</SectionLabel>
+              <CoachGroup>
+                {group.items
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      (SCENARIO_ORDER[a.id] ?? Number.MAX_SAFE_INTEGER) -
+                      (SCENARIO_ORDER[b.id] ?? Number.MAX_SAFE_INTEGER)
+                  )
+                  .map((scenario) => (
+                  <CoachRow
+                    key={scenario.id}
+                    icon={SCENARIO_ICONS[scenario.id] ?? 'chat'}
+                    title={scenario.title}
+                    subtitle={scenario.description}
+                    meta={`${scenario.persona.locale} · ${t('coachTurns', {
+                      count: scenario.max_turns,
+                    })}`}
+                    badge={scenario.id === 'standup_update' ? t('coachRecommended') : undefined}
+                    onPress={() => start(scenario)}
+                    onLongPress={() => void copyToMine(scenario)}
+                  />
+                  ))}
+              </CoachGroup>
             </View>
           ))}
 
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: c.inkLight }]}>
-              {t('coachMyScenarios')}
-            </Text>
-            <Pressable onPress={() => router.push('/coach/editor')}>
-              <Text style={{ color: c.accent, fontWeight: '600' }}>{t('coachNew')}</Text>
-            </Pressable>
-          </View>
-          {customScenarios.length === 0 ? (
-            <Text style={[styles.empty, { color: c.inkMuted }]}>
-              {t('coachNoCustomScenarios')}
-            </Text>
-          ) : (
-            customScenarios.map((scenario) => (
-              <ScenarioCard
+          <SectionLabel>{t('coachMyScenarios')}</SectionLabel>
+          <CoachGroup>
+            {customScenarios.map((scenario) => (
+              <CoachRow
                 key={scenario.id}
-                scenario={scenario}
-                disabled={!!startReason && !startReason.ok}
-                onStart={() => start(scenario)}
-                onCopy={() => router.push({ pathname: '/coach/editor', params: { scenarioId: scenario.id } })}
-                onDelete={() => void removeCustom(scenario)}
+                icon={SCENARIO_ICONS[scenario.id] ?? 'chat'}
+                title={scenario.title}
+                subtitle={scenario.description}
+                meta={`${scenario.persona.locale} · ${t('coachTurns', {
+                  count: scenario.max_turns,
+                })}`}
+                onPress={() => (available ? start(scenario) : undefined)}
+                onLongPress={() => router.push({ pathname: '/coach/editor', params: { scenarioId: scenario.id } })}
               />
-            ))
-          )}
+            ))}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/coach/editor')}
+              style={[styles.addRow, { borderColor: c.accent, backgroundColor: c.card }]}
+            >
+              <View style={[styles.addIcon, { backgroundColor: c.accentLight }]}>
+                <CoachGlyph name="plus" color={c.accent} size={18} />
+              </View>
+              <Text style={[styles.addText, { color: c.accent }]}>{t('coachNewScenario')}</Text>
+            </Pressable>
+          </CoachGroup>
+          {customScenarios.length === 0 ? (
+            <Text style={[styles.help, { color: c.inkMuted }]}>{t('coachNoCustomScenarios')}</Text>
+          ) : null}
 
-          <Text style={[styles.sectionTitle, { color: c.inkLight }]}>
-            {t('coachRecentPractice')}
-          </Text>
-          {history.length === 0 ? (
-            <Text style={[styles.empty, { color: c.inkMuted }]}>{t('coachNoHistory')}</Text>
-          ) : (
-            history.slice(0, 4).map((record) => (
-              <Pressable
-                key={record.id}
-                onPress={() =>
-                  router.push({
-                    pathname: '/coach/summary',
-                    params: { record: JSON.stringify(record) },
-                  })
-                }
-                style={[cardStyle(c.card), styles.historyRow]}
-              >
-                <Text style={[styles.cardTitle, { color: c.ink }]} numberOfLines={1}>
-                  {record.scenarioTitle}
+          <SectionLabel>{t('coachRecentPractice')}</SectionLabel>
+          <CoachGroup>
+            {history.length === 0 ? (
+              <View style={styles.emptyHistory}>
+                <Text style={[styles.emptyHistoryTitle, { color: c.inkLight }]}>
+                  {t('coachNoHistory')}
                 </Text>
-                <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 4 }}>
-                  {t('coachTurns', { count: record.summary.stats.turns })}
-                </Text>
-              </Pressable>
-            ))
-          )}
+                <Text style={[styles.help, { color: c.inkMuted }]}>{t('coachStartHint')}</Text>
+              </View>
+            ) : (
+              history.slice(0, 4).map((record) => (
+                <CoachRow
+                  key={record.id}
+                  plain
+                  icon="history"
+                  title={record.scenarioTitle}
+                  meta={`${t('coachTurns', {
+                    count: record.summary.stats.turns,
+                  })} · ${record.summary.stats.corrections} ${t('coachCorrections')}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/coach/summary',
+                      params: { record: JSON.stringify(record) },
+                    })
+                  }
+                />
+              ))
+            )}
+          </CoachGroup>
         </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
-function ScenarioCard({
-  scenario,
-  disabled,
-  onStart,
-  onCopy,
-  onDelete,
-}: {
-  scenario: CoachScenario;
-  disabled: boolean;
-  onStart: () => void;
-  onCopy: () => void;
-  onDelete?: () => void;
-}) {
-  const { t } = useI18n();
-  const { theme } = useTheme();
-  const c = theme.colors;
-  const difficulty = {
-    easy: 'coachDifficultyEasy',
-    core: 'coachDifficultyCore',
-    challenge: 'coachDifficultyChallenge',
-  }[scenario.difficulty];
-
-  return (
-    <View style={[cardStyle(c.card, c.border), styles.card]}>
-      <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: c.ink }]}>{scenario.title}</Text>
-        <Text style={[styles.meta, { color: c.inkMuted }]}>
-          {scenario.persona.locale} · {t('coachTurns', { count: scenario.max_turns })}
-        </Text>
-      </View>
-      <Text style={[styles.description, { color: c.inkLight }]}>{scenario.description}</Text>
-      <Text style={[styles.meta, { color: c.inkMuted }]}>
-        {scenario.persona.name} · {scenario.persona.role} · {t(difficulty)}
-      </Text>
-      <View style={styles.actions}>
-        <Pressable onPress={onCopy} hitSlop={8}>
-          <Text style={{ color: c.accent, fontSize: 13 }}>{t('coachCopyScenario')}</Text>
-        </Pressable>
-        {onDelete ? (
-          <Pressable onPress={onDelete} hitSlop={8}>
-            <Text style={{ color: c.inkMuted, fontSize: 13 }}>{t('coachDelete')}</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          disabled={disabled}
-          onPress={onStart}
-          style={[
-            styles.startButton,
-            { backgroundColor: disabled ? c.inkMuted : c.buttonBg },
-          ]}
-        >
-          <Text style={{ color: c.buttonText, fontSize: 13, fontWeight: '600' }}>
-            {t('coachStart')}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  headerRow: {
+  container: { flex: 1 },
+  tabHead: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
+  tabTitle: { fontSize: 24, fontWeight: '700', flex: 1 },
   quotaPill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { paddingBottom: 110 },
-  sectionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 10 },
-  sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
+    alignItems: 'baseline',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  group: { marginBottom: 8 },
-  groupTitle: { fontSize: 12, marginTop: 10, marginBottom: 8 },
-  card: { marginBottom: 10 },
-  interviewCard: {
+  quotaText: { fontSize: 10.5 },
+  quotaStrong: { fontSize: 13, fontWeight: '700' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  body: { paddingHorizontal: 20, paddingBottom: 150 },
+  entry: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 16,
-    marginTop: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 18,
+    marginTop: 2,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', fontFamily: serif },
-  meta: { fontSize: 11, marginTop: 5 },
-  description: { fontSize: 13, lineHeight: 19, marginTop: 8 },
-  actions: {
+  entryIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryBody: { flex: 1, minWidth: 0 },
+  entryTitle: { fontSize: 15, fontWeight: '600' },
+  entryDesc: { fontSize: 11.5, marginTop: 3 },
+  addRow: {
+    minHeight: 54,
+    marginHorizontal: 10,
+    marginVertical: 10,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 16,
-    marginTop: 14,
+    justifyContent: 'center',
+    gap: 9,
   },
-  startButton: {
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  addIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  empty: { fontSize: 13, paddingVertical: 10 },
-  historyRow: { marginBottom: 8 },
+  addText: { fontSize: 13, fontWeight: '600' },
+  help: { fontSize: 11.5, lineHeight: 18, marginTop: 9 },
+  emptyHistory: { paddingVertical: 22, paddingHorizontal: 16, alignItems: 'center' },
+  emptyHistoryTitle: { fontSize: 13 },
 });

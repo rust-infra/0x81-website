@@ -78,14 +78,10 @@ export function TabIcon({
   focused: boolean;
   pillColor: string;
 }) {
+  void pillColor;
   return (
     <View style={styles.wrap}>
-      {focused ? (
-        <View style={[styles.pill, { backgroundColor: pillColor }]} />
-      ) : null}
-      <View style={focused ? styles.scaled : undefined}>
-        {renderIcon(name, color)}
-      </View>
+      <View style={focused ? styles.scaled : undefined}>{renderIcon(name, color)}</View>
     </View>
   );
 }

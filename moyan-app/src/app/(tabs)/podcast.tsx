@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAppConfig } from '../../lib/api';
+import { CoachGlyph } from '../../components/coach/CoachUi';
 import { useI18n } from '../../lib/i18n';
 import {
   loadRecent,
@@ -180,7 +181,7 @@ export default function PodcastScreen() {
   const renderCard = (item: SearchItem, url: string) => (
     <Pressable
       key={item.id}
-      style={[styles.card, { backgroundColor: c.card }]}
+      style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}
       onPress={() => openPlayer(item, url)}
     >
       {item.thumbnail ? (
@@ -216,7 +217,7 @@ export default function PodcastScreen() {
           </View>
           <View style={styles.search}>
             <View style={styles.searchField}>
-              <Text style={[styles.searchIcon, { color: c.inkMuted }]}>🔍</Text>
+              <View style={styles.searchIcon}><CoachGlyph name="search" color={c.inkMuted} size={17} /></View>
               <TextInput
                 style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
                 placeholder={t('podcastSearchPlaceholder')}
@@ -343,8 +344,9 @@ const styles = StyleSheet.create({
   },
   error: { fontSize: 12, paddingHorizontal: 22, marginTop: 10 },
   sectionLabel: { fontSize: 13, fontWeight: '500', padding: 18, paddingBottom: 8 },
-  list: { paddingHorizontal: 16, paddingBottom: 110 },
+  list: { paddingHorizontal: 16, paddingBottom: 140 },
   card: {
+    borderWidth: 1,
     flexDirection: 'row',
     gap: 12,
     borderRadius: 16,

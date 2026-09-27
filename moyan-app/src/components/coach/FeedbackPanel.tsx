@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CoachFeedback } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
+import { CoachGlyph } from './CoachUi';
 
 export function FeedbackPanel({
   feedback,
@@ -17,61 +18,88 @@ export function FeedbackPanel({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (feedback?.corrections.length) setOpen(true);
+    if (feedback) setOpen(true);
   }, [feedback]);
 
   if (!feedback) return null;
 
+  const first = feedback.corrections[0];
+  const natural = feedback.better_phrasing?.natural;
+
   return (
-    <View style={[styles.card, { backgroundColor: c.studyCard, borderColor: c.border }]}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: c.studyCard,
+          borderColor: c.border,
+          borderLeftColor: c.accent,
+        },
+      ]}
+    >
       <Pressable style={styles.header} onPress={() => setOpen((value) => !value)}>
-        <Text style={{ color: c.studyText, fontWeight: '700' }}>{t('coachCorrections')}</Text>
-        <Text style={{ color: c.studyMuted }}>{open ? '⌃' : '⌄'}</Text>
+        <CoachGlyph name="check" color={c.accent} size={15} />
+        <Text style={[styles.headerText, { color: c.accent }]}>
+          {t('coachBetterPhrasing')}
+        </Text>
+        <Text style={{ color: c.studyMuted, marginLeft: 'auto' }}>{open ? '⌃' : '⌄'}</Text>
       </Pressable>
+
       {open ? (
         <View style={styles.body}>
-          {feedback.corrections.map((item) => (
-            <View key={`${item.original}-${item.corrected}`} style={styles.row}>
-              <Text style={{ color: c.studyMuted, textDecorationLine: 'line-through' }}>
-                {item.original}
-              </Text>
-              <Text style={{ color: c.studyText, marginTop: 3 }}>{item.corrected}</Text>
-              {item.explanation_zh ? (
-                <Text style={{ color: c.studyMuted, fontSize: 12, marginTop: 3 }}>
-                  {item.explanation_zh}
-                </Text>
+          {first ? (
+            <View>
+              <Text style={[styles.old, { color: c.studyMuted }]}>{first.original}</Text>
+              <Text style={[styles.new, { color: c.ink }]}>{first.corrected}</Text>
+              {first.explanation_zh ? (
+                <Text style={[styles.note, { color: c.inkLight }]}>{first.explanation_zh}</Text>
               ) : null}
             </View>
-          ))}
-          {feedback.better_phrasing ? (
-            <View style={styles.row}>
-              <Text style={{ color: c.accent, fontSize: 12, fontWeight: '600' }}>
-                {t('coachBetterPhrasing')}
-              </Text>
-              <Pressable
-                style={styles.speakRow}
-                onPress={() => onSpeak(feedback.better_phrasing?.natural ?? '')}
-              >
-                <Text style={{ color: c.studyText, flex: 1 }}>
-                  {feedback.better_phrasing.natural}
+          ) : null}
+
+          {!first && natural ? (
+            <Pressable onPress={() => onSpeak(natural)}>
+              <Text style={[styles.new, { color: c.ink }]}>{natural}</Text>
+              {feedback.better_phrasing?.note_zh ? (
+                <Text style={[styles.note, { color: c.inkLight }]}>
+                  {feedback.better_phrasing.note_zh}
                 </Text>
-                <Text style={{ color: c.accent }}>{t('coachReplay')}</Text>
-              </Pressable>
+              ) : null}
+            </Pressable>
+          ) : null}
+
+          {feedback.corrections.length > 1 ? (
+            <View style={styles.moreCorrections}>
+              {feedback.corrections.slice(1).map((item) => (
+                <Text key={`${item.original}-${item.corrected}`} style={[styles.note, { color: c.inkLight }]}>
+                  · {item.original} → {item.corrected}
+                </Text>
+              ))}
             </View>
           ) : null}
-          {feedback.expressions.length ? (
-            <View style={styles.row}>
-              <Text style={{ color: c.accent, fontSize: 12, fontWeight: '600' }}>
-                {t('coachExpressions')}
-              </Text>
-              {feedback.expressions.map((expression) => (
+
+          {(first || natural || feedback.expressions.length > 0) ? (
+            <View style={styles.chips}>
+              {first ? (
+                <Text style={[styles.chip, { backgroundColor: c.inputBg, color: c.inkLight }]}>
+                  {first.original} → {first.corrected}
+                </Text>
+              ) : null}
+              {natural ? (
+                <Pressable
+                  onPress={() => onSpeak(natural)}
+                  style={[styles.chip, { backgroundColor: c.inputBg }]}
+                >
+                  <Text style={{ color: c.inkLight, fontSize: 10.5 }}>{natural}</Text>
+                </Pressable>
+              ) : null}
+              {feedback.expressions.slice(0, 2).map((expression) => (
                 <Pressable
                   key={expression.en}
-                  style={styles.speakRow}
                   onPress={() => onSpeak(expression.en)}
+                  style={[styles.chip, { backgroundColor: c.inputBg }]}
                 >
-                  <Text style={{ color: c.studyText, flex: 1 }}>{expression.en}</Text>
-                  <Text style={{ color: c.studyMuted, fontSize: 12 }}>{expression.zh}</Text>
+                  <Text style={{ color: c.inkLight, fontSize: 10.5 }}>{expression.en}</Text>
                 </Pressable>
               ))}
             </View>
@@ -83,9 +111,20 @@ export function FeedbackPanel({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 10 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  body: { marginTop: 10, gap: 10 },
-  row: { gap: 4 },
-  speakRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 },
+  card: {
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderRadius: 16,
+    padding: 15,
+    marginTop: 10,
+  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  headerText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  body: { marginTop: 10, gap: 9 },
+  old: { fontSize: 12.5, lineHeight: 20, textDecorationLine: 'line-through' },
+  new: { fontSize: 13, lineHeight: 21, fontWeight: '600' },
+  note: { fontSize: 11.5, lineHeight: 18, marginTop: 4 },
+  moreCorrections: { gap: 3 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  chip: { borderRadius: 999, overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4 },
 });

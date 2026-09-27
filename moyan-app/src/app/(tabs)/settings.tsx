@@ -538,9 +538,9 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { paddingBottom: 120 },
+  body: { paddingBottom: 140 },
   sectionTitle: { fontSize: 13, fontWeight: '500', marginTop: 8, marginBottom: 10 },
-  card: { borderRadius: 16, padding: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  card: { borderRadius: 16, borderWidth: 1, padding: 6 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

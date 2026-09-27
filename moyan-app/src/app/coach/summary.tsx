@@ -2,6 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  CoachGlyph,
+  CoachHeader,
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/coach/CoachUi';
 import { listCoachScenarios, postCoachSummary } from '../../lib/coach-api-runtime';
 import { summaryRecordFromSession } from '../../lib/coach-history';
 import { saveCoachHistory } from '../../lib/coach-storage';
@@ -16,7 +22,7 @@ import type {
 import { useI18n } from '../../lib/i18n';
 import { getSpeechSettings, speak } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
-import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
+import { cardStyle } from '../../lib/ui';
 
 export default function CoachSummaryScreen() {
   const params = useLocalSearchParams<{
@@ -37,6 +43,7 @@ export default function CoachSummaryScreen() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [durationSeconds, setDurationSeconds] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -44,6 +51,7 @@ export default function CoachSummaryScreen() {
         try {
           const record = JSON.parse(params.record) as CoachHistoryRecord;
           setSummary(record.summary);
+          setDurationSeconds(record.durationSeconds);
           setScenario({
             id: record.scenarioId,
             source: 'custom',
@@ -65,6 +73,9 @@ export default function CoachSummaryScreen() {
         }
       }
 
+      setDurationSeconds(
+        Math.max(1, Math.round((Date.now() - (Number(params.startedAt) || Date.now())) / 1000))
+      );
       const presets = await listCoachScenarios(lang).catch(() => []);
       const current = presets.find((item) => item.id === params.scenarioId) ?? null;
       setScenario(current);
@@ -98,7 +109,7 @@ export default function CoachSummaryScreen() {
         setLoading(false);
       }
     })();
-  }, [lang, params.history, params.interviewKind, params.profile, params.record, params.scenarioId]);
+  }, [lang, params.history, params.interviewKind, params.profile, params.record, params.scenarioId, params.startedAt]);
 
   const play = async (text: string) => {
     const settings = await getSpeechSettings();
@@ -117,8 +128,8 @@ export default function CoachSummaryScreen() {
     const record = summaryRecordFromSession(
       {
         scenarioId: scenario?.id ?? params.scenarioId ?? 'unknown',
-        scenarioTitle: scenario?.title ?? '',
-        durationSeconds: Math.max(1, Math.round((Date.now() - startedAt) / 1000)),
+        scenarioTitle: scenario?.title ?? params.scenarioTitle ?? '',
+        durationSeconds: Math.max(1, durationSeconds),
         startedAt,
       },
       summary
@@ -127,22 +138,16 @@ export default function CoachSummaryScreen() {
     setSaved(true);
   };
 
+  const isInterview = !!summary?.interview_feedback || !!params.interviewKind;
+  const sceneLabel = (scenario?.id ?? 'coach').replace(/_/g, ' ').toUpperCase();
+  const duration = `${Math.floor(durationSeconds / 60)}:${String(durationSeconds % 60).padStart(2, '0')}`;
+
   return (
-    <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
-      <View style={screen.header}>
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            style={[roundButton, { backgroundColor: c.inputBg }]}
-          >
-            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
-          </Pressable>
-          <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            {t('coachFinishNow')}
-          </Text>
-          <View style={roundButton} />
-        </View>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <CoachHeader
+        title={isInterview ? t('coachInterviewDebrief') : t('coachSessionSummary')}
+        onBack={() => router.back()}
+      />
 
       {loading ? (
         <View style={styles.center}>
@@ -154,68 +159,90 @@ export default function CoachSummaryScreen() {
           <Text style={{ color: c.accent, textAlign: 'center' }}>{t('coachSummaryFailed')}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[screen.body, styles.body]}>
-          <Text style={[styles.title, { color: c.ink, fontFamily: serif }]}>
-            {scenario?.title ?? params.scenarioTitle}
-          </Text>
-          <Text style={{ color: c.inkMuted, marginTop: 6 }}>
-            {t('coachTurns', { count: summary.stats.turns })} · {summary.stats.corrections}
-          </Text>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <View style={[cardStyle(c.card, c.border), styles.hero]}>
+            <Text style={[styles.scene, { color: c.inkMuted }]}>{sceneLabel}</Text>
+            <Text style={[styles.heroTitle, { color: c.ink }]}>{scenario?.title}</Text>
+            <View style={[styles.stats, { borderTopColor: c.divider }]}>
+              <Stat value={String(summary.stats.turns)} label={t('coachRounds')} />
+              <Stat value={String(summary.stats.corrections)} label={t('coachCorrections')} />
+              <Stat value={duration} label={t('coachDuration')} />
+            </View>
+          </View>
 
-          <Section title={t('coachOverall')} color={c.ink} card={c.card}>
-            <Text style={{ color: c.inkLight, lineHeight: 22 }}>
-              {lang === 'en' ? summary.overall_en : summary.overall_zh}
+          <SummaryPanel title={t('coachOverall')}>
+            <Text style={[styles.bodyText, { color: c.ink }]}>{summary.overall_zh}</Text>
+            <Text style={[styles.bodyText, styles.en, { color: c.inkMuted }]}>
+              {summary.overall_en}
             </Text>
-          </Section>
-          <ListSection
-            title={t('coachHighlights')}
-            items={summary.strengths}
-            color={c.ink}
-            card={c.card}
-          />
-          <ListSection
-            title={t('coachImprovements')}
-            items={summary.improvements}
-            color={c.ink}
-            card={c.card}
-          />
+          </SummaryPanel>
+
+          {summary.strengths.length ? (
+            <SummaryPanel title={t('coachHighlights')}>
+              {summary.strengths.map((item) => (
+                <View key={item} style={styles.listItem}>
+                  <Text style={[styles.marker, { color: c.accent }]}>✓</Text>
+                  <Text style={[styles.itemText, { color: c.ink }]}>{item}</Text>
+                </View>
+              ))}
+            </SummaryPanel>
+          ) : null}
+
+          {summary.improvements.length ? (
+            <SummaryPanel title={t('coachImprovements')}>
+              {summary.improvements.map((item) => (
+                <View key={item} style={styles.listItem}>
+                  <Text style={[styles.marker, { color: c.accent }]}>→</Text>
+                  <Text style={[styles.itemText, { color: c.ink }]}>{item}</Text>
+                </View>
+              ))}
+            </SummaryPanel>
+          ) : null}
 
           {summary.interview_feedback ? (
-            <Section title={t('coachCorrections')} color={c.ink} card={c.card}>
-              <Text style={{ color: c.inkLight, lineHeight: 22 }}>
+            <SummaryPanel title={t('coachInterviewFeedback')}>
+              <Text style={[styles.itemText, { color: c.ink }]}>
                 {summary.interview_feedback.star_structure}
               </Text>
-              <Text style={{ color: c.inkLight, lineHeight: 22, marginTop: 8 }}>
+              <Text style={[styles.itemText, { color: c.ink, marginTop: 8 }]}>
                 {summary.interview_feedback.quantified_impact}
               </Text>
               {summary.interview_feedback.weak_spots.map((item) => (
-                <Text key={item} style={{ color: c.inkMuted, marginTop: 6 }}>
-                  · {item}
-                </Text>
+                <View key={item} style={styles.listItem}>
+                  <Text style={[styles.marker, { color: c.accent }]}>→</Text>
+                  <Text style={[styles.itemText, { color: c.ink }]}>{item}</Text>
+                </View>
               ))}
-            </Section>
+            </SummaryPanel>
           ) : null}
 
-          <Section title={t('coachExpressions')} color={c.ink} card={c.card}>
-            {summary.expressions.map((expression) => (
-              <Pressable
-                key={expression.en}
-                onPress={() => void play(expression.en)}
-                style={styles.expressionRow}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.ink }}>{expression.en}</Text>
-                  <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 2 }}>
-                    {expression.zh}
-                  </Text>
+          {summary.expressions.length ? (
+            <SummaryPanel title={isInterview ? t('coachPhrasesToAdd') : t('coachExpressions')}>
+              {summary.expressions.map((expression) => (
+                <View
+                  key={expression.en}
+                  style={[styles.phrase, { backgroundColor: c.inputBg, borderColor: c.border }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: c.ink, fontSize: 13, fontWeight: '500' }}>
+                      {expression.en}
+                    </Text>
+                    <Text style={{ color: c.inkMuted, fontSize: 11.5, marginTop: 2 }}>
+                      {expression.zh}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => void play(expression.en)} style={styles.phraseReplay}>
+                    <CoachGlyph name="mic" color={c.inkLight} size={15} />
+                    <Text style={{ color: c.inkLight, fontSize: 11 }}>{t('coachReplay')}</Text>
+                  </Pressable>
                 </View>
-                <Text style={{ color: c.accent }}>{t('coachReplay')}</Text>
-              </Pressable>
-            ))}
-          </Section>
+              ))}
+            </SummaryPanel>
+          ) : null}
 
           <View style={styles.actions}>
-            <Pressable
+            <PrimaryButton
+              label={t('coachTryAgain')}
               onPress={() =>
                 router.replace({
                   pathname: '/coach/session',
@@ -227,21 +254,12 @@ export default function CoachSummaryScreen() {
                   },
                 })
               }
-              style={[styles.primary, { backgroundColor: c.buttonBg }]}
-            >
-              <Text style={{ color: c.buttonText, fontWeight: '700' }}>{t('coachTryAgain')}</Text>
-            </Pressable>
-            <Pressable
+            />
+            <SecondaryButton
+              label={t('coachChangeScenario')}
               onPress={() => router.replace('/(tabs)/coach')}
-              style={[styles.secondary, { borderColor: c.border }]}
-            >
-              <Text style={{ color: c.ink, fontWeight: '600' }}>{t('coachChangeScenario')}</Text>
-            </Pressable>
-            <Pressable
-              disabled={saved}
-              onPress={() => void save()}
-              style={[styles.secondary, { borderColor: saved ? c.border : c.accent }]}
-            >
+            />
+            <Pressable disabled={saved} onPress={() => void save()} style={styles.saveLink}>
               <Text style={{ color: saved ? c.inkMuted : c.accent, fontWeight: '600' }}>
                 {saved ? t('coachHistorySaved') : t('coachSaveHistory')}
               </Text>
@@ -250,6 +268,30 @@ export default function CoachSummaryScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+function SummaryPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={[cardStyle(c.card, c.border), styles.panel]}>
+      <Text style={[styles.panelTitle, { color: c.inkMuted }]}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statValue, { color: c.ink }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: c.inkMuted }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -263,60 +305,34 @@ function parseHistory(raw?: string): CoachTurn[] {
   }
 }
 
-function Section({
-  title,
-  card,
-  color,
-  children,
-}: {
-  title: string;
-  card: string;
-  color: string;
-  children: React.ReactNode;
-}) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  return (
-    <View style={[cardStyle(card, c.border), styles.section]}>
-      <Text style={{ color, fontWeight: '700', marginBottom: 8 }}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function ListSection({
-  title,
-  items,
-  card,
-  color,
-}: {
-  title: string;
-  items: string[];
-  card: string;
-  color: string;
-}) {
-  const { theme } = useTheme();
-  const c = theme.colors;
-  if (items.length === 0) return null;
-  return (
-    <Section title={title} card={card} color={color}>
-      {items.map((item) => (
-        <Text key={item} style={{ color: c.inkLight, lineHeight: 22 }}>
-          · {item}
-        </Text>
-      ))}
-    </Section>
-  );
-}
-
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
-  body: { paddingBottom: 40 },
-  title: { fontSize: 22, fontWeight: '700' },
-  section: { marginTop: 14 },
-  expressionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 12 },
-  actions: { gap: 10, marginTop: 20 },
-  primary: { alignItems: 'center', borderRadius: 14, paddingVertical: 14 },
-  secondary: { alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingVertical: 13 },
+  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  hero: { alignItems: 'center', padding: 18 },
+  scene: { fontSize: 11, letterSpacing: 1.3, textAlign: 'center' },
+  heroTitle: { fontSize: 19, fontWeight: '700', marginTop: 7, textAlign: 'center' },
+  stats: { flexDirection: 'row', alignSelf: 'stretch', borderTopWidth: 1, marginTop: 16, paddingTop: 14 },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 19, fontWeight: '700' },
+  statLabel: { fontSize: 10.5, marginTop: 3 },
+  panel: { marginTop: 12, padding: 15 },
+  panelTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 },
+  bodyText: { fontSize: 13, lineHeight: 21 },
+  en: { marginTop: 7 },
+  listItem: { flexDirection: 'row', gap: 9, marginTop: 8 },
+  marker: { width: 16, fontSize: 14, fontWeight: '700' },
+  itemText: { flex: 1, fontSize: 13, lineHeight: 20 },
+  phrase: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 11,
+    marginTop: 8,
+  },
+  phraseReplay: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actions: { gap: 10, marginTop: 18 },
+  saveLink: { alignItems: 'center', paddingVertical: 8 },
 });

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachAvatar } from '../../components/coach/CoachAvatar';
+import { CoachGlyph, PrimaryButton, SecondaryButton } from '../../components/coach/CoachUi';
 import { EndSessionSheet } from '../../components/coach/EndSessionSheet';
 import { FeedbackPanel } from '../../components/coach/FeedbackPanel';
 import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/coach-api-runtime';
@@ -64,6 +66,9 @@ export default function CoachSessionScreen() {
   const [startedAt] = useState(() => Date.now());
   const [volume, setVolume] = useState(0);
   const sttRef = useRef<SttSession | null>(null);
+  const inputRef = useRef<TextInput | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -194,11 +199,11 @@ export default function CoachSessionScreen() {
         onError: (message) => {
           sttRef.current = null;
           dispatch({ type: 'RESET' });
-          toast(
-            /not-allowed|permission|denied/i.test(message)
-              ? t('coachMicPermissionDenied')
-              : t('coachMicError')
-          );
+          if (/not-allowed|permission|denied/i.test(message)) {
+            setMicPermissionDenied(true);
+          } else {
+            toast(t('coachMicError'));
+          }
         },
         onEnd: () => {
           sttRef.current = null;
@@ -208,11 +213,11 @@ export default function CoachSessionScreen() {
       dispatch({ type: 'START_LISTENING' });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      toast(
-        /denied|restricted/.test(message)
-          ? t('coachMicPermissionDenied')
-          : t('coachMicError')
-      );
+      if (/denied|restricted/.test(message)) {
+        setMicPermissionDenied(true);
+      } else {
+        toast(t('coachMicError'));
+      }
     }
   };
 
@@ -248,6 +253,42 @@ export default function CoachSessionScreen() {
         : session.state === 'speaking'
           ? 'speaking'
           : 'idle';
+  const isInterview = !!params.interviewKind;
+  const liveText =
+    input.trim() ||
+    (session.state === 'listening'
+      ? t('coachListening')
+      : session.pendingText && session.state === 'error'
+        ? session.pendingText
+        : '');
+  const statusText =
+    session.state === 'listening'
+      ? t('coachListeningStatus')
+      : session.state === 'thinking'
+        ? t('coachThinkingStatus')
+        : session.state === 'speaking'
+          ? t('coachSpeakingStatus')
+          : t('coachWaitingStatus');
+
+  const stopAudio = () => {
+    void stopSpeaking();
+    sttRef.current?.abort();
+    sttRef.current = null;
+    setVolume(0);
+    dispatch({ type: 'RESET' });
+  };
+
+  if (micPermissionDenied) {
+    return (
+      <PermissionState
+        onSettings={() => void Linking.openSettings()}
+        onKeyboard={() => {
+          setMicPermissionDenied(false);
+          setKeyboardOpen(true);
+        }}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.studyBg }]} edges={['top', 'bottom']}>
@@ -256,102 +297,230 @@ export default function CoachSessionScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.topBar}>
-          <Pressable onPress={() => setShowEnd(true)} hitSlop={10}>
-            <Text style={{ color: c.studyMuted, fontWeight: '600' }}>{t('coachEnd')}</Text>
-          </Pressable>
-          <View style={styles.topCenter}>
-            <Text style={[styles.scenarioTitle, { color: c.studyText, fontFamily: serif }]} numberOfLines={1}>
-              {scenario.title}
+          <Text
+            numberOfLines={1}
+            style={[styles.scenarioTitle, { color: c.studyText, fontFamily: serif }]}
+          >
+            {scenario.title}
+          </Text>
+          <View style={styles.topPills}>
+            <Text style={[styles.headPill, { backgroundColor: c.tagBg, color: c.studyMuted }]}>
+              {turnIndex} / {scenario.max_turns}
             </Text>
-            <Text style={{ color: c.studyMuted, fontSize: 11, marginTop: 3 }}>
-              {turnIndex}/{scenario.max_turns}
-              {quotaRemaining !== undefined
-                ? ` · ${quotaRemaining === null ? t('coachUnlimited') : quotaRemaining}`
-                : ''}
-            </Text>
+            {quotaRemaining !== undefined && quotaRemaining !== null ? (
+              <Text style={[styles.headPill, { backgroundColor: c.tagBg, color: c.studyMuted }]}>
+                {t('coachToday')} {quotaRemaining}
+              </Text>
+            ) : null}
           </View>
           <Pressable
-            onPress={() => setMode((value) => (value === 'feedback' ? 'immersion' : 'feedback'))}
-            style={[styles.modeChip, { borderColor: c.studyMuted }]}
+            accessibilityRole="button"
+            onPress={() => setShowEnd(true)}
+            style={[styles.endChip, { borderColor: c.border }]}
           >
-            <Text style={{ color: c.studyMuted, fontSize: 11 }}>
-              {mode === 'immersion' ? t('coachImmersion') : t('coachFeedbackMode')}
-            </Text>
+            <Text style={{ color: c.studyText, fontSize: 12 }}>{t('coachEnd')}</Text>
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.avatarWrap}>
-            <CoachAvatar
-              state={avatarState}
-              mood="friendly"
-              size={210}
-              volume={Math.max(0, Math.min(1, (volume + 2) / 12))}
-            />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.stage, { backgroundColor: c.studyCard, borderColor: c.border }]}>
+            <View style={styles.stageMeta}>
+              <Text style={[styles.stageWho, { color: c.studyMuted }]}>
+                {scenario.persona.name} · {scenario.persona.role} · {scenario.persona.locale}
+              </Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.liveDot, { backgroundColor: c.accent }]} />
+                <Text style={{ color: c.studyMuted, fontSize: 11 }}>{statusText}</Text>
+              </View>
+            </View>
+            <View style={styles.avatarWrap}>
+              <CoachAvatar
+                state={avatarState}
+                mood="friendly"
+                size={196}
+                volume={Math.max(0, Math.min(1, (volume + 2) / 12))}
+              />
+            </View>
           </View>
-          <Pressable onPress={() => void play(reply)} style={styles.replyBlock}>
+
+          <View style={[styles.replyCard, { backgroundColor: c.studyCard, borderColor: c.border }]}>
             <Text style={[styles.reply, { color: c.studyText }]}>{reply}</Text>
-            <Text style={{ color: c.accent, fontSize: 12, marginTop: 8 }}>{t('coachReplay')}</Text>
-          </Pressable>
+            <View style={styles.replyFooter}>
+              <Text style={{ color: c.studyMuted, fontSize: 12, flex: 1 }}>
+                {isInterview ? t('coachInterviewModeHint') : t('coachFeedbackMode')}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void play(reply)}
+                style={[styles.replayButton, { borderColor: c.border }]}
+              >
+                <CoachGlyph name="mic" color={c.inkLight} size={15} />
+                <Text style={{ color: c.inkLight, fontSize: 11 }}>{t('coachReplay')}</Text>
+              </Pressable>
+            </View>
+          </View>
 
           {session.state === 'thinking' ? (
-            <Text style={{ color: c.studyMuted, textAlign: 'center' }}>{t('coachThinking')}</Text>
+            <Text style={{ color: c.studyMuted, textAlign: 'center', marginTop: 8 }}>
+              {t('coachThinking')}
+            </Text>
           ) : null}
+
           {error ? (
-            <View style={styles.errorRow}>
-              <Text style={{ color: c.accent, flex: 1 }}>{t('coachSessionError')}</Text>
-              <Pressable onPress={() => void submit()}>
-                <Text style={{ color: c.studyText, fontWeight: '700' }}>{t('coachRetry')}</Text>
+            <View style={[styles.errorCard, { backgroundColor: c.accentLight, borderLeftColor: c.accent }]}>
+              <Text style={{ color: c.ink, fontWeight: '700' }}>{t('coachTurnFailedTitle')}</Text>
+              <Text style={{ color: c.inkLight, lineHeight: 20, marginTop: 5 }}>
+                {t('coachTurnFailedDesc')}
+              </Text>
+              <Pressable
+                onPress={() => void submit()}
+                style={[styles.retryButton, { backgroundColor: c.accentLight }]}
+              >
+                <Text style={{ color: c.accent, fontWeight: '700' }}>{t('coachRetry')}</Text>
               </Pressable>
             </View>
           ) : null}
-          {mode === 'feedback' ? (
+
+          {!isInterview && mode === 'feedback' ? (
             <FeedbackPanel feedback={feedback} onSpeak={(text) => void play(text)} />
+          ) : null}
+
+          {isInterview ? (
+            <View style={[styles.modeNote, { backgroundColor: c.tagBg }]}>
+              <Text style={{ color: c.studyMuted, fontSize: 12, lineHeight: 18 }}>
+                {t('coachInterviewModeHint')}
+              </Text>
+            </View>
+          ) : null}
+
+          {liveText ? (
+            <View style={styles.userLine}>
+              <View style={[styles.userRing, { backgroundColor: c.accentLight, borderColor: c.accent }]}>
+                <CoachGlyph name="mic" color={c.accent} size={17} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.studyText, fontSize: 13.5, lineHeight: 20 }}>{liveText}</Text>
+                <Text style={{ color: c.studyMuted, fontSize: 10.5, marginTop: 2 }}>
+                  {session.state === 'listening' ? t('coachListening') : t('coachKept')}
+                </Text>
+              </View>
+            </View>
           ) : null}
         </ScrollView>
 
-        <View style={[styles.controls, { borderTopColor: c.border }]}>
-          <Pressable
-            accessibilityLabel="coach-mic"
-            onPress={() => void toggleMic()}
-            style={[
-              styles.mic,
-              {
-                backgroundColor: session.state === 'listening' ? c.accent : c.studyCard,
-                borderColor: session.state === 'listening' ? c.accent : c.studyMuted,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: session.state === 'listening' ? c.buttonText : c.studyMuted,
-                fontSize: 22,
-              }}
-            >
-              ◉
-            </Text>
-          </Pressable>
-          <View style={[styles.inputWrap, { backgroundColor: c.studyCard }]}>
-            <TextInput
-              accessibilityLabel="coach-input"
-              value={input}
-              onChangeText={setInput}
-              placeholder={t('coachInputPlaceholder')}
-              placeholderTextColor={c.studyMuted}
-              style={[styles.input, { color: c.studyText }]}
-              multiline
-              maxLength={2_000}
-            />
-            <Pressable
-              accessibilityLabel="coach-send"
-              disabled={!input.trim() || session.state === 'thinking'}
-              onPress={() => void submit()}
-            >
-              <Text style={{ color: input.trim() ? c.accent : c.studyMuted, fontWeight: '700' }}>
-                {t('coachSend')}
+        <View style={[styles.controls, { borderTopColor: c.divider }]}>
+          {!isInterview ? (
+            <View style={styles.modes}>
+              <Pressable
+                onPress={() => setMode('feedback')}
+                style={[
+                  styles.modeButton,
+                  { borderColor: c.border },
+                  mode === 'feedback' && { backgroundColor: c.ink, borderColor: c.ink },
+                ]}
+              >
+                <Text style={{ color: mode === 'feedback' ? c.paper : c.studyMuted, fontSize: 11.5 }}>
+                  {t('coachFeedbackMode')}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setMode('immersion')}
+                style={[
+                  styles.modeButton,
+                  { borderColor: c.border },
+                  mode === 'immersion' && { backgroundColor: c.ink, borderColor: c.ink },
+                ]}
+              >
+                <Text style={{ color: mode === 'immersion' ? c.paper : c.studyMuted, fontSize: 11.5 }}>
+                  {t('coachImmersion')}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {keyboardOpen ? (
+            <>
+              <View style={[styles.composer, { backgroundColor: c.studyCard, borderColor: c.border }]}>
+                <TextInput
+                  ref={inputRef}
+                  accessibilityLabel="coach-input"
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder={t('coachInputPlaceholder')}
+                  placeholderTextColor={c.studyMuted}
+                  style={[styles.input, { color: c.studyText }]}
+                  multiline
+                  maxLength={2_000}
+                  autoFocus
+                />
+                <Pressable
+                  accessibilityLabel="coach-send"
+                  disabled={!input.trim() || session.state === 'thinking'}
+                  onPress={() => {
+                    void submit();
+                    setKeyboardOpen(false);
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: input.trim() ? c.accent : c.studyMuted,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {t('coachSend')}
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={[styles.controlHint, { color: c.studyMuted }]}>
+                {t('coachKeyboardHint')}
               </Text>
-            </Pressable>
-          </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.voiceRow}>
+                <Pressable
+                  accessibilityLabel="coach-keyboard"
+                  accessibilityRole="button"
+                  onPress={() => setKeyboardOpen(true)}
+                  style={[styles.roundControl, { backgroundColor: c.card, borderColor: c.border }]}
+                >
+                  <CoachGlyph name="keyboard" color={c.ink} size={20} />
+                </Pressable>
+                <View
+                  style={[
+                    styles.micRing,
+                    {
+                      borderColor: session.state === 'listening' ? c.accent : 'transparent',
+                    },
+                  ]}
+                >
+                  <Pressable
+                    accessibilityLabel="coach-mic"
+                    accessibilityRole="button"
+                    onPress={() => void toggleMic()}
+                    style={[styles.mic, { backgroundColor: c.buttonBg }]}
+                  >
+                    <CoachGlyph name="mic" color={c.buttonText} size={26} />
+                  </Pressable>
+                </View>
+                <Pressable
+                  accessibilityLabel="coach-stop"
+                  accessibilityRole="button"
+                  onPress={stopAudio}
+                  style={[styles.roundControl, { backgroundColor: c.card, borderColor: c.border }]}
+                >
+                  <CoachGlyph name="stop" color={c.ink} size={20} />
+                </Pressable>
+              </View>
+              <Text style={[styles.controlHint, { color: c.studyMuted }]}>
+                {isInterview ? t('coachInterviewEndHint') : t('coachVoiceControlHint')}
+              </Text>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -367,44 +536,134 @@ export default function CoachSessionScreen() {
   );
 }
 
+function PermissionState({
+  onSettings,
+  onKeyboard,
+}: {
+  onSettings: () => void;
+  onKeyboard: () => void;
+}) {
+  const { t } = useI18n();
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <View style={styles.permissionBody}>
+        <View style={[styles.permissionIcon, { backgroundColor: c.card, borderColor: c.border }]}>
+          <CoachGlyph name="micOff" color={c.ink} size={30} />
+        </View>
+        <Text style={[styles.permissionTitle, { color: c.ink }]}>
+          {t('coachPermissionMicTitle')}
+        </Text>
+        <Text style={[styles.permissionText, { color: c.inkMuted }]}>
+          {t('coachPermissionMicDesc')}
+        </Text>
+        <Text style={[styles.permissionFoot, { color: c.inkMuted }]}>
+          {t('coachPermissionMicFootnote')}
+        </Text>
+        <View style={styles.permissionActions}>
+          <PrimaryButton label={t('coachOpenSettings')} onPress={onSettings} variant="accent" />
+          <SecondaryButton label={t('coachUseKeyboard')} onPress={onKeyboard} />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: 10,
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
-  topCenter: { flex: 1, alignItems: 'center' },
-  scenarioTitle: { fontSize: 16, fontWeight: '700', maxWidth: '80%' },
-  modeChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
-  content: { paddingHorizontal: 20, paddingBottom: 30 },
-  avatarWrap: { alignItems: 'center', paddingTop: 12, paddingBottom: 10 },
-  replyBlock: { alignItems: 'center', paddingHorizontal: 8, marginBottom: 8 },
-  reply: { fontSize: 18, lineHeight: 27, textAlign: 'center' },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
-  controls: {
+  scenarioTitle: { flex: 1, fontSize: 16, fontWeight: '700' },
+  topPills: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headPill: { fontSize: 10.5, borderRadius: 999, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 4 },
+  endChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  content: { paddingHorizontal: 16, paddingBottom: 14 },
+  stage: {
+    height: 340,
+    borderWidth: 1,
+    borderRadius: 22,
+    overflow: 'hidden',
+    paddingTop: 13,
+  },
+  stageMeta: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  mic: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  stageWho: { fontSize: 11.5, flexShrink: 1 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  avatarWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 4 },
+  replyCard: { borderWidth: 1, borderRadius: 16, padding: 15, marginTop: 12 },
+  reply: { fontSize: 15, lineHeight: 24 },
+  replyFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 },
+  replayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  errorCard: { marginTop: 10, borderLeftWidth: 3, borderRadius: 14, padding: 13 },
+  retryButton: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, marginTop: 10 },
+  modeNote: { marginTop: 10, borderRadius: 12, padding: 11 },
+  userLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  userRing: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inputWrap: {
-    flex: 1,
+  controls: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  modes: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 },
+  modeButton: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 5 },
+  voiceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22 },
+  roundControl: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mic: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composer: {
     minHeight: 48,
     maxHeight: 110,
-    borderRadius: 22,
+    borderWidth: 1,
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -412,4 +671,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: { flex: 1, fontSize: 15, maxHeight: 80, paddingTop: 0 },
+  controlHint: { textAlign: 'center', fontSize: 11, marginTop: 11 },
+  permissionBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 34, paddingBottom: 70 },
+  permissionIcon: { width: 96, height: 96, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  permissionTitle: { fontSize: 20, fontWeight: '700', marginTop: 24, textAlign: 'center' },
+  permissionText: { fontSize: 13, lineHeight: 21, marginTop: 10, textAlign: 'center' },
+  permissionFoot: { fontSize: 11.5, lineHeight: 18, marginTop: 14, textAlign: 'center' },
+  permissionActions: { alignSelf: 'stretch', gap: 9, marginTop: 24 },
 });

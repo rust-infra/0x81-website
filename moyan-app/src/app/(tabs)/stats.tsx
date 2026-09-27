@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoachGlyph } from '../../components/coach/CoachUi';
 import { getDailyTrend, getStudyQueue } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
@@ -90,7 +91,7 @@ export default function StatsScreen() {
         <ScrollView contentContainerStyle={[screen.body, styles.body]}>
           <View style={[styles.streakCard, { backgroundColor: c.buttonBg }]}>
             <View style={[styles.streakIcon, { backgroundColor: `${c.buttonText}1F` }]}>
-              <Text style={styles.streakEmoji}>🔥</Text>
+              <CoachGlyph name="spark" color={c.buttonText} size={25} />
             </View>
             <View>
               <Text style={[styles.streakValue, { color: c.buttonText }]}>{streak}</Text>
@@ -107,14 +108,14 @@ export default function StatsScreen() {
               { label: t('todayReview'), value: stats.today },
               { label: t('due'), value: stats.due },
             ].map((item) => (
-              <View key={item.label} style={[styles.statCard, { backgroundColor: c.card }]}>
+              <View key={item.label} style={[styles.statCard, { backgroundColor: c.card, borderColor: c.border }]}>
                 <Text style={[styles.statValue, { color: c.ink }]}>{item.value}</Text>
                 <Text style={[styles.statLabel, { color: c.inkLight }]}>{item.label}</Text>
               </View>
             ))}
           </View>
 
-          <View style={[styles.trendCard, { backgroundColor: c.card }]}>
+          <View style={[styles.trendCard, { backgroundColor: c.card, borderColor: c.border }]}>
             <View style={styles.trendHeader}>
               <Text style={[styles.trendTitle, { color: c.ink }]}>{t('weekTrend')}</Text>
               <Text style={[styles.trendAcc, { color: c.accent }]}>{t('accuracy')} {overallAccuracy}%</Text>
@@ -151,7 +152,7 @@ export default function StatsScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { paddingBottom: 120 },
+  body: { paddingBottom: 140 },
   streakCard: {
     borderRadius: 16,
     padding: 20,
@@ -167,7 +168,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  streakEmoji: { fontSize: 26 },
   streakValue: { fontSize: 28, fontWeight: '700', fontFamily: serif },
   streakLabel: { fontSize: 12, marginTop: 2 },
   grid: {
@@ -176,15 +176,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statCard: {
-    width: '47.5%',
+    width: '48%',
     borderRadius: 16,
-    padding: 16,
+    borderWidth: 1,
+    padding: 15,
   },
   statValue: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 12, marginTop: 4 },
   quote: { textAlign: 'center', fontSize: 13, marginTop: 28, fontFamily: serif },
   trendCard: {
     borderRadius: 16,
+    borderWidth: 1,
     padding: 20,
     marginTop: 16,
   },

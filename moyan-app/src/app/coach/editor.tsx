@@ -1,16 +1,22 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  CoachGlyph,
+  CoachGroup,
+  CoachHeader,
+  CoachRow,
+  PrimaryButton,
+  SecondaryButton,
+  SectionLabel,
+} from '../../components/coach/CoachUi';
 import { draftCoachScenario } from '../../lib/coach-api-runtime';
-import { loadCustomScenarios, saveCustomScenario } from '../../lib/coach-storage';
+import {
+  deleteCustomScenario,
+  loadCustomScenarios,
+  saveCustomScenario,
+} from '../../lib/coach-storage';
 import type {
   CoachCategory,
   CoachDifficulty,
@@ -26,8 +32,8 @@ import {
 } from '../../lib/coach-validation';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
-import { useToast } from '../../lib/toast';
-import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
+import { confirmAsync, useToast } from '../../lib/toast';
+import { serif } from '../../lib/ui';
 
 function newScenario(): CoachScenario {
   return {
@@ -57,6 +63,7 @@ export default function CoachEditorScreen() {
   const [focusText, setFocusText] = useState('');
   const [errors, setErrors] = useState<CoachScenarioErrors>({});
   const [busy, setBusy] = useState(false);
+  const [draftGenerated, setDraftGenerated] = useState(false);
 
   useEffect(() => {
     if (!scenarioId) return;
@@ -65,6 +72,7 @@ export default function CoachEditorScreen() {
       if (!found) return;
       setScenario(found);
       setFocusText(found.focus_points.join(', '));
+      setDraftGenerated(true);
     });
   }, [scenarioId]);
 
@@ -80,6 +88,7 @@ export default function CoachEditorScreen() {
     try {
       const draft = await draftCoachScenario(description.trim(), lang);
       apply({ ...draft, id: scenario.id, source: 'custom' });
+      setDraftGenerated(true);
     } catch {
       toast(t('coachDraftFailed'));
     } finally {
@@ -103,32 +112,40 @@ export default function CoachEditorScreen() {
     router.replace('/(tabs)/coach');
   };
 
+  const remove = async () => {
+    if (!scenarioId) return;
+    const ok = await confirmAsync(t('coachDelete'), scenario.title);
+    if (!ok) return;
+    await deleteCustomScenario(scenarioId);
+    toast(t('saved'));
+    router.replace('/(tabs)/coach');
+  };
+
   return (
-    <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
-      <View style={screen.header}>
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            style={[roundButton, { backgroundColor: c.inputBg }]}
-          >
-            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
-          </Pressable>
-          <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            {scenarioId ? t('coachEdit') : t('coachNew')}
-          </Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <CoachHeader
+        title={scenarioId ? t('coachEdit') : t('coachNewScenario')}
+        onBack={() => router.back()}
+        right={
           <Pressable onPress={() => void save()} hitSlop={12}>
             <Text style={{ color: c.accent, fontWeight: '700' }}>{t('save')}</Text>
           </Pressable>
-        </View>
-      </View>
+        }
+      />
 
-      <ScrollView contentContainerStyle={[screen.body, styles.body]} keyboardShouldPersistTaps="handled">
-        <View style={[cardStyle(c.card, c.border), styles.draftCard]}>
-          <Text style={[styles.cardTitle, { color: c.ink, fontFamily: serif }]}>
-            {t('coachAiDraft')}
-          </Text>
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <View style={[styles.draftCard, { backgroundColor: c.accentLight }]}>
+          <View style={styles.draftTitleRow}>
+            <CoachGlyph name="spark" color={c.accent} size={17} />
+            <Text style={[styles.draftTitle, { color: c.accent }]}>{t('coachAiDraftTitle')}</Text>
+          </View>
+          <Text style={[styles.draftDesc, { color: c.inkLight }]}>{t('coachAiDraftDesc')}</Text>
           <TextInput
-            style={[styles.input, styles.draftInput, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+            style={[
+              styles.input,
+              styles.draftInput,
+              { backgroundColor: c.card, color: c.ink, borderColor: 'transparent' },
+            ]}
             value={description}
             onChangeText={setDescription}
             placeholder={t('coachAiDraftPlaceholder')}
@@ -139,16 +156,16 @@ export default function CoachEditorScreen() {
           <Pressable
             disabled={busy || !description.trim()}
             onPress={() => void generate()}
-            style={[styles.primarySmall, { backgroundColor: busy ? c.inkMuted : c.buttonBg }]}
+            style={[styles.draftButton, { backgroundColor: busy ? c.inkMuted : c.accent }]}
           >
-            <Text style={{ color: c.buttonText, fontWeight: '600' }}>
-              {busy ? t('saving') : t('coachGenerateDraft')}
+            <Text style={{ color: c.buttonText, fontWeight: '700' }}>
+              {busy ? t('saving') : draftGenerated ? t('coachRegenerate') : t('coachGenerateDraft')}
             </Text>
           </Pressable>
           <Text style={[styles.hint, { color: c.inkMuted }]}>{t('coachPrivacyHint')}</Text>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('coachFromTemplate')}</Text>
+        <SectionLabel>{t('coachFromTemplate')}</SectionLabel>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {['incident_sync', 'scope_deadline', 'cross_timezone_handoff', 'growth_1on1'].map((id) => {
             const template = scenarioFromTemplate(id);
@@ -156,7 +173,10 @@ export default function CoachEditorScreen() {
             return (
               <Pressable
                 key={id}
-                onPress={() => apply({ ...template, id: scenario.id })}
+                onPress={() => {
+                  apply({ ...template, id: scenario.id });
+                  setDraftGenerated(true);
+                }}
                 style={[styles.chip, { backgroundColor: c.inputBg, borderColor: c.border }]}
               >
                 <Text style={{ color: c.ink, fontSize: 12 }}>{template.title}</Text>
@@ -165,6 +185,42 @@ export default function CoachEditorScreen() {
           })}
         </ScrollView>
 
+        {draftGenerated ? (
+          <>
+            <SectionLabel>{t('coachGeneratedFields')}</SectionLabel>
+            <CoachGroup>
+              <CoachRow
+                title={t('coachPersonaName')}
+                subtitle={`${scenario.persona.name} · ${scenario.persona.role}`}
+                meta={`${scenario.persona.locale} · ${scenario.persona.tone}`}
+              />
+              <CoachRow
+                title={t('coachOpeningLine')}
+                subtitle={scenario.opening_line || t('coachPasteText')}
+                meta={scenario.opening_line ? t('coachKept') : undefined}
+              />
+              <CoachRow
+                title={t('coachFocusPoints')}
+                subtitle={focusText || '—'}
+                meta={t('coachItems', {
+                  count: focusText.split(/[,，、]/).filter((item) => item.trim()).length,
+                })}
+              />
+              <CoachRow
+                title={`${t('coachDifficulty')} / ${t('coachMaxTurns')}`}
+                subtitle={`${t(
+                  scenario.difficulty === 'easy'
+                    ? 'coachDifficultyEasy'
+                    : scenario.difficulty === 'challenge'
+                      ? 'coachDifficultyChallenge'
+                      : 'coachDifficultyCore'
+                )} · ${t('coachTurns', { count: scenario.max_turns })}`}
+              />
+            </CoachGroup>
+          </>
+        ) : null}
+
+        <SectionLabel>{t('coachManualEntry')}</SectionLabel>
         <Field
           label={t('coachTitle')}
           value={scenario.title}
@@ -180,20 +236,27 @@ export default function CoachEditorScreen() {
           multiline
           maxLength={220}
         />
-        <Field
-          label={t('coachPersonaName')}
-          value={scenario.persona.name}
-          onChange={(value) => apply({ ...scenario, persona: { ...scenario.persona, name: value } })}
-          invalid={!!errors.name}
-          maxLength={40}
-        />
-        <Field
-          label={t('coachPersonaRole')}
-          value={scenario.persona.role}
-          onChange={(value) => apply({ ...scenario, persona: { ...scenario.persona, role: value } })}
-          invalid={!!errors.role}
-          maxLength={80}
-        />
+        <Text style={[styles.fieldLabel, { color: c.inkLight }]}>{t('coachPersonaLabel')}</Text>
+        <View style={styles.twoColumns}>
+          <Field
+            style={styles.twoColumnField}
+            hideLabel
+            label={t('coachPersonaName')}
+            value={scenario.persona.name}
+            onChange={(value) => apply({ ...scenario, persona: { ...scenario.persona, name: value } })}
+            invalid={!!errors.name}
+            maxLength={40}
+          />
+          <Field
+            style={styles.twoColumnField}
+            hideLabel
+            label={t('coachPersonaRole')}
+            value={scenario.persona.role}
+            onChange={(value) => apply({ ...scenario, persona: { ...scenario.persona, role: value } })}
+            invalid={!!errors.role}
+            maxLength={80}
+          />
+        </View>
         <Field
           label={t('coachOpeningLine')}
           value={scenario.opening_line}
@@ -224,6 +287,9 @@ export default function CoachEditorScreen() {
             apply({ ...scenario, persona: { ...scenario.persona, locale: value as CoachLocale } })
           }
         />
+        {scenario.persona.locale === 'zh-CN' ? (
+          <Text style={[styles.hint, { color: c.inkMuted }]}>{t('coachAccentHint')}</Text>
+        ) : null}
         <Selector
           label={t('coachTone')}
           values={['friendly', 'neutral', 'direct', 'challenging']}
@@ -251,9 +317,12 @@ export default function CoachEditorScreen() {
           keyboardType="number-pad"
         />
 
-        <Pressable onPress={() => void save()} style={[styles.primary, { backgroundColor: c.buttonBg }]}>
-          <Text style={{ color: c.buttonText, fontWeight: '700' }}>{t('coachSaveScenario')}</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <PrimaryButton label={t('coachSaveScenario')} onPress={() => void save()} variant="accent" />
+          {scenarioId ? (
+            <SecondaryButton label={t('coachDelete')} onPress={() => void remove()} />
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -267,6 +336,8 @@ function Field({
   multiline,
   maxLength,
   keyboardType,
+  style,
+  hideLabel,
 }: {
   label: string;
   value: string;
@@ -275,12 +346,16 @@ function Field({
   multiline?: boolean;
   maxLength?: number;
   keyboardType?: 'default' | 'number-pad';
+  style?: object;
+  hideLabel?: boolean;
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
   return (
-    <View style={styles.field}>
-      <Text style={{ color: c.inkLight, fontSize: 12, marginBottom: 6 }}>{label}</Text>
+    <View style={[styles.field, style]}>
+      {hideLabel ? null : (
+        <Text style={[styles.fieldLabel, { color: c.inkLight }]}>{label}</Text>
+      )}
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -316,7 +391,7 @@ function Selector({
   const c = theme.colors;
   return (
     <View style={styles.field}>
-      <Text style={{ color: c.inkLight, fontSize: 12, marginBottom: 6 }}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: c.inkLight }]}>{label}</Text>
       <View style={styles.chips}>
         {values.map((value) => (
           <Pressable
@@ -341,29 +416,33 @@ function Selector({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  body: { paddingBottom: 40 },
-  draftCard: { marginBottom: 18 },
-  cardTitle: { fontSize: 17, fontWeight: '700', marginBottom: 10 },
+  container: { flex: 1 },
+  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  draftCard: { borderRadius: 16, padding: 15 },
+  draftTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  draftTitle: { fontSize: 14, fontWeight: '700' },
+  draftDesc: { fontSize: 11.5, lineHeight: 18, marginTop: 5 },
   input: {
     borderWidth: 1,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 13.5,
   },
-  draftInput: { minHeight: 78, textAlignVertical: 'top' },
-  multiline: { minHeight: 72, textAlignVertical: 'top' },
-  primarySmall: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9, marginTop: 10 },
-  primary: { alignItems: 'center', borderRadius: 16, paddingVertical: 15, marginTop: 22 },
+  draftInput: { minHeight: 74, textAlignVertical: 'top', marginTop: 10, fontSize: 13.5 },
+  draftButton: {
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 10,
+  },
   hint: { fontSize: 11, lineHeight: 17, marginTop: 10 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
-  field: { marginTop: 14 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  field: { marginTop: 15 },
+  fieldLabel: { fontSize: 11.5, fontWeight: '600', marginBottom: 6 },
+  multiline: { minHeight: 74, textAlignVertical: 'top' },
+  twoColumns: { flexDirection: 'row', gap: 8 },
+  twoColumnField: { flex: 1 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  actions: { gap: 10, marginTop: 24 },
 });

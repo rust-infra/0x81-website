@@ -1,27 +1,40 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoachGlyph, CoachHeader, PrimaryButton } from '../../../components/coach/CoachUi';
+import { listCoachScenarios } from '../../../lib/coach-api-runtime';
 import { saveInterviewProfile } from '../../../lib/coach-storage';
-import type { InterviewKind } from '../../../lib/coach-types';
+import type { CoachScenario, InterviewKind } from '../../../lib/coach-types';
 import { useI18n } from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme-context';
 import { useToast } from '../../../lib/toast';
-import { cardStyle, roundButton, screen, serif } from '../../../lib/ui';
 
 export default function InterviewProfileScreen() {
-  const { kind: rawKind, profile: rawProfile, interviewerId } = useLocalSearchParams<{
+  const { kind: rawKind, profile: rawProfile, interviewerId, source } = useLocalSearchParams<{
     kind?: string;
     profile?: string;
     interviewerId?: string;
+    source?: string;
   }>();
   const kind: InterviewKind = rawKind === 'job' ? 'job' : 'resume';
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { theme } = useTheme();
   const toast = useToast();
   const c = theme.colors;
   const [profile, setProfile] = useState(rawProfile ?? '');
+  const [interviewer, setInterviewer] = useState<CoachScenario | null>(null);
+
+  useEffect(() => {
+    void listCoachScenarios(lang)
+      .then((items) =>
+        setInterviewer(
+          items.find((item) => item.id === (interviewerId ?? 'interview_behavioral')) ?? null
+        )
+      )
+      .catch(() => {});
+  }, [interviewerId, lang]);
 
   const start = async () => {
     if (!profile.trim()) return;
@@ -44,23 +57,39 @@ export default function InterviewProfileScreen() {
     });
   };
 
+  const edited = profile !== (rawProfile ?? '');
+
   return (
-    <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
-      <View style={screen.header}>
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={[roundButton, { backgroundColor: c.inputBg }]}>
-            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <CoachHeader
+        title={t('coachProfileTitle')}
+        onBack={() => router.back()}
+        right={
+          <Pressable
+            onPress={() =>
+              router.replace({
+                pathname: '/coach/interview/materials',
+                params: { kind, interviewerId, source },
+              })
+            }
+            hitSlop={12}
+          >
+            <Text style={{ color: c.inkMuted, fontSize: 12 }}>{t('coachRegenerate')}</Text>
           </Pressable>
-          <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            {t('coachProfileTitle')}
+        }
+      />
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <View style={[styles.notice, { backgroundColor: c.card, borderLeftColor: c.accent }]}>
+          <View style={styles.noticeTitleRow}>
+            <CoachGlyph name="check" color={c.accent} size={17} />
+            <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12.5 }}>
+              {t('coachProfileGenerated')}
+            </Text>
+          </View>
+          <Text style={{ color: c.ink, fontSize: 14, lineHeight: 22, marginTop: 9 }}>
+            {t('coachProfileUseOnly')}
           </Text>
-          <View style={roundButton} />
         </View>
-      </View>
-      <ScrollView contentContainerStyle={[screen.body, styles.body]} keyboardShouldPersistTaps="handled">
-        <Text style={{ color: c.inkMuted, fontSize: 12, lineHeight: 18 }}>
-          {t('coachProfileHint')}
-        </Text>
         <TextInput
           value={profile}
           onChangeText={setProfile}
@@ -68,42 +97,69 @@ export default function InterviewProfileScreen() {
           maxLength={3_000}
           style={[
             styles.input,
-            { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border },
+            { backgroundColor: c.card, color: c.ink, borderColor: c.border },
           ]}
         />
-        <Text style={{ color: c.inkMuted, textAlign: 'right', fontSize: 11, marginTop: 5 }}>
-          {profile.length} / 3000
-        </Text>
-        <View style={[cardStyle(c.card, c.border), styles.risk]}>
+        <View style={styles.counterRow}>
+          <View style={styles.editedRow}>
+            <View
+              style={[
+                styles.editedDot,
+                { backgroundColor: edited ? c.accent : c.inkMuted },
+              ]}
+            />
+            <Text style={{ color: c.inkMuted, fontSize: 11 }}>
+              {edited ? t('coachEdited') : t('saved')}
+            </Text>
+          </View>
+          <Text style={{ color: c.inkMuted, fontSize: 11 }}>{profile.length} / 3000</Text>
+        </View>
+        <View style={[styles.risk, { backgroundColor: c.card, borderColor: c.border }]}>
           <Text style={{ color: c.inkMuted, fontSize: 12, lineHeight: 18 }}>
-            {t('coachRiskNotice')}
+            {t('coachProfileRisk')}
           </Text>
         </View>
-        <Pressable
-          disabled={!profile.trim()}
-          onPress={() => void start()}
-          style={[styles.primary, { backgroundColor: profile.trim() ? c.buttonBg : c.inkMuted }]}
-        >
-          <Text style={{ color: c.buttonText, fontWeight: '700' }}>{t('coachStartInterview')}</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <PrimaryButton
+            label={t('coachStartInterview')}
+            onPress={() => void start()}
+            disabled={!profile.trim()}
+            variant="accent"
+          />
+          {interviewer ? (
+            <Text style={[styles.footer, { color: c.inkMuted }]}>
+              {t('coachInterviewerFooter', {
+                name: interviewer.persona.name,
+                role: interviewer.persona.role,
+                locale: interviewer.persona.locale,
+              })}
+            </Text>
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  body: { paddingBottom: 40 },
+  container: { flex: 1 },
+  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  notice: { borderLeftWidth: 3, borderRadius: 16, padding: 14 },
+  noticeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   input: {
-    minHeight: 320,
+    minHeight: 330,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     textAlignVertical: 'top',
-    marginTop: 14,
+    marginTop: 12,
     fontSize: 14,
     lineHeight: 22,
   },
-  risk: { marginTop: 12 },
-  primary: { alignItems: 'center', borderRadius: 16, paddingVertical: 15, marginTop: 18 },
+  counterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  editedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editedDot: { width: 7, height: 7, borderRadius: 4 },
+  risk: { borderRadius: 13, borderWidth: 1, padding: 13, marginTop: 12 },
+  actions: { marginTop: 18 },
+  footer: { textAlign: 'center', fontSize: 11, marginTop: 12 },
 });

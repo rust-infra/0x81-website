@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Animated,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -102,7 +103,7 @@ export default function HomeScreen() {
       {!stats ? (
         <ActivityIndicator color={c.accent} style={styles.center} />
       ) : (
-        <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <View style={[styles.progressCard, { backgroundColor: c.buttonBg }]}>
             <View style={styles.progressRow}>
               <View>
@@ -136,24 +137,24 @@ export default function HomeScreen() {
           </Pressable>
 
           <View style={styles.grid}>
-            <View style={[styles.statCard, { backgroundColor: c.card }]}>
+            <View style={[styles.statCard, { backgroundColor: c.card, borderColor: c.border }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.due}</Text>
               <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('due')}</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: c.card }]}>
+            <View style={[styles.statCard, { backgroundColor: c.card, borderColor: c.border }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.fresh}</Text>
               <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('new')}</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: c.card }]}>
+            <View style={[styles.statCard, { backgroundColor: c.card, borderColor: c.border }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.total}</Text>
               <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('totalWords')}</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: c.card }]}>
+            <View style={[styles.statCard, { backgroundColor: c.card, borderColor: c.border }]}>
               <Text style={[styles.statValue, { color: c.ink }]}>{stats.today}</Text>
               <Text style={[styles.statLabel, { color: c.inkLight }]}>{t('todayReview')}</Text>
             </View>
           </View>
-        </View>
+        </ScrollView>
       )}
 
     </SafeAreaView>
@@ -162,11 +163,11 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 20 },
-  greeting: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
-  date: { fontSize: 13 },
+  header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 18 },
+  greeting: { fontSize: 25, fontWeight: '700', marginBottom: 7 },
+  date: { fontSize: 12.5 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  body: { paddingHorizontal: 20 },
+  body: { paddingHorizontal: 20, paddingBottom: 140 },
   progressCard: {
     borderRadius: 24,
     padding: 20,
@@ -179,8 +180,8 @@ const styles = StyleSheet.create({
   progressToday: { fontSize: 18, fontWeight: '600' },
   cta: {
     borderRadius: 24,
-    padding: 22,
-    marginBottom: 16,
+    padding: 20,
+    marginBottom: 14,
     overflow: 'hidden',
   },
   ctaWord: {
@@ -200,10 +201,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   statCard: {
-    width: '47.5%',
+    width: '48%',
     borderRadius: 16,
-    padding: 16,
+    borderWidth: 1,
+    padding: 15,
   },
-  statValue: { fontSize: 24, fontWeight: '700' },
-  statLabel: { fontSize: 12, marginTop: 4 },
+  statValue: { fontSize: 22, fontWeight: '700' },
+  statLabel: { fontSize: 11.5, marginTop: 4 },
 });

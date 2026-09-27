@@ -58,7 +58,7 @@ export default function DecksScreen() {
   const renderDeck = (deck: Deck) => (
     <Pressable
       key={deck.id}
-      style={cardStyle(c.card)}
+      style={cardStyle(c.card, c.border)}
       onPress={() => router.push(`/deck/${deck.id}`)}
     >
       <View style={styles.deckRow}>

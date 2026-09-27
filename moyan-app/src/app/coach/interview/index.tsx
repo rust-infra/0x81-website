@@ -2,12 +2,20 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialSourceSheet, type MaterialSource } from '../../../components/coach/MaterialSourceSheet';
+import {
+  CoachGlyph,
+  CoachGroup,
+  CoachHeader,
+  CoachRow,
+  PrimaryButton,
+  SectionLabel,
+} from '../../../components/coach/CoachUi';
 import { listCoachScenarios } from '../../../lib/coach-api-runtime';
 import { loadInterviewProfiles } from '../../../lib/coach-storage';
 import type { CoachScenario, InterviewProfileRecord } from '../../../lib/coach-types';
 import { useI18n } from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme-context';
-import { cardStyle, roundButton, screen, serif } from '../../../lib/ui';
 
 const INTERVIEW_IDS = [
   'interview_behavioral',
@@ -23,6 +31,7 @@ export default function InterviewEntryScreen() {
   const [interviewers, setInterviewers] = useState<CoachScenario[]>([]);
   const [profiles, setProfiles] = useState<InterviewProfileRecord[]>([]);
   const [selected, setSelected] = useState('interview_behavioral');
+  const [sourceKind, setSourceKind] = useState<'resume' | 'job' | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -39,16 +48,16 @@ export default function InterviewEntryScreen() {
   const resume = profiles.find((profile) => profile.kind === 'resume');
   const job = profiles.find((profile) => profile.kind === 'job');
 
-  const openMaterials = (kind: 'resume' | 'job') => {
+  const openMaterials = (kind: 'resume' | 'job', source?: MaterialSource) => {
     router.push({
       pathname: '/coach/interview/materials',
-      params: { kind, interviewerId: selected },
+      params: { kind, interviewerId: selected, source },
     });
   };
 
   const start = () => {
     if (!resume) {
-      openMaterials('resume');
+      setSourceKind('resume');
       return;
     }
     const profile =
@@ -67,87 +76,82 @@ export default function InterviewEntryScreen() {
   };
 
   return (
-    <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
-      <View style={screen.header}>
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={[roundButton, { backgroundColor: c.inputBg }]}>
-            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
-          </Pressable>
-          <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
-            {t('coachInterviewTitle')}
-          </Text>
-          <View style={roundButton} />
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={[screen.body, styles.body]}>
-        <View style={[cardStyle(c.card, c.border), styles.intro]}>
-          <Text style={{ color: c.ink, fontWeight: '600' }}>{t('coachInterviewIntro')}</Text>
-          <Text style={{ color: c.inkMuted, marginTop: 6, fontSize: 12 }}>
-            {t('coachImmersion')} · {t('coachReminder')}
-          </Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <CoachHeader title={t('coachInterviewTitle')} onBack={() => router.back()} />
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <View style={[styles.intro, { backgroundColor: c.accentLight }]}>
+          <View style={styles.introTitleRow}>
+            <CoachGlyph name="spark" color={c.accent} size={17} />
+            <Text style={[styles.introTitle, { color: c.accent }]}>{t('coachInterviewIntro')}</Text>
+          </View>
+          <Text style={[styles.introText, { color: c.inkLight }]}>{t('coachReminder')}</Text>
         </View>
 
-        <Text style={[styles.section, { color: c.inkLight }]}>{t('coachChooseInterviewer')}</Text>
-        {interviewers.map((interviewer) => (
-          <Pressable
-            key={interviewer.id}
-            onPress={() => setSelected(interviewer.id)}
-            style={[
-              cardStyle(c.card, selected === interviewer.id ? c.accent : c.border),
-              styles.rowCard,
-            ]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: c.ink, fontWeight: '600' }}>{interviewer.title}</Text>
-              <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 4 }}>
-                {interviewer.persona.name} · {interviewer.persona.locale}
-              </Text>
-            </View>
-            {selected === interviewer.id ? (
-              <Text style={{ color: c.accent, fontWeight: '700' }}>✓</Text>
-            ) : null}
-          </Pressable>
-        ))}
+        <SectionLabel>{t('coachChooseInterviewer')}</SectionLabel>
+        <CoachGroup>
+          {interviewers.map((interviewer) => {
+            const isSelected = selected === interviewer.id;
+            return (
+              <CoachRow
+                key={interviewer.id}
+                icon="person"
+                selected={isSelected}
+                title={interviewer.title}
+                subtitle={interviewer.description}
+                meta={`${interviewer.persona.name} · ${interviewer.persona.locale}`}
+                badge={isSelected ? t('coachSelected') : undefined}
+                onPress={() => setSelected(interviewer.id)}
+              />
+            );
+          })}
+        </CoachGroup>
 
-        <Text style={[styles.section, { color: c.inkLight }]}>{t('coachMaterials')}</Text>
-        <Pressable
-          onPress={() => openMaterials('resume')}
-          style={[cardStyle(c.card, c.border), styles.rowCard]}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: c.ink, fontWeight: '600' }}>{t('coachResume')}</Text>
-            <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 4 }}>
-              {resume ? `${resume.profile.length}` : t('coachPasteText')}
-            </Text>
-          </View>
-          <Text style={{ color: c.accent }}>›</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => openMaterials('job')}
-          style={[cardStyle(c.card, c.border), styles.rowCard]}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: c.ink, fontWeight: '600' }}>{t('coachAddJob')}</Text>
-            <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 4 }}>
-              {job ? `${job.profile.length}` : t('coachPasteText')}
-            </Text>
-          </View>
-          <Text style={{ color: c.accent }}>›</Text>
-        </Pressable>
+        <SectionLabel>{t('coachMaterials')}</SectionLabel>
+        <CoachGroup>
+          <CoachRow
+            icon="file"
+            title={resume ? t('coachMyResume') : t('coachAddResume')}
+            subtitle={resume ? t('coachProfileTitle') : t('coachPasteText')}
+            meta={resume ? t('coachProfileChars', { count: resume.profile.length }) : undefined}
+            onPress={() => setSourceKind('resume')}
+          />
+          <CoachRow
+            icon="plus"
+            title={job ? t('coachJob') : t('coachAddJob')}
+            subtitle={job ? t('coachChars', { count: job.profile.length }) : t('coachPasteText')}
+            dashed={!job}
+            onPress={() => setSourceKind('job')}
+          />
+        </CoachGroup>
+        <Text style={[styles.help, { color: c.inkMuted }]}>
+          {t('coachMaterialHint')} {t('coachMaterialLocalOnly')}
+        </Text>
 
-        <Pressable onPress={start} style={[styles.primary, { backgroundColor: c.buttonBg }]}>
-          <Text style={{ color: c.buttonText, fontWeight: '700' }}>{t('coachStartInterview')}</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <PrimaryButton label={t('coachStartInterview')} onPress={start} variant="accent" />
+        </View>
       </ScrollView>
+      <MaterialSourceSheet
+        visible={!!sourceKind}
+        title={sourceKind === 'job' ? t('coachAddJob') : t('coachAddResume')}
+        onCancel={() => setSourceKind(null)}
+        onSelect={(source) => {
+          const kind = sourceKind ?? 'resume';
+          setSourceKind(null);
+          openMaterials(kind, source);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  body: { paddingBottom: 40 },
-  intro: { marginBottom: 14 },
-  section: { fontSize: 13, fontWeight: '600', marginTop: 14, marginBottom: 8 },
-  rowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  primary: { alignItems: 'center', borderRadius: 16, paddingVertical: 15, marginTop: 18 },
+  container: { flex: 1 },
+  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  intro: { borderRadius: 18, padding: 15 },
+  introTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  introTitle: { flex: 1, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  introText: { fontSize: 11.5, lineHeight: 18, marginTop: 5 },
+  help: { fontSize: 11.5, lineHeight: 18, marginTop: 9 },
+  actions: { marginTop: 20 },
 });
