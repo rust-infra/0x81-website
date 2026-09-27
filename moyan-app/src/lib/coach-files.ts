@@ -54,8 +54,16 @@ export async function withCleanup<T>(
   }
 }
 
+export interface PreparedDocument {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  size?: number | null;
+  file?: File;
+}
+
 export function buildInterviewForm(input: {
-  docs?: File[];
+  docs?: PreparedDocument[];
   images?: PreparedImage[];
 }): FormData {
   const form = new FormData();
@@ -70,7 +78,15 @@ export function buildInterviewForm(input: {
     );
   }
   for (const doc of input.docs ?? []) {
-    form.append('docs', doc);
+    form.append(
+      'docs',
+      (doc.file ??
+        ({
+          uri: doc.uri,
+          name: doc.name,
+          type: doc.mimeType || 'application/octet-stream',
+        } as unknown as Blob))
+    );
   }
   return form;
 }

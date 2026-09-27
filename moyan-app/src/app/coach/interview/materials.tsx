@@ -11,7 +11,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SensitiveHints } from '../../../components/coach/SensitiveHints';
-import { postInterviewProfile } from '../../../lib/coach-api-runtime';
+import { extractInterviewText, postInterviewProfile } from '../../../lib/coach-api-runtime';
+import { ApiError } from '../../../lib/api-error';
+import { buildInterviewForm } from '../../../lib/coach-files';
+import {
+  deletePreparedFiles,
+  pickDocuments,
+  pickImages,
+} from '../../../lib/coach-files-runtime';
 import { removeSensitiveHits, scanSensitive } from '../../../lib/sensitive-scan';
 import { useI18n } from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme-context';
@@ -31,8 +38,45 @@ export default function InterviewMaterialsScreen() {
   const c = theme.colors;
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
   const [error, setError] = useState('');
   const hits = useMemo(() => scanSensitive(text), [text]);
+
+  const recognize = async (source: 'camera' | 'library' | 'document') => {
+    setRecognizing(true);
+    setError('');
+    let files: Array<{ uri: string }> = [];
+    try {
+      if (source === 'document') {
+        const docs = await pickDocuments();
+        if (docs.length === 0) return;
+        files = docs;
+        const result = await extractInterviewText(buildInterviewForm({ docs }));
+        setText(result.text);
+        if (result.likely_scanned) toast(t('coachScannedPdf'));
+      } else {
+        const images = await pickImages(source);
+        if (images.length === 0) return;
+        files = images;
+        const result = await extractInterviewText(buildInterviewForm({ images }));
+        setText(result.text);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.reason === 'vision_not_supported') {
+        setError(t('coachVisionUnsupported'));
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        if (/permission|denied|restricted/i.test(message)) {
+          toast(t('coachPhotoPermissionDenied'));
+        } else {
+          setError(message);
+        }
+      }
+    } finally {
+      await deletePreparedFiles(files);
+      setRecognizing(false);
+    }
+  };
 
   const generate = async () => {
     if (!text.trim()) return;
@@ -75,13 +119,14 @@ export default function InterviewMaterialsScreen() {
         </Text>
         <View style={styles.importRow}>
           {[
-            { label: t('coachCamera'), icon: '▣' },
-            { label: t('coachGallery'), icon: '▧' },
-            { label: t('coachFile'), icon: '▤' },
+            { label: t('coachCamera'), icon: '▣', source: 'camera' as const },
+            { label: t('coachGallery'), icon: '▧', source: 'library' as const },
+            { label: t('coachFile'), icon: '▤', source: 'document' as const },
           ].map((item) => (
             <Pressable
               key={item.label}
-              onPress={() => toast(t('coachNativeImportUnavailable'))}
+              disabled={recognizing}
+              onPress={() => void recognize(item.source)}
               style={[styles.importButton, { backgroundColor: c.card, borderColor: c.border }]}
             >
               <Text style={{ color: c.ink, fontSize: 18 }}>{item.icon}</Text>
@@ -120,9 +165,13 @@ export default function InterviewMaterialsScreen() {
           onPress={() => void generate()}
           style={[styles.primary, { backgroundColor: busy ? c.inkMuted : c.buttonBg }]}
         >
-          {busy ? <ActivityIndicator color={c.buttonText} /> : null}
+          {recognizing || busy ? <ActivityIndicator color={c.buttonText} /> : null}
           <Text style={{ color: c.buttonText, fontWeight: '700' }}>
-            {busy ? t('coachRecognizeLoading') : t('coachGenerateProfile')}
+            {recognizing
+              ? t('coachRecognizeLoading')
+              : busy
+                ? t('saving')
+                : t('coachGenerateProfile')}
           </Text>
         </Pressable>
       </ScrollView>

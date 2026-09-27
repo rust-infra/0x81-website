@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +30,7 @@ import type {
 } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
 import { getSpeechSettings, speak, stopSpeaking } from '../../lib/speech';
+import { startListening, type SttSession } from '../../lib/coach-stt';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { roundButton, serif } from '../../lib/ui';
@@ -61,6 +62,8 @@ export default function CoachSessionScreen() {
   const [turnIndex, setTurnIndex] = useState(0);
   const [autoPlay, setAutoPlay] = useState(true);
   const [startedAt] = useState(() => Date.now());
+  const [volume, setVolume] = useState(0);
+  const sttRef = useRef<SttSession | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -89,7 +92,17 @@ export default function CoachSessionScreen() {
       .catch(() => setQuotaRemaining(undefined));
   }, []);
 
-  useEffect(() => () => void stopSpeaking(), []);
+  useEffect(
+    () => () => {
+      sttRef.current?.abort();
+      void stopSpeaking();
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (session.state !== 'listening') setVolume(0);
+  }, [session.state]);
 
   const play = async (text: string) => {
     if (!scenario || !text.trim()) return;
@@ -112,9 +125,12 @@ export default function CoachSessionScreen() {
     return { kind, profile: params.profile };
   };
 
-  const submit = async () => {
-    if (!scenario || !input.trim() || session.state === 'thinking') return;
-    const text = input.trim();
+  const submit = async (override?: string) => {
+    if (!scenario || session.state === 'thinking') return;
+    const text = (override ?? input).trim();
+    if (!text) return;
+    sttRef.current?.stop();
+    sttRef.current = null;
     setInput('');
     setError('');
     await stopSpeaking();
@@ -152,6 +168,51 @@ export default function CoachSessionScreen() {
       setError(message);
       setInput(text);
       dispatch({ type: 'TURN_ERROR', id, message });
+    }
+  };
+
+  const toggleMic = async () => {
+    if (!scenario) return;
+    if (session.state === 'listening') {
+      sttRef.current?.stop();
+      sttRef.current = null;
+      dispatch({ type: 'STOP_LISTENING' });
+      return;
+    }
+
+    await stopSpeaking();
+    try {
+      sttRef.current = await startListening(lang, {
+        onInterim: (text) => setInput(text),
+        onFinal: (text) => {
+          setInput(text);
+          sttRef.current = null;
+          dispatch({ type: 'STOP_LISTENING' });
+          void submit(text);
+        },
+        onVolume: setVolume,
+        onError: (message) => {
+          sttRef.current = null;
+          dispatch({ type: 'RESET' });
+          toast(
+            /not-allowed|permission|denied/i.test(message)
+              ? t('coachMicPermissionDenied')
+              : t('coachMicError')
+          );
+        },
+        onEnd: () => {
+          sttRef.current = null;
+          dispatch({ type: 'STOP_LISTENING' });
+        },
+      });
+      dispatch({ type: 'START_LISTENING' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast(
+        /denied|restricted/.test(message)
+          ? t('coachMicPermissionDenied')
+          : t('coachMicError')
+      );
     }
   };
 
@@ -221,7 +282,12 @@ export default function CoachSessionScreen() {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.avatarWrap}>
-            <CoachAvatar state={avatarState} mood="friendly" size={210} />
+            <CoachAvatar
+              state={avatarState}
+              mood="friendly"
+              size={210}
+              volume={Math.max(0, Math.min(1, (volume + 2) / 12))}
+            />
           </View>
           <Pressable onPress={() => void play(reply)} style={styles.replyBlock}>
             <Text style={[styles.reply, { color: c.studyText }]}>{reply}</Text>
@@ -246,10 +312,23 @@ export default function CoachSessionScreen() {
 
         <View style={[styles.controls, { borderTopColor: c.border }]}>
           <Pressable
-            onPress={() => toast(t('coachVoiceUnavailable'))}
-            style={[styles.mic, { backgroundColor: c.studyCard, borderColor: c.studyMuted }]}
+            onPress={() => void toggleMic()}
+            style={[
+              styles.mic,
+              {
+                backgroundColor: session.state === 'listening' ? c.accent : c.studyCard,
+                borderColor: session.state === 'listening' ? c.accent : c.studyMuted,
+              },
+            ]}
           >
-            <Text style={{ color: c.studyMuted, fontSize: 22 }}>◉</Text>
+            <Text
+              style={{
+                color: session.state === 'listening' ? c.buttonText : c.studyMuted,
+                fontSize: 22,
+              }}
+            >
+              ◉
+            </Text>
           </Pressable>
           <View style={[styles.inputWrap, { backgroundColor: c.studyCard }]}>
             <TextInput
