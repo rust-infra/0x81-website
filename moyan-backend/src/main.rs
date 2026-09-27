@@ -427,6 +427,69 @@ mod tests {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
+    /// DOCX extraction works through the real multipart route and does not consume quota.
+    #[tokio::test]
+    async fn interview_text_extracts_docx_without_consuming_quota() -> anyhow::Result<()> {
+        use std::io::Write as _;
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+
+        let cursor = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(cursor);
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )?;
+        zip.write_all(
+            br#"<w:body><w:p><w:r><w:t>Alice Chen</w:t></w:r></w:p><w:p><w:r><w:t>Backend Engineer</w:t></w:r></w:p></w:body>"#,
+        )?;
+        let docx = zip.finish()?.into_inner();
+
+        let boundary = "moyan-test-boundary";
+        let mut body = Vec::new();
+        write!(
+            body,
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"docs\"; filename=\"resume.docx\"\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n"
+        )?;
+        body.extend_from_slice(&docx);
+        write!(body, "\r\n--{boundary}--\r\n")?;
+
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/interview/text")
+                    .header("authorization", bearer)
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["source"], "document");
+        assert_eq!(body["data"]["text"], "Alice Chen\nBackend Engineer");
+        assert_eq!(body["data"]["char_count"], 27);
+        assert_eq!(body["data"]["likely_scanned"], true);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0, "document extraction must not consume quota");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn type_sync_saves_session_and_entries() -> anyhow::Result<()> {
         let state = test_state(Arc::new(
@@ -950,12 +1013,34 @@ mod tests {
     }
 
     /// 设置一个环境变量，测试结束（含 panic）时自动清掉。
-    struct EnvGuard(&'static str);
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var_os(key);
+            unsafe { std::env::set_var(key, value) };
+            Self { key, previous }
+        }
+    }
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
-            unsafe { std::env::remove_var(self.0) }
+            match &self.previous {
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
         }
+    }
+
+    fn kimi_test_env(base: &str) -> [EnvGuard; 3] {
+        [
+            EnvGuard::set("MOYAN_KIMI_BASE_URL", base),
+            EnvGuard::set("NO_PROXY", "127.0.0.1,localhost"),
+            EnvGuard::set("no_proxy", "127.0.0.1,localhost"),
+        ]
     }
 
     /// 一个假的 Kimi：`/api/oauth/token` 返回给定的授权结果，
@@ -1150,8 +1235,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(true, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1191,8 +1275,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(false, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1208,8 +1291,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let foreign = es256_access_token("kimi-user-1", "evil-issuer", "access");
         let base = start_kimi_es256_stub(true, &foreign).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1230,8 +1312,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(true, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1270,8 +1351,7 @@ mod tests {
     async fn kimi_userinfo_profile_still_overwrites_stored_values() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("kimi-access-token"), true).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1305,15 +1385,12 @@ mod tests {
     async fn kimi_token_poll_returns_our_jwt_and_never_the_kimi_token() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("kimi-access-token"), true).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
         )));
         let response = app.clone().oneshot(kimi_poll_request("dc-1")?).await?;
-        assert_eq!(response.status(), StatusCode::OK);
-
         let body = read_json(response).await?;
         let token = body["data"]["token"]
             .as_str()
@@ -1350,8 +1427,7 @@ mod tests {
     async fn kimi_token_poll_rejects_a_token_kimi_would_not_verify() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("forged-token"), false).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,

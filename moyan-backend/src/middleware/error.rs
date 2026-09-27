@@ -42,6 +42,11 @@ pub enum AppError {
         used: u32,
         resets_at: String,
     },
+    /// Request was valid JSON but cannot be processed with current upstream capability.
+    Unprocessable {
+        reason: &'static str,
+        message: String,
+    },
     ImportFailed(Vec<ImportErrorItem>),
     Repository(RepositoryError),
 }
@@ -53,7 +58,11 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
-            AppError::QuotaExceeded { limit, used, resets_at } => {
+            AppError::QuotaExceeded {
+                limit,
+                used,
+                resets_at,
+            } => {
                 let body = Json(json!({
                     "success": false,
                     "error": {
@@ -66,6 +75,13 @@ impl IntoResponse for AppError {
                     }
                 }));
                 return (StatusCode::TOO_MANY_REQUESTS, body).into_response();
+            }
+            AppError::Unprocessable { reason, message } => {
+                let body = Json(json!({
+                    "success": false,
+                    "error": { "code": 422, "reason": reason, "message": message }
+                }));
+                return (StatusCode::UNPROCESSABLE_ENTITY, body).into_response();
             }
             AppError::ImportFailed(errors) => {
                 let body = Json(json!({

@@ -9,7 +9,9 @@ mod coach_quota;
 mod coach_settings;
 mod health;
 pub(crate) mod interview_docs;
-mod llm_client;
+mod interview_ocr;
+pub use interview_ocr::InterviewOcrService;
+pub(crate) mod llm_client;
 mod podcast;
 mod settings;
 mod sync;
@@ -37,6 +39,21 @@ pub use system_decks::SystemDecksService;
 pub use typing::TypeService;
 pub use vocabulary::VocabularyService;
 
+/// LLMs occasionally wrap JSON in markdown fences despite the prompt. Keep
+/// parsing tolerant in one place for coach, draft, OCR and profile payloads.
+pub(crate) fn strip_code_fences(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let without_open = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+        .unwrap_or(trimmed);
+    without_open
+        .strip_suffix("```")
+        .unwrap_or(without_open)
+        .trim()
+        .to_string()
+}
+
 #[derive(Clone)]
 pub struct Services {
     pub auth: AuthService,
@@ -50,6 +67,7 @@ pub struct Services {
     pub coach_quota: CoachQuotaService,
     pub coach: CoachService,
     pub coach_settings: CoachSettingsService,
+    pub interview_ocr: InterviewOcrService,
     pub podcast: PodcastService,
     pub typing: TypeService,
 }
@@ -68,6 +86,8 @@ impl Services {
             Arc::clone(&admin_collect),
         );
         let coach_settings = CoachSettingsService::new(Arc::clone(&repository));
+        let interview_ocr =
+            InterviewOcrService::new(coach_quota.clone(), Arc::clone(&admin_collect));
 
         Self {
             auth: AuthService::new(Arc::clone(&repository)),
@@ -81,6 +101,7 @@ impl Services {
             coach_quota,
             coach,
             coach_settings,
+            interview_ocr,
             podcast: PodcastService::new(Arc::clone(&repository)),
             typing: TypeService::new(Arc::clone(&repository)),
         }

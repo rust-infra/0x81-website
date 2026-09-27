@@ -16,6 +16,7 @@ use crate::services::admin_collect::AdminCollectService;
 use crate::services::coach_quota::CoachQuotaService;
 use crate::services::coach_scenarios;
 use crate::services::llm_client;
+use crate::services::strip_code_fences;
 
 const MAX_TURN_TOKENS: u32 = 1_200;
 const MOODS: [&str; 5] = ["neutral", "friendly", "curious", "encouraging", "concerned"];
@@ -375,19 +376,6 @@ pub fn parse_turn_payload(raw: &str) -> Result<CoachTurnResponse, AppError> {
         limit_reached: false,
         feedback: payload.feedback,
     })
-}
-
-fn strip_code_fences(raw: &str) -> String {
-    let trimmed = raw.trim();
-    let without_open = trimmed
-        .strip_prefix("```json")
-        .or_else(|| trimmed.strip_prefix("```"))
-        .unwrap_or(trimmed);
-    without_open
-        .strip_suffix("```")
-        .unwrap_or(without_open)
-        .trim()
-        .to_string()
 }
 
 #[cfg(test)]

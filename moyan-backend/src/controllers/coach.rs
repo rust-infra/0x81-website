@@ -53,9 +53,12 @@ pub async fn scenario_draft(
 }
 
 pub async fn interview_text(
+    State(state): State<AppState>,
+    axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
     mut multipart: axum::extract::Multipart,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let mut docs: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut images: Vec<crate::services::llm_client::ImagePart> = Vec::new();
 
     while let Some(field) = multipart
         .next_field()
@@ -64,14 +67,46 @@ pub async fn interview_text(
     {
         let name = field.name().unwrap_or_default().to_string();
         let file_name = field.file_name().unwrap_or_default().to_string();
+        let content_type = field.content_type().unwrap_or_default().to_string();
         let bytes = field
             .bytes()
             .await
             .map_err(|e| AppError::BadRequest(format!("read upload: {e}")))?
             .to_vec();
-        if name == "docs" {
-            docs.push((file_name, bytes));
+
+        match name.as_str() {
+            "docs" => docs.push((file_name, bytes)),
+            "images" => {
+                use base64::Engine as _;
+                let media_type = if content_type.is_empty() {
+                    "image/jpeg".to_string()
+                } else {
+                    content_type
+                };
+                images.push(crate::services::llm_client::ImagePart {
+                    media_type,
+                    data_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+                });
+            }
+            _ => {}
         }
+    }
+
+    if !images.is_empty() {
+        let text = state
+            .services
+            .interview_ocr
+            .ocr(&claims.sub, images)
+            .await?;
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "data": {
+                "text": text,
+                "char_count": text.chars().count(),
+                "likely_scanned": false,
+                "source": "image",
+            }
+        })));
     }
 
     let (file_name, bytes) = docs

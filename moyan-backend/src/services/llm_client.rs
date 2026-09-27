@@ -18,6 +18,34 @@ const TRANSLATE_CHUNK_CHARS: usize = 1_500;
 const TRANSLATE_MAX_TOKENS: u32 = 8_192;
 const TRANSLATE_MAX_CONCURRENCY: usize = 6;
 
+/// An in-memory image supplied to an OpenAI-compatible vision request.
+///
+/// Kept separate from the public JSON request types so clients can never
+/// smuggle arbitrary data URLs into coach prompts.
+#[derive(Debug, Clone)]
+pub struct ImagePart {
+    pub media_type: String,
+    pub data_base64: String,
+}
+
+/// Build an OpenAI-compatible content-parts array with the text first.
+///
+/// `detail: high` is deliberate: low-detail image input drops small text,
+/// which makes resume and job-posting transcription unreliable.
+pub fn build_content_parts(text: &str, images: &[ImagePart]) -> Vec<serde_json::Value> {
+    let mut parts = vec![json!({ "type": "text", "text": text })];
+    for image in images {
+        parts.push(json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:{};base64,{}", image.media_type, image.data_base64),
+                "detail": "high"
+            }
+        }));
+    }
+    parts
+}
+
 #[derive(Debug, Deserialize)]
 struct ChatCompletionResponse {
     choices: Vec<ChatChoice>,
@@ -184,8 +212,8 @@ pub async fn translate_caption_lines(
         });
     }
     while let Some(joined) = tasks.join_next().await {
-        let pairs = joined
-            .map_err(|e| AppError::BadRequest(format!("translation task failed: {e}")))??;
+        let pairs =
+            joined.map_err(|e| AppError::BadRequest(format!("translation task failed: {e}")))??;
         for (global, zh) in pairs {
             if global < out.len() {
                 out[global] = zh;
@@ -255,13 +283,15 @@ async fn translate_chunk_attempt(
     proxy: Option<&str>,
     semaphore: Arc<tokio::sync::Semaphore>,
 ) -> Result<Vec<(usize, String)>, AppError> {
-    let _permit = semaphore.acquire().await.map_err(|e| {
-        AppError::BadRequest(format!("translation concurrency: {e}"))
-    })?;
+    let _permit = semaphore
+        .acquire()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("translation concurrency: {e}")))?;
     let content = chat_completion(
         settings,
         TRANSLATE_SYSTEM_PROMPT,
         user,
+        &[],
         proxy,
         true,
         Some(TRANSLATE_MAX_TOKENS),
@@ -340,9 +370,7 @@ where
         ));
     }
     if settings.api_key.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "请先在设置中配置 LLM api_key".into(),
-        ));
+        return Err(AppError::BadRequest("请先在设置中配置 LLM api_key".into()));
     }
 
     let chunks = caption_chunks(caption_text);
@@ -416,7 +444,11 @@ where
         } else {
             format!(
                 "LLM produced no usable vocabulary cards ({})",
-                chunk_errors.join("; ").chars().take(500).collect::<String>()
+                chunk_errors
+                    .join("; ")
+                    .chars()
+                    .take(500)
+                    .collect::<String>()
             )
         };
         return Err(AppError::BadRequest(detail));
@@ -463,7 +495,7 @@ Hard requirements:
         "Video id: {video_id}\nTitle: {title}\nSegment: {chunk_index}/{chunk_total}\nTranscript segment:\n{caption}"
     );
 
-    let content = chat_completion(settings, system, &user, proxy, false, None).await?;
+    let content = chat_completion(settings, system, &user, &[], proxy, false, None).await?;
     parse_llm_cards(&content, video_id)
 }
 
@@ -471,6 +503,7 @@ async fn chat_completion(
     settings: &LlmSettingsStored,
     system: &str,
     user: &str,
+    images: &[ImagePart],
     proxy: Option<&str>,
     direct: bool,
     max_tokens: Option<u32>,
@@ -478,13 +511,19 @@ async fn chat_completion(
     let base = settings.base_url.trim_end_matches('/');
     let url = format!("{base}/chat/completions");
 
+    let user_content = if images.is_empty() {
+        json!(user)
+    } else {
+        json!(build_content_parts(user, images))
+    };
+
     let mut body = json!({
         "model": settings.model,
         "temperature": settings.temperature,
         "response_format": { "type": "json_object" },
         "messages": [
             { "role": "system", "content": system },
-            { "role": "user", "content": user }
+            { "role": "user", "content": user_content }
         ]
     });
     if let Some(max_tokens) = max_tokens {
@@ -557,7 +596,18 @@ pub async fn chat_json(
     proxy: Option<&str>,
     max_tokens: Option<u32>,
 ) -> Result<String, AppError> {
-    chat_completion(settings, system, user, proxy, true, max_tokens).await
+    chat_completion(settings, system, user, &[], proxy, true, max_tokens).await
+}
+
+/// Vision-capable sibling of `chat_json`; used only by interview OCR.
+pub async fn chat_json_with_images(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user: &str,
+    images: &[ImagePart],
+    max_tokens: Option<u32>,
+) -> Result<String, AppError> {
+    chat_completion(settings, system, user, images, None, true, max_tokens).await
 }
 
 fn app_error_message(err: &AppError) -> String {
@@ -568,6 +618,7 @@ fn app_error_message(err: &AppError) -> String {
         | AppError::Internal(m)
         | AppError::ServiceUnavailable(m) => m.clone(),
         AppError::QuotaExceeded { .. } => "quota exceeded".into(),
+        AppError::Unprocessable { message, .. } => message.clone(),
         AppError::ImportFailed(_) => "import failed".into(),
         AppError::Repository(e) => e.to_string(),
     }
