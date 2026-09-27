@@ -503,6 +503,27 @@ export interface CollectJobListResult {
   page_size: number;
 }
 
+export interface CoachSettings {
+  daily_turn_limit: number;
+  enabled: boolean;
+}
+
+export async function getCoachSettings(): Promise<CoachSettings> {
+  const res = await adminFetch("/api/admin/settings/coach");
+  return parseEnvelope<CoachSettings>(res);
+}
+
+export async function updateCoachSettings(
+  input: CoachSettings,
+): Promise<CoachSettings> {
+  const res = await adminFetch("/api/admin/settings/coach", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<CoachSettings>(res);
+}
+
 export async function getLlmSettings(): Promise<LlmSettings> {
   const res = await adminFetch("/api/admin/settings/llm");
   return parseEnvelope<LlmSettings>(res);

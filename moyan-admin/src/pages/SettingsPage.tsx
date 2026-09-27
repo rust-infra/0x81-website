@@ -1,13 +1,17 @@
 import {
+  getCoachSettings,
   getLlmSettings,
   getPodcastConfig,
+  updateCoachSettings,
   updateLlmSettings,
   updatePodcastConfig,
+  type CoachSettings,
   type LlmSettings,
   type PodcastConfig,
   type UpdateLlmSettingsInput,
 } from "@/api/admin";
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -22,6 +26,8 @@ import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const [form] = Form.useForm<UpdateLlmSettingsInput>();
+  const [coachForm] = Form.useForm<CoachSettings>();
+  const [coachSaving, setCoachSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<LlmSettings | null>(null);
@@ -52,6 +58,7 @@ export default function SettingsPage() {
   useEffect(() => {
     void load();
     void loadPodcast();
+    void loadCoach();
   }, []);
 
   const loadPodcast = async () => {
@@ -81,6 +88,28 @@ export default function SettingsPage() {
       message.error(err instanceof Error ? err.message : "保存失败");
     } finally {
       setPodcastSaving(false);
+    }
+  };
+
+  const loadCoach = async () => {
+    try {
+      const data = await getCoachSettings();
+      coachForm.setFieldsValue(data);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "读取 AI 陪练设置失败");
+    }
+  };
+
+  const handleSaveCoach = async (values: CoachSettings) => {
+    setCoachSaving(true);
+    try {
+      const saved = await updateCoachSettings(values);
+      coachForm.setFieldsValue(saved);
+      message.success("AI 陪练设置已保存");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存 AI 陪练设置失败");
+    } finally {
+      setCoachSaving(false);
     }
   };
 
@@ -222,6 +251,31 @@ export default function SettingsPage() {
               清除 Key
             </Button>
           </Space>
+        </Form>
+      </Card>
+
+      <Card title="AI 陪练" style={{ maxWidth: 640, marginTop: 16 }}>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="每日用量上限"
+          description="按用户发言轮次计。填 0 表示不限量；默认 100。超限时接口返回 429，不会调用模型。"
+        />
+        <Form form={coachForm} layout="vertical" onFinish={handleSaveCoach}>
+          <Form.Item
+            name="daily_turn_limit"
+            label="每日上限（次 / 用户 / 天）"
+            rules={[{ required: true, message: "请输入每日上限" }]}
+          >
+            <InputNumber min={0} max={100000} style={{ width: 200 }} />
+          </Form.Item>
+          <Form.Item name="enabled" label="启用配额" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={coachSaving}>
+            保存配额设置
+          </Button>
         </Form>
       </Card>
     </div>
