@@ -18,7 +18,7 @@ export function FeedbackPanel({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (feedback) setOpen(true);
+    if (feedback) setOpen(false);
   }, [feedback]);
 
   if (!feedback) return null;
@@ -44,6 +44,12 @@ export function FeedbackPanel({
         </Text>
         <Text style={{ color: c.studyMuted, marginLeft: 'auto' }}>{open ? '⌃' : '⌄'}</Text>
       </Pressable>
+
+      {!open && (natural || first) ? (
+        <Text numberOfLines={1} style={[styles.preview, { color: c.studyMuted }]}>
+          {natural ?? first?.corrected}
+        </Text>
+      ) : null}
 
       {open ? (
         <View style={styles.body}>
@@ -120,6 +126,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   headerText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  preview: { fontSize: 12, lineHeight: 18, marginTop: 7, paddingRight: 12 },
   body: { marginTop: 10, gap: 9 },
   old: { fontSize: 12.5, lineHeight: 20, textDecorationLine: 'line-through' },
   new: { fontSize: 13, lineHeight: 21, fontWeight: '600' },
