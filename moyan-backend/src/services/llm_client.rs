@@ -60,9 +60,6 @@ struct ChatChoice {
 struct ChatMessage {
     #[serde(default)]
     content: Option<MessageContent>,
-    /// Some reasoning models put text here instead of `content`.
-    #[serde(default)]
-    reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,10 +96,7 @@ impl ChatMessage {
                 MessageContent::Text(_) => {}
             }
         }
-        self.reasoning_content
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        None
     }
 }
 

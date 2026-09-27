@@ -20,7 +20,7 @@ use crate::services::coach_scenarios;
 use crate::services::llm_client;
 use crate::services::strip_code_fences;
 
-const MAX_TURN_TOKENS: u32 = 1_200;
+const MAX_TURN_TOKENS: u32 = 3_000;
 const MOODS: [&str; 5] = ["neutral", "friendly", "curious", "encouraging", "concerned"];
 
 #[derive(Clone)]
@@ -112,7 +112,7 @@ impl CoachService {
     }
 }
 
-const MAX_SUMMARY_TOKENS: u32 = 1_500;
+const MAX_SUMMARY_TOKENS: u32 = 3_000;
 const SUMMARY_SYSTEM_PROMPT: &str = "You are an English speaking coach for software engineers \
 working remotely with international colleagues. Review the practice conversation and return JSON only:\n\
 {\"overall_zh\":\"...\",\"overall_en\":\"...\",\"strengths\":[\"...\"],\"improvements\":[\"...\"],\
