@@ -1,6 +1,7 @@
 //! Application entities and HTTP request/response data transfer objects.
 
 mod admin;
+mod coach;
 mod admin_collect;
 mod learning;
 mod podcast;
@@ -9,6 +10,7 @@ mod user;
 mod vocabulary;
 
 pub use admin::*;
+pub use coach::*;
 pub use admin_collect::*;
 pub use learning::*;
 pub use podcast::*;
