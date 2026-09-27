@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from '../../components/AppHeader';
 import { CoachAvatar } from '../../components/coach/CoachAvatar';
 import { CoachGlyph, PrimaryButton, SecondaryButton } from '../../components/coach/CoachUi';
 import { EndSessionSheet } from '../../components/coach/EndSessionSheet';
@@ -237,7 +238,13 @@ export default function CoachSessionScreen() {
 
   if (!scenario) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: c.studyBg }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: c.studyBg }]} edges={['top', 'bottom']}>
+        <View style={styles.topBar}>
+          <BackButton onPress={() => router.back()} color={c.studyText} />
+          <Text style={[styles.scenarioTitle, { color: c.studyText, fontFamily: serif }]}>
+            {t('coachLoadFailed')}
+          </Text>
+        </View>
         <Text style={{ color: c.studyMuted, textAlign: 'center', marginTop: 80 }}>
           {t('loadFailed')}
         </Text>
@@ -297,6 +304,7 @@ export default function CoachSessionScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.topBar}>
+          <BackButton onPress={() => setShowEnd(true)} color={c.studyText} />
           <Text
             numberOfLines={1}
             style={[styles.scenarioTitle, { color: c.studyText, fontFamily: serif }]}

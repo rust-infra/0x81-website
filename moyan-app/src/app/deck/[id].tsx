@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from '../../components/AppHeader';
 import {
   createCard,
   deleteCard,
@@ -236,9 +237,7 @@ export default function DeckDetailScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: c.accent }]}>‹ {t('back')}</Text>
-        </Pressable>
+        <BackButton onPress={() => router.back()} />
         {deck ? (
           <Pressable onPress={() => setShowDeckEdit(true)} hitSlop={12}>
             <Text style={{ color: c.inkLight }}>{t('edit')}</Text>

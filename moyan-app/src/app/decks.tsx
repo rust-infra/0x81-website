@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from '../components/AppHeader';
 import { createDeck, deleteDeck, listDecks } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme-context';
@@ -123,14 +124,7 @@ export default function DecksScreen() {
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={screen.header}>
         <View style={styles.titleRow}>
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={12}
-            onPress={() => router.back()}
-            style={[roundButton, { backgroundColor: `${c.ink}10` }]}
-          >
-            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
-          </Pressable>
+          <BackButton onPress={() => router.back()} />
           <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
             {t('tabDecks')}
           </Text>

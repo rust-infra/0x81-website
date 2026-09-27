@@ -8,6 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
+import { BackButton } from '../AppHeader';
 import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 
@@ -249,13 +250,7 @@ export function CoachHeader({
   const c = theme.colors;
   return (
     <View style={[styles.header, style]}>
-      {onBack ? (
-        <Pressable accessibilityRole="button" hitSlop={12} onPress={onBack} style={styles.back}>
-          <Text style={[styles.backText, { color: c.ink }]}>‹</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.back} />
-      )}
+      {onBack ? <BackButton onPress={onBack} /> : <View style={styles.back} />}
       <Text
         numberOfLines={1}
         style={[
@@ -460,8 +455,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  back: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  backText: { fontSize: 28, lineHeight: 28, marginTop: -2 },
+  back: { width: 34, height: 34 },
   headerTitle: { flex: 1, fontSize: 19, fontWeight: '700', letterSpacing: 0.1 },
   headerRight: { minWidth: 34, alignItems: 'flex-end' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 8 },

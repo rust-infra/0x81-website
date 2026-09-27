@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from '../../components/AppHeader';
 import { getApiBase } from '../../lib/config';
 import { resolvePodcast, translatePodcast } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
@@ -140,6 +141,9 @@ export default function PodcastPlayerScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]}>
+        <View style={styles.topBar}>
+          <BackButton onPress={() => router.back()} color={c.inkMuted} />
+        </View>
         <ActivityIndicator color={c.accent} style={styles.center} />
       </SafeAreaView>
     );
@@ -148,16 +152,13 @@ export default function PodcastPlayerScreen() {
   if (error || !data) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]}>
+        <View style={styles.topBar}>
+          <BackButton onPress={() => router.back()} color={c.inkMuted} />
+        </View>
         <View style={styles.center}>
           <Text style={{ color: c.accent, textAlign: 'center', paddingHorizontal: 30 }}>
             {error || t('podcastNoCaptions')}
           </Text>
-          <Pressable
-            style={[styles.backBtn, { backgroundColor: c.buttonBg }]}
-            onPress={() => router.back()}
-          >
-            <Text style={{ color: c.buttonText }}>{t('back')}</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -172,9 +173,7 @@ export default function PodcastPlayerScreen() {
       edges={['top', 'bottom']}
     >
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={{ color: c.inkMuted, fontSize: 18 }}>‹ {t('back')}</Text>
-        </Pressable>
+        <BackButton onPress={() => router.back()} color={c.inkMuted} />
         <View style={styles.topActions}>
           <Pressable
             style={[

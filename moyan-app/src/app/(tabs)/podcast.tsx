@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAppConfig } from '../../lib/api';
+import { BackButton } from '../../components/AppHeader';
 import { CoachGlyph } from '../../components/coach/CoachUi';
 import { useI18n } from '../../lib/i18n';
 import {
@@ -261,15 +262,12 @@ export default function PodcastScreen() {
       ) : (
         <>
           <View style={styles.resultsHead}>
-            <Pressable
-              style={[styles.back, { borderColor: c.border, backgroundColor: c.card }]}
+            <BackButton
               onPress={() => {
                 setMode('home');
                 setError('');
               }}
-            >
-              <Text style={{ color: c.ink }}>‹</Text>
-            </Pressable>
+            />
             <Text style={[styles.resultsTitle, { color: c.ink }]}>
               {t('podcastSearchResults')}
             </Text>
