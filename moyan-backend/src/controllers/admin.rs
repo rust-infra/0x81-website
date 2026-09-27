@@ -169,6 +169,21 @@ pub async fn import_vocabulary(
     Ok(success(result))
 }
 
+pub async fn get_coach_settings(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.coach_settings.get().await?;
+    Ok(success(settings))
+}
+
+pub async fn update_coach_settings(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::services::CoachSettings>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let settings = state.services.coach_settings.update(req).await?;
+    Ok(success(settings))
+}
+
 pub async fn get_llm_settings(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {

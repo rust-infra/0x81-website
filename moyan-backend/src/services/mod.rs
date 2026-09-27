@@ -2,6 +2,7 @@
 
 mod admin;
 mod coach_quota;
+mod coach_settings;
 mod admin_collect;
 mod admin_excel;
 mod auth;
@@ -21,6 +22,7 @@ use crate::repositories::Repository;
 
 pub use admin::AdminService;
 pub use coach_quota::{CoachQuotaService, CoachSettings};
+pub use coach_settings::CoachSettingsService;
 pub mod coach_scenarios;
 pub use admin_collect::AdminCollectService;
 pub use auth::AuthService;
@@ -43,6 +45,7 @@ pub struct Services {
     pub admin: AdminService,
     pub admin_collect: AdminCollectService,
     pub coach_quota: CoachQuotaService,
+    pub coach_settings: CoachSettingsService,
     pub podcast: PodcastService,
     pub typing: TypeService,
 }
@@ -61,6 +64,7 @@ impl Services {
             admin,
             admin_collect,
             coach_quota: CoachQuotaService::new(Arc::clone(&repository)),
+            coach_settings: CoachSettingsService::new(Arc::clone(&repository)),
             podcast: PodcastService::new(Arc::clone(&repository)),
             typing: TypeService::new(Arc::clone(&repository)),
         }

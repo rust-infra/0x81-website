@@ -239,6 +239,61 @@ mod tests {
         })
     }
 
+    /// 管理端配额设置：需要 X-Admin-Token，默认 100，写完能读回。
+    #[tokio::test]
+    async fn admin_coach_settings_require_token_and_round_trip() -> anyhow::Result<()> {
+        let mut state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        // `check_admin_token` 在 configured 为空时返回 503，所以测试必须显式设置 token
+        state.admin_token = "test-admin-token".to_string();
+        let app = build_app(state);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 100);
+        assert_eq!(body["data"]["enabled"], true);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"daily_turn_limit":250,"enabled":true}"#))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 250);
+
+        // 再读一次，确认真落库
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 250);
+
+        Ok(())
+    }
+
     /// `GET /api/coach/scenarios` 需要 JWT；带合法 token 时按 locale 返回预置场景。
     /// 这一条替代了计划里的手工 curl 步骤——同样验证路由挂载与鉴权，但可重复执行。
     #[tokio::test]
