@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 28 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 29 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
