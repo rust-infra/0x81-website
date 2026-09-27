@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSttAdapter, type SpeechModuleLike } from './coach-stt';
+import { createSttAdapter, sttLocaleFor, type SpeechModuleLike } from './coach-stt';
 
 function fakeModule() {
   const options: unknown[] = [];
@@ -92,4 +92,11 @@ test('reports permission denial without starting', async () => {
     /permission-denied/
   );
   assert.equal(fake.options.length, 0);
+});
+
+test('maps UI and Chinese-accent locales to supported STT locales', () => {
+  assert.equal(sttLocaleFor('en-IN'), 'en-IN');
+  assert.equal(sttLocaleFor('en-GB'), 'en-GB');
+  assert.equal(sttLocaleFor('zh-CN'), 'en-US');
+  assert.equal(sttLocaleFor('en'), 'en-US');
 });

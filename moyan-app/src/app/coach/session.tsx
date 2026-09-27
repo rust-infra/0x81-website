@@ -35,7 +35,7 @@ import type {
 } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
 import { getSpeechSettings, speak, stopSpeaking } from '../../lib/speech';
-import { startListening, type SttSession } from '../../lib/coach-stt';
+import { startListening, sttLocaleFor, type SttSession } from '../../lib/coach-stt';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { roundButton, serif } from '../../lib/ui';
@@ -207,7 +207,7 @@ export default function CoachSessionScreen() {
 
     await stopSpeaking();
     try {
-      sttRef.current = await startListening(lang, {
+      sttRef.current = await startListening(sttLocaleFor(scenario.persona.locale), {
         onInterim: (text) => setInput(text),
         onFinal: (text) => {
           setInput(text);
@@ -222,6 +222,7 @@ export default function CoachSessionScreen() {
           if (/not-allowed|permission|denied/i.test(message)) {
             setMicPermissionDenied(true);
           } else {
+            console.warn('[coach-stt] native error', message);
             toast(t('coachMicError'));
           }
         },
@@ -236,6 +237,7 @@ export default function CoachSessionScreen() {
       if (/denied|restricted/.test(message)) {
         setMicPermissionDenied(true);
       } else {
+        console.warn('[coach-stt] start failed', message);
         toast(t('coachMicError'));
       }
     }

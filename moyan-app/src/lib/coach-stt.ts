@@ -37,6 +37,12 @@ export interface SpeechModuleLike {
   ) => Subscription;
 }
 
+export function sttLocaleFor(locale: string): string {
+  return ['en-US', 'en-GB', 'en-IN', 'en-AU'].includes(locale)
+    ? locale
+    : 'en-US';
+}
+
 export function createSttAdapter(module: SpeechModuleLike) {
   return {
     async requestPermissions(): Promise<SttPermission> {
