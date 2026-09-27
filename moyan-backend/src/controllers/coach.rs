@@ -124,3 +124,14 @@ pub async fn interview_text(
         }
     })))
 }
+
+pub async fn interview_profile(
+    State(state): State<AppState>,
+    axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
+    axum::Json(req): axum::Json<crate::models::InterviewProfileRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let profile = state.services.interview_profile.profile(&claims.sub, req).await?;
+    Ok(Json(
+        serde_json::json!({ "success": true, "data": profile }),
+    ))
+}

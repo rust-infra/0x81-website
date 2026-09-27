@@ -16,6 +16,10 @@ pub fn routes() -> Router<AppState> {
         .route("/turn", axum::routing::post(coach::turn))
         .route("/summary", axum::routing::post(coach::summary))
         .route(
+            "/interview/profile",
+            axum::routing::post(coach::interview_profile),
+        )
+        .route(
             "/interview/text",
             axum::routing::post(coach::interview_text)
                 .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)),

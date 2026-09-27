@@ -219,6 +219,18 @@ pub struct CoachSummaryResponse {
     pub stats: CoachSummaryStats,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct InterviewProfileRequest {
+    pub kind: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InterviewProfileResponse {
+    pub kind: String,
+    pub profile: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CoachScenarioDraftRequest {
     pub description: String,

@@ -490,6 +490,38 @@ mod tests {
         Ok(())
     }
 
+    /// Profile validation runs through the real route before quota is consumed.
+    #[tokio::test]
+    async fn interview_profile_rejects_invalid_kind_before_quota() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/interview/profile")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"kind":"cv","text":"resume text"}"#))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0, "invalid profile input must not consume quota");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn type_sync_saves_session_and_entries() -> anyhow::Result<()> {
         let state = test_state(Arc::new(

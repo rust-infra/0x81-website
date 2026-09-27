@@ -10,7 +10,9 @@ mod coach_settings;
 mod health;
 pub(crate) mod interview_docs;
 mod interview_ocr;
+mod interview_profile;
 pub use interview_ocr::InterviewOcrService;
+pub use interview_profile::InterviewProfileService;
 pub(crate) mod llm_client;
 mod podcast;
 mod settings;
@@ -68,6 +70,7 @@ pub struct Services {
     pub coach: CoachService,
     pub coach_settings: CoachSettingsService,
     pub interview_ocr: InterviewOcrService,
+    pub interview_profile: InterviewProfileService,
     pub podcast: PodcastService,
     pub typing: TypeService,
 }
@@ -88,6 +91,8 @@ impl Services {
         let coach_settings = CoachSettingsService::new(Arc::clone(&repository));
         let interview_ocr =
             InterviewOcrService::new(coach_quota.clone(), Arc::clone(&admin_collect));
+        let interview_profile =
+            InterviewProfileService::new(coach_quota.clone(), Arc::clone(&admin_collect));
 
         Self {
             auth: AuthService::new(Arc::clone(&repository)),
@@ -102,6 +107,7 @@ impl Services {
             coach,
             coach_settings,
             interview_ocr,
+            interview_profile,
             podcast: PodcastService::new(Arc::clone(&repository)),
             typing: TypeService::new(Arc::clone(&repository)),
         }
