@@ -18,7 +18,7 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{admin, auth, health, podcast, settings, sync, typing, vocabulary};
+use crate::routes::{admin, auth, coach, health, podcast, settings, sync, typing, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
@@ -70,6 +70,7 @@ fn build_app(state: AppState) -> Router {
         .route("/api/config", get(crate::controllers::podcast::config))
         .nest("/api/type", typing::routes())
         .nest("/api/health", health::routes())
+        .nest("/api/coach", coach::routes())
         .nest("/api/admin", admin::routes())
         .route("/", get(root_handler))
         .layer(Extension(state.clone()))
@@ -236,6 +237,45 @@ mod tests {
                 }
             ]
         })
+    }
+
+    /// `GET /api/coach/scenarios` 需要 JWT；带合法 token 时按 locale 返回预置场景。
+    /// 这一条替代了计划里的手工 curl 步骤——同样验证路由挂载与鉴权，但可重复执行。
+    #[tokio::test]
+    async fn coach_scenarios_require_auth_and_return_presets() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/scenarios")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/scenarios?locale=en")
+                    .header("authorization", bearer)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        let items = body["data"].as_array().expect("data is an array");
+        assert_eq!(items.len(), 8);
+        assert_eq!(items[0]["id"], "standup_update");
+        assert_eq!(items[0]["title"], "Daily Standup");
+        Ok(())
     }
 
     async fn read_json(response: axum::response::Response) -> anyhow::Result<serde_json::Value> {

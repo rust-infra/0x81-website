@@ -19,6 +19,7 @@ use std::sync::Arc;
 use crate::repositories::Repository;
 
 pub use admin::AdminService;
+pub mod coach_scenarios;
 pub use admin_collect::AdminCollectService;
 pub use auth::AuthService;
 pub use health::HealthService;
