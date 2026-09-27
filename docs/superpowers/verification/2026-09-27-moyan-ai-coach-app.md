@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 31 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 32 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -107,9 +107,10 @@ Branch: `feat/ai-agent`
 - AI 模板中英文两套内容；英文模板有独立的标题、描述和练习重点，避免英文界面出现中文模板。
 - 主题名称/描述、语言选项、全局设置、登录状态、词库空态、学习模式、确认弹窗和 API fallback 错误。
 - 会话轮数、纠错数、历史次数、识别图片数、删除条数等数量词增加单复数 key。
+- 历史记录不再把创建时标题当成展示标题；最近练习、练习记录和总结页会按 `scenarioId` 用当前语言重新解析“每日站会”等预置场景标题。
 - 新增全量 `zh-CN` / `en` key parity 测试，以及英文模板不得含中文的测试。
 
-模拟器切换英文后复核了首页、陪练根页、场景编辑器、主题列表和设置页；随后已恢复为中文偏好。
+模拟器切换英文后复核了首页、陪练根页、场景编辑器、主题列表和设置页；历史标题解析由新增回归测试覆盖，随后已恢复为中文偏好。
 
 ### 原生图片上传缺陷修复
 
