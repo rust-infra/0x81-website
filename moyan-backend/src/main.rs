@@ -239,6 +239,95 @@ mod tests {
         })
     }
 
+    fn coach_turn_payload(user_text: &str) -> serde_json::Value {
+        serde_json::json!({
+            "scenario": {
+                "id": "custom_x", "source": "custom", "category": "daily",
+                "title": "t", "description": "d",
+                "persona": { "name": "A", "role": "R", "locale": "en-US", "tone": "friendly" },
+                "setting": "meeting", "opening_line": "Hi",
+                "focus_points": [], "difficulty": "easy", "max_turns": 6
+            },
+            "history": [],
+            "user_text": user_text,
+            "coach_mode": "feedback"
+        })
+    }
+
+    /// 超过 user_text 上限时必须在调用 LLM 之前就 400（校验先于配额与上游请求）。
+    #[tokio::test]
+    async fn coach_turn_rejects_overlong_user_text_before_llm() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let payload = coach_turn_payload(&"x".repeat(2_001));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    /// 配额用尽返回 429，且带上 limit / used / resets_at。
+    #[tokio::test]
+    async fn coach_quota_returns_429_with_details() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        state
+            .services
+            .coach_settings
+            .update(crate::services::CoachSettings {
+                daily_turn_limit: 1,
+                enabled: true,
+            })
+            .await
+            .expect("set coach quota limit");
+
+        // 先真实消费一次额度，使 used == limit == 1
+        state
+            .services
+            .coach_quota
+            .check_and_consume(&sub)
+            .await
+            .expect("consume one quota unit");
+
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let payload = coach_turn_payload("Hello there");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["error"]["reason"], "coach_quota_exceeded");
+        assert_eq!(body["error"]["limit"], 1);
+        assert_eq!(body["error"]["used"], 1);
+        assert!(body["error"]["resets_at"].is_string());
+        Ok(())
+    }
+
     /// 管理端配额设置：需要 X-Admin-Token，默认 100，写完能读回。
     #[tokio::test]
     async fn admin_coach_settings_require_token_and_round_trip() -> anyhow::Result<()> {
