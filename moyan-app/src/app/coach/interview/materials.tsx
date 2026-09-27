@@ -136,6 +136,7 @@ export default function InterviewMaterialsScreen() {
         </View>
 
         <TextInput
+          accessibilityLabel="interview-material-input"
           value={text}
           onChangeText={setText}
           placeholder={t('coachPastePlaceholder')}
@@ -161,6 +162,7 @@ export default function InterviewMaterialsScreen() {
         </View>
         {error ? <Text style={{ color: c.accent, marginTop: 10 }}>{error}</Text> : null}
         <Pressable
+          accessibilityLabel="interview-profile-generate"
           disabled={busy || !text.trim()}
           onPress={() => void generate()}
           style={[styles.primary, { backgroundColor: busy ? c.inkMuted : c.buttonBg }]}

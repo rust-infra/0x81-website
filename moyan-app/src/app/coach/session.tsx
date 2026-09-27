@@ -312,6 +312,7 @@ export default function CoachSessionScreen() {
 
         <View style={[styles.controls, { borderTopColor: c.border }]}>
           <Pressable
+            accessibilityLabel="coach-mic"
             onPress={() => void toggleMic()}
             style={[
               styles.mic,
@@ -332,6 +333,7 @@ export default function CoachSessionScreen() {
           </Pressable>
           <View style={[styles.inputWrap, { backgroundColor: c.studyCard }]}>
             <TextInput
+              accessibilityLabel="coach-input"
               value={input}
               onChangeText={setInput}
               placeholder={t('coachInputPlaceholder')}
@@ -341,6 +343,7 @@ export default function CoachSessionScreen() {
               maxLength={2_000}
             />
             <Pressable
+              accessibilityLabel="coach-send"
               disabled={!input.trim() || session.state === 'thinking'}
               onPress={() => void submit()}
             >

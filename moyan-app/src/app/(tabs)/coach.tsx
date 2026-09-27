@@ -199,14 +199,23 @@ export default function CoachScreen() {
             <Text style={[styles.empty, { color: c.inkMuted }]}>{t('coachNoHistory')}</Text>
           ) : (
             history.slice(0, 4).map((record) => (
-              <View key={record.id} style={[cardStyle(c.card), styles.historyRow]}>
+              <Pressable
+                key={record.id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/coach/summary',
+                    params: { record: JSON.stringify(record) },
+                  })
+                }
+                style={[cardStyle(c.card), styles.historyRow]}
+              >
                 <Text style={[styles.cardTitle, { color: c.ink }]} numberOfLines={1}>
                   {record.scenarioTitle}
                 </Text>
                 <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 4 }}>
                   {t('coachTurns', { count: record.summary.stats.turns })}
                 </Text>
-              </View>
+              </Pressable>
             ))
           )}
         </ScrollView>
