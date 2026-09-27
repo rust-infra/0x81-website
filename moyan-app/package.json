@@ -36,7 +36,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/lib/*.test.js"
   },
   "private": true
 }
