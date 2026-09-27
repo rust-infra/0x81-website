@@ -42,7 +42,10 @@ test('rejects overlong fields and too many focus points', () => {
 test('templates are valid custom scenarios', () => {
   for (const id of ['incident_sync', 'scope_deadline', 'cross_timezone_handoff', 'growth_1on1']) {
     const template = scenarioFromTemplate(id);
+    const templateEn = scenarioFromTemplate(id, 'en');
     assert.equal(template?.source, 'custom');
     assert.equal(normalizeCoachScenario(template as CoachScenario).ok, true);
+    assert.equal(normalizeCoachScenario(templateEn as CoachScenario).ok, true);
+    assert.doesNotMatch(templateEn?.title ?? '', /[\u4e00-\u9fff]/);
   }
 });

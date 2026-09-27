@@ -3,6 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequestWithDeps } from './api-client';
 import { getApiBase } from './config';
+import { translate } from './i18n';
 import type {
   CardProgress,
   AppConfig,
@@ -44,7 +45,7 @@ async function publicGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `请求失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('requestFailed', { status: res.status }));
   }
   return body.data as T;
 }
@@ -57,7 +58,7 @@ async function publicPost<T>(path: string, body: unknown): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.success) {
-    throw new Error(data?.error?.message || `请求失败 (${res.status})`);
+    throw new Error(data?.error?.message || translate('requestFailed', { status: res.status }));
   }
   return data.data as T;
 }
@@ -210,7 +211,7 @@ export async function kimiDevice(deviceId: string): Promise<KimiDeviceInfo> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `设备授权失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('deviceAuthFailed', { status: res.status }));
   }
   return body.data as KimiDeviceInfo;
 }
@@ -243,7 +244,7 @@ export async function kimiTokenPoll(
   if (/authorization_pending|slow_down|pending/i.test(message)) {
     return { status: 'pending' };
   }
-  throw new Error(message || `登录轮询失败 (${res.status})`);
+  throw new Error(message || translate('loginPollFailed', { status: res.status }));
 }
 
 export async function googleMobileLogin(
@@ -256,7 +257,7 @@ export async function googleMobileLogin(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `Google 登录失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('googleLoginFailed', { status: res.status }));
   }
   const data = body.data as { token: string; user: User };
   return { token: data.token, user: data.user };

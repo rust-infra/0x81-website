@@ -326,7 +326,7 @@ export default function DeckDetailScreen() {
         </View>
       ) : (
         <View style={styles.center}>
-          <Text style={{ color: c.inkMuted }}>词库不存在</Text>
+          <Text style={{ color: c.inkMuted }}>{t('deckNotFound')}</Text>
         </View>
       )}
 

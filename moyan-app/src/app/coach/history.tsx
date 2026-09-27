@@ -154,7 +154,7 @@ function HistoryRow({
         />
       }
       title={record.scenarioTitle}
-      subtitle={`${record.summary.stats.corrections} ${t('coachCorrections')} · ${duration}`}
+      subtitle={`${record.summary.stats.corrections} ${t('coachCorrectionsInline')} · ${duration}`}
       meta={`${day} · ${t('coachTurns', { count: record.summary.stats.turns })}`}
       badge={interview ? t('coachFilterInterview') : undefined}
       onPress={() => onOpen({ pathname: '/coach/summary', params: { record: JSON.stringify(record) } })}

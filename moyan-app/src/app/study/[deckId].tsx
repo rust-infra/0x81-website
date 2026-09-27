@@ -161,7 +161,7 @@ export default function StudyScreen() {
 
   const renderContent = () => {
     if (loading) {
-      return <Text style={{ color: c.inkMuted }}>加载中...</Text>;
+      return <Text style={{ color: c.inkMuted }}>{t('studyLoading')}</Text>;
     }
     if (queue.length === 0 || index >= queue.length) {
       const total =
@@ -292,12 +292,12 @@ export default function StudyScreen() {
           </Pressable>
           <Pressable onPress={toggleSpeak} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 16 }}>
-              {speakEnabled ? '🔊' : '🔇'}
+              {speakEnabled ? t('voiceOn') : t('voiceOff')}
             </Text>
           </Pressable>
           <Pressable onPress={toggleMode} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 14 }}>
-              {studyMode === 'en-zh' ? '英→中' : '中→英'}
+              {studyMode === 'en-zh' ? t('studyModeEnZh') : t('studyModeZhEn')}
             </Text>
           </Pressable>
         </View>

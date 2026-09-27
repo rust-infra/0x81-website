@@ -60,9 +60,19 @@ export function normalizeCoachScenario(
   };
 }
 
-export function scenarioFromTemplate(id: string): CoachScenario | null {
-  const preset = TEMPLATES.find((template) => template.id === id);
-  return preset ? { ...preset, persona: { ...preset.persona } } : null;
+export function scenarioFromTemplate(
+  id: string,
+  lang: 'zh-CN' | 'en' = 'zh-CN'
+): CoachScenario | null {
+  const source = lang === 'en' ? TEMPLATES_EN : TEMPLATES;
+  const preset = source.find((template) => template.id === id);
+  return preset
+    ? {
+        ...preset,
+        persona: { ...preset.persona },
+        focus_points: [...preset.focus_points],
+      }
+    : null;
 }
 
 export const TEMPLATES: CoachScenario[] = [
@@ -115,6 +125,62 @@ export const TEMPLATES: CoachScenario[] = [
     setting: 'one_on_one',
     opening_line: 'How are things going lately?',
     focus_points: ['表达现状', '给具体例子', '提出诉求'],
+    difficulty: 'core',
+    max_turns: 10,
+  },
+];
+
+
+export const TEMPLATES_EN: CoachScenario[] = [
+  {
+    id: 'incident_sync',
+    source: 'custom',
+    category: 'high_stakes',
+    title: 'Incident Update',
+    description: 'Brief leadership and US teammates on impact, progress and next steps',
+    persona: { name: 'Sam', role: 'SRE', locale: 'en-US', tone: 'direct' },
+    setting: 'meeting',
+    opening_line: 'What do you know about the incident so far?',
+    focus_points: ['Lead with impact', 'Separate knowns and unknowns', 'Set an update cadence'],
+    difficulty: 'challenge',
+    max_turns: 12,
+  },
+  {
+    id: 'scope_deadline',
+    source: 'custom',
+    category: 'high_stakes',
+    title: 'Scope & Deadline',
+    description: 'Discuss scope, priority and an unrealistic deadline',
+    persona: { name: 'Jordan', role: 'Product Manager', locale: 'en-US', tone: 'neutral' },
+    setting: 'meeting',
+    opening_line: 'Can we commit to this date?',
+    focus_points: ['Explain trade-offs', 'Offer options', 'Confirm priority'],
+    difficulty: 'challenge',
+    max_turns: 12,
+  },
+  {
+    id: 'cross_timezone_handoff',
+    source: 'custom',
+    category: 'engineering',
+    title: 'Cross-timezone Handoff',
+    description: 'Hand off context, current state and next steps across time zones',
+    persona: { name: 'Emma', role: 'Teammate', locale: 'en-AU', tone: 'friendly' },
+    setting: 'meeting',
+    opening_line: 'Hey, can you give me the handoff?',
+    focus_points: ['Give context first', 'State the current status', 'Leave a clear question'],
+    difficulty: 'core',
+    max_turns: 10,
+  },
+  {
+    id: 'growth_1on1',
+    source: 'custom',
+    category: 'daily',
+    title: 'Manager 1:1 · Growth',
+    description: 'Discuss workload, feedback and growth with your manager',
+    persona: { name: 'Morgan', role: 'Engineering Manager', locale: 'en-GB', tone: 'friendly' },
+    setting: 'one_on_one',
+    opening_line: 'How are things going lately?',
+    focus_points: ['Describe the current state', 'Give a concrete example', 'Make a clear request'],
     difficulty: 'core',
     max_turns: 10,
   },

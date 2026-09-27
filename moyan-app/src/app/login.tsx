@@ -60,7 +60,7 @@ export default function LoginScreen() {
     if (googleResponse?.type === 'success' && googleResponse.params?.code) {
       void handleGoogleCode(googleResponse.params.code);
     } else if (googleResponse?.type === 'error') {
-      setError(t('login') + ' 失败');
+      setError(t('loginFailed'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleResponse]);
@@ -77,7 +77,7 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = () => {
     if (!getGoogleClientId()) {
-      setError('服务端未配置 Google 登录（GOOGLE_MOBILE_CLIENT_ID）');
+      setError(t('googleNotConfigured'));
       return;
     }
     void googlePrompt();
@@ -85,14 +85,14 @@ export default function LoginScreen() {
 
   const startKimiLogin = async () => {
     setError('');
-    setPollStatus('正在获取验证码...');
+    setPollStatus(t('kimiFetchingCode'));
     try {
       const deviceId = randomDeviceId();
       deviceIdRef.current = deviceId;
       const info = await kimiDevice(deviceId);
       setDeviceInfo(info);
       setMode('kimi');
-      setPollStatus('请在浏览器中完成授权');
+      setPollStatus(t('kimiAuthorize'));
       await WebBrowser.openBrowserAsync(info.verification_uri_complete);
       startPolling(info);
     } catch (err) {
@@ -110,7 +110,7 @@ export default function LoginScreen() {
         const result = await kimiTokenPoll(info.device_code, deviceIdRef.current);
         if (result.status === 'ok') {
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-          setPollStatus('授权成功，登录中...');
+          setPollStatus(t('kimiAuthorizing'));
           await signIn(result.token, result.user);
         }
       } catch (err) {
@@ -134,12 +134,12 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     const value = tokenInput.trim();
     if (!value) {
-      setError('请输入 token');
+      setError(t('loginTokenRequired'));
       return;
     }
     await signIn(value, {
       id: 'local',
-      name: '开发用户',
+      name: t('devUserName'),
       email: '',
       avatar: '',
       provider: 'local',

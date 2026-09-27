@@ -107,7 +107,7 @@ export default function CoachScreen() {
       ...scenario,
       id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       source: 'custom',
-      title: `${scenario.title} · Copy`,
+      title: `${scenario.title} · ${t('coachCopySuffix')}`,
     };
     await saveCustomScenario(copy);
     router.push({ pathname: '/coach/editor', params: { scenarioId: copy.id } });
@@ -250,7 +250,7 @@ export default function CoachScreen() {
                   title={record.scenarioTitle}
                   meta={`${t('coachTurns', {
                     count: record.summary.stats.turns,
-                  })} · ${record.summary.stats.corrections} ${t('coachCorrections')}`}
+                  })} · ${record.summary.stats.corrections} ${t('coachCorrectionsInline')}`}
                   onPress={() =>
                     router.push({
                       pathname: '/coach/summary',

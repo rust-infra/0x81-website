@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { translate } from './i18n';
 
 const ToastContext = createContext<(message: string) => void>(() => {});
 
@@ -44,8 +45,8 @@ export function confirmAsync(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     const { Alert } = require('react-native');
     Alert.alert(title, message, [
-      { text: '取消', style: 'cancel', onPress: () => resolve(false) },
-      { text: '确定', style: 'destructive', onPress: () => resolve(true) },
+      { text: translate('cancel'), style: 'cancel', onPress: () => resolve(false) },
+      { text: translate('confirm'), style: 'destructive', onPress: () => resolve(true) },
     ]);
   });
 }

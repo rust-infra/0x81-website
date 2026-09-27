@@ -16,6 +16,21 @@ interface I18nContextValue {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
+let currentLang: Lang = 'zh-CN';
+
+export function translate(
+  key: string,
+  params?: Record<string, string | number>
+): string {
+  let text = translations[currentLang][key] ?? key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.replace(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
 const I18nContext = createContext<I18nContextValue>({
   lang: 'zh-CN',
   setLang: () => {},
@@ -39,7 +54,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   };
 
   const t = (key: string, params?: Record<string, string | number>) => {
-    let text = translations[lang][key] ?? key;
+    const pluralKey =
+      params?.count !== undefined
+        ? `${key}${Number(params.count) === 1 ? 'One' : 'Other'}`
+        : key;
+    let text =
+      translations[lang][pluralKey] ??
+      translations[lang][key] ??
+      key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
         text = text.replace(`{${k}}`, String(v));
@@ -47,6 +69,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
     return text;
   };
+
+  currentLang = lang;
 
   return (
     <I18nContext.Provider value={{ lang, setLang, t }}>

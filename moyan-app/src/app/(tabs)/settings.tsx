@@ -33,6 +33,17 @@ import {
   type VoiceOption,
 } from '../../lib/voices';
 
+const THEME_TEXT: Record<string, { label: string; description: string }> = {
+  xuanzhi: { label: 'themeXuanzhi', description: 'themeXuanzhiDesc' },
+  shenyemo: { label: 'themeShenyemo', description: 'themeShenyemoDesc' },
+  zhuqing: { label: 'themeZhuqing', description: 'themeZhuqingDesc' },
+  zhusha: { label: 'themeZhusha', description: 'themeZhushaDesc' },
+  dailan: { label: 'themeDailan', description: 'themeDailanDesc' },
+  fense: { label: 'themeFense', description: 'themeFenseDesc' },
+  ios: { label: 'themeIos', description: 'themeIosDesc' },
+  'ios-dark': { label: 'themeIosDark', description: 'themeIosDarkDesc' },
+};
+
 const PROVIDERS = [
   { key: 'webspeech', labelKey: 'providerWebspeech' },
   { key: 'google', labelKey: 'providerGoogle' },
@@ -285,8 +296,12 @@ export default function SettingsScreen() {
               >
                 <View style={[styles.themeDot, { backgroundColor: th.preview }]} />
                 <View style={styles.rowBody}>
-                  <Text style={[styles.rowTitle, { color: c.ink }]}>{th.label}</Text>
-                  <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{th.description}</Text>
+                  <Text style={[styles.rowTitle, { color: c.ink }]}>
+                    {t(THEME_TEXT[th.name]?.label ?? '')}
+                  </Text>
+                  <Text style={[styles.rowDesc, { color: c.inkMuted }]}>
+                    {t(THEME_TEXT[th.name]?.description ?? '')}
+                  </Text>
                 </View>
                 <Text style={[styles.check, active ? { color: c.accent } : { color: 'transparent' }]}>✓</Text>
               </Pressable>
@@ -308,7 +323,7 @@ export default function SettingsScreen() {
                 onPress={() => changeLanguage(lg)}
               >
                 <Text style={{ color: lang === lg ? '#fff' : c.ink }}>
-                  {lg === 'zh-CN' ? '中文' : 'English'}
+                  {lg === 'zh-CN' ? t('languageChinese') : t('languageEnglish')}
                 </Text>
               </Pressable>
             ))}
@@ -335,7 +350,7 @@ export default function SettingsScreen() {
           {speech?.provider !== 'webspeech' && (
             <TextInput
               style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder={speech?.provider === 'google' ? 'Google API Key' : speech?.provider === 'elevenlabs' ? 'ElevenLabs API Key' : '阿里云 API Key'}
+              placeholder={t('apiKeyPlaceholder')}
               placeholderTextColor={c.inkMuted}
               secureTextEntry
               value={
@@ -391,7 +406,7 @@ export default function SettingsScreen() {
 
           {missingKey && (
             <Text style={[styles.keyHint, { color: c.inkMuted }]}>
-              未配置 API Key，测试将使用系统语音
+              {t('apiKeyMissingHint')}
             </Text>
           )}
 
@@ -515,7 +530,10 @@ export default function SettingsScreen() {
               keyExtractor={(item) => item.id}
               ListEmptyComponent={
                 <Text style={[styles.keyHint, { color: c.inkMuted }]}>
-                  无可用{voicePicker === 'zh' ? '中文' : '英文'}系统语音
+                  {t('noSystemVoices', {
+                    language:
+                      voicePicker === 'zh' ? t('languageChinese') : t('voiceEn'),
+                  })}
                 </Text>
               }
               renderItem={({ item }) => (

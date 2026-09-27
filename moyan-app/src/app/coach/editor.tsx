@@ -112,6 +112,29 @@ export default function CoachEditorScreen() {
     router.replace('/(tabs)/coach');
   };
 
+  const categoryOptions = [
+    { value: 'daily', label: t('coachCategoryDaily') },
+    { value: 'engineering', label: t('coachCategoryEngineering') },
+    { value: 'high_stakes', label: t('coachCategoryHighStakes') },
+  ];
+  const toneOptions = [
+    { value: 'friendly', label: t('coachToneFriendly') },
+    { value: 'neutral', label: t('coachToneNeutral') },
+    { value: 'direct', label: t('coachToneDirect') },
+    { value: 'challenging', label: t('coachToneChallenging') },
+  ];
+  const settingOptions = [
+    { value: 'meeting', label: t('coachSettingMeeting') },
+    { value: 'one_on_one', label: t('coachSettingOneOnOne') },
+    { value: 'coffee_chat', label: t('coachSettingCoffeeChat') },
+    { value: 'phone_call', label: t('coachSettingPhoneCall') },
+  ];
+  const difficultyOptions = [
+    { value: 'easy', label: t('coachDifficultyEasy') },
+    { value: 'core', label: t('coachDifficultyCore') },
+    { value: 'challenge', label: t('coachDifficultyChallenge') },
+  ];
+
   const remove = async () => {
     if (!scenarioId) return;
     const ok = await confirmAsync(t('coachDelete'), scenario.title);
@@ -168,7 +191,7 @@ export default function CoachEditorScreen() {
         <SectionLabel>{t('coachFromTemplate')}</SectionLabel>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {['incident_sync', 'scope_deadline', 'cross_timezone_handoff', 'growth_1on1'].map((id) => {
-            const template = scenarioFromTemplate(id);
+            const template = scenarioFromTemplate(id, lang);
             if (!template) return null;
             return (
               <Pressable
@@ -190,9 +213,9 @@ export default function CoachEditorScreen() {
             <SectionLabel>{t('coachGeneratedFields')}</SectionLabel>
             <CoachGroup>
               <CoachRow
-                title={t('coachPersonaName')}
+                title={t('coachPersonaSummary')}
                 subtitle={`${scenario.persona.name} · ${scenario.persona.role}`}
-                meta={`${scenario.persona.locale} · ${scenario.persona.tone}`}
+                meta={`${scenario.persona.locale} · ${toneOptions.find((item) => item.value === scenario.persona.tone)?.label ?? scenario.persona.tone}`}
               />
               <CoachRow
                 title={t('coachOpeningLine')}
@@ -275,13 +298,13 @@ export default function CoachEditorScreen() {
 
         <Selector
           label={t('coachCategory')}
-          values={['daily', 'engineering', 'high_stakes']}
+          options={categoryOptions}
           selected={scenario.category}
           onSelect={(value) => apply({ ...scenario, category: value as CoachCategory })}
         />
         <Selector
           label={t('coachLocale')}
-          values={['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN']}
+          options={['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'].map((value) => ({ value, label: value }))}
           selected={scenario.persona.locale}
           onSelect={(value) =>
             apply({ ...scenario, persona: { ...scenario.persona, locale: value as CoachLocale } })
@@ -292,7 +315,7 @@ export default function CoachEditorScreen() {
         ) : null}
         <Selector
           label={t('coachTone')}
-          values={['friendly', 'neutral', 'direct', 'challenging']}
+          options={toneOptions}
           selected={scenario.persona.tone}
           onSelect={(value) =>
             apply({ ...scenario, persona: { ...scenario.persona, tone: value as CoachTone } })
@@ -300,13 +323,13 @@ export default function CoachEditorScreen() {
         />
         <Selector
           label={t('coachSetting')}
-          values={['meeting', 'one_on_one', 'coffee_chat', 'phone_call']}
+          options={settingOptions}
           selected={scenario.setting}
           onSelect={(value) => apply({ ...scenario, setting: value as CoachSetting })}
         />
         <Selector
           label={t('coachDifficulty')}
-          values={['easy', 'core', 'challenge']}
+          options={difficultyOptions}
           selected={scenario.difficulty}
           onSelect={(value) => apply({ ...scenario, difficulty: value as CoachDifficulty })}
         />
@@ -378,12 +401,12 @@ function Field({
 
 function Selector({
   label,
-  values,
+  options,
   selected,
   onSelect,
 }: {
   label: string;
-  values: string[];
+  options: Array<{ value: string; label: string }>;
   selected: string;
   onSelect: (value: string) => void;
 }) {
@@ -393,20 +416,25 @@ function Selector({
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: c.inkLight }]}>{label}</Text>
       <View style={styles.chips}>
-        {values.map((value) => (
+        {options.map((option) => (
           <Pressable
-            key={value}
-            onPress={() => onSelect(value)}
+            key={option.value}
+            onPress={() => onSelect(option.value)}
             style={[
               styles.chip,
               {
-                backgroundColor: value === selected ? c.accentLight : c.inputBg,
-                borderColor: value === selected ? c.accent : c.border,
+                backgroundColor: option.value === selected ? c.accentLight : c.inputBg,
+                borderColor: option.value === selected ? c.accent : c.border,
               },
             ]}
           >
-            <Text style={{ color: value === selected ? c.accent : c.inkLight, fontSize: 12 }}>
-              {value}
+            <Text
+              style={{
+                color: option.value === selected ? c.accent : c.inkLight,
+                fontSize: 12,
+              }}
+            >
+              {option.label}
             </Text>
           </Pressable>
         ))}

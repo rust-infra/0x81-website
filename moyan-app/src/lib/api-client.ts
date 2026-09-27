@@ -1,4 +1,5 @@
 import { ApiError } from './api-error';
+import { translate } from './i18n';
 
 export type ApiRequest = <T>(
   path: string,
@@ -18,7 +19,7 @@ export async function apiRequestWithDeps<T>(
 ): Promise<T> {
   const token = await deps.getToken();
   if (!token) {
-    throw new ApiError(401, '未登录');
+    throw new ApiError(401, translate('notLoggedIn'));
   }
 
   const headers: Record<string, string> = {
@@ -40,7 +41,7 @@ export async function apiRequestWithDeps<T>(
     const error = body?.error ?? {};
     throw new ApiError(
       res.status,
-      error.message || `请求失败 (${res.status})`,
+      error.message || translate('requestFailed', { status: res.status }),
       error.reason,
       error
     );
