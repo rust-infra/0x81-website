@@ -10,5 +10,6 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/scenarios", get(coach::list_scenarios))
         .route("/turn", axum::routing::post(coach::turn))
+        .route("/summary", axum::routing::post(coach::summary))
         .layer(middleware::from_fn(jwt_middleware))
 }

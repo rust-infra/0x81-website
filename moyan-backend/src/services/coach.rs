@@ -7,8 +7,9 @@ use std::sync::Arc;
 
 use crate::middleware::error::AppError;
 use crate::models::{
-    validate_history, validate_scenario, CoachFeedback, CoachMode, CoachRole, CoachScenario,
-    CoachTurn, CoachTurnRequest, CoachTurnResponse,
+    validate_history, validate_scenario, CoachExpression, CoachFeedback, CoachMode, CoachRole,
+    CoachScenario, CoachSummaryRequest, CoachSummaryResponse, CoachSummaryStats, CoachTurn,
+    CoachTurnRequest, CoachTurnResponse,
 };
 use crate::repositories::Repository;
 use crate::services::admin_collect::AdminCollectService;
@@ -97,6 +98,108 @@ impl CoachService {
             )),
         }
     }
+}
+
+const MAX_SUMMARY_TOKENS: u32 = 1_500;
+const SUMMARY_SYSTEM_PROMPT: &str = "You are an English speaking coach for software engineers \
+working remotely with international colleagues. Review the practice conversation and return JSON only:\n\
+{\"overall_zh\":\"...\",\"overall_en\":\"...\",\"strengths\":[\"...\"],\"improvements\":[\"...\"],\
+\"expressions\":[{\"en\":\"...\",\"zh\":\"...\"}]}\n\
+Rules: strengths/improvements/expressions at most 3 each; Chinese fields in Simplified Chinese; \
+be specific to this conversation, not generic advice.";
+
+impl CoachService {
+    pub async fn summary(
+        &self,
+        req: CoachSummaryRequest,
+    ) -> Result<CoachSummaryResponse, AppError> {
+        let scenario = validate_scenario(&req.scenario).map_err(AppError::BadRequest)?;
+        if req.history.is_empty() {
+            return Err(AppError::BadRequest("history is required".into()));
+        }
+        if req.history.len() > crate::models::MAX_HISTORY_TURNS {
+            return Err(AppError::BadRequest("history is too long".into()));
+        }
+        let guidance = req
+            .scenario_id
+            .as_deref()
+            .filter(|_| matches!(scenario.source, crate::models::CoachScenarioSource::Preset))
+            .and_then(coach_scenarios::preset_guidance);
+        let system = format!(
+            "{SUMMARY_SYSTEM_PROMPT}\n\nScenario: {} ({})",
+            scenario.title, scenario.description
+        );
+        let target_language = if req.locale.as_deref().unwrap_or("zh-CN").starts_with("en") {
+            "English"
+        } else {
+            "Chinese"
+        };
+        let transcript = format!(
+            "{}\n\nAdditional teaching guidance: {}\nWrite strengths/improvements/expressions in {}.",
+            build_transcript(&req.history, "(end of session)"),
+            guidance.unwrap_or("none"),
+            target_language,
+        );
+        let settings = self.admin_collect.llm_settings().await?;
+        let raw = llm_client::chat_json(
+            &settings,
+            &system,
+            &transcript,
+            None,
+            Some(MAX_SUMMARY_TOKENS),
+        )
+        .await
+        .map_err(|_| {
+            AppError::ServiceUnavailable("AI coach summary is temporarily unavailable".into())
+        })?;
+
+        let turns = req.history.iter().filter(|t| t.role == CoachRole::User).count() as u32;
+        let user_chars = req
+            .history
+            .iter()
+            .filter(|t| t.role == CoachRole::User)
+            .map(|t| t.content.chars().count() as u32)
+            .sum();
+        parse_summary_payload(&raw, turns, user_chars, 0)
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct LlmSummaryPayload {
+    overall_zh: String,
+    overall_en: String,
+    #[serde(default)]
+    strengths: Vec<String>,
+    #[serde(default)]
+    improvements: Vec<String>,
+    #[serde(default)]
+    expressions: Vec<CoachExpression>,
+}
+
+pub fn parse_summary_payload(
+    raw: &str,
+    turns: u32,
+    user_chars: u32,
+    corrections: u32,
+) -> Result<CoachSummaryResponse, AppError> {
+    let cleaned = strip_code_fences(raw);
+    let payload: LlmSummaryPayload = serde_json::from_str(&cleaned)
+        .map_err(|e| AppError::BadRequest(format!("invalid summary JSON: {e}")))?;
+    if payload.overall_zh.trim().is_empty() && payload.overall_en.trim().is_empty() {
+        return Err(AppError::BadRequest("summary was empty".into()));
+    }
+    Ok(CoachSummaryResponse {
+        overall_zh: payload.overall_zh,
+        overall_en: payload.overall_en,
+        strengths: payload.strengths.into_iter().take(3).collect(),
+        improvements: payload.improvements.into_iter().take(3).collect(),
+        expressions: payload.expressions.into_iter().take(3).collect(),
+        stats: CoachSummaryStats {
+            turns,
+            user_chars,
+            corrections,
+        },
+    })
 }
 
 /// LLM 返回不可解析时的降级：保留原文作为回复，放弃反馈。
@@ -315,6 +418,22 @@ mod tests {
         assert!(out.limit_reached);
         assert_eq!(out.turn_index, 3);
         assert_eq!(out.mood, "neutral");
+    }
+
+    #[test]
+    fn parses_summary_payload_and_fills_stats() {
+        let raw = r#"{"overall_zh":"表达清楚","overall_en":"Clear","strengths":["信息完整"],"improvements":["时态"],"expressions":[{"en":"I'm on it.","zh":"我在做。"}]}"#;
+        let out = parse_summary_payload(raw, 8, 420, 6).unwrap();
+        assert_eq!(out.stats.turns, 8);
+        assert_eq!(out.stats.user_chars, 420);
+        assert_eq!(out.stats.corrections, 6);
+        assert_eq!(out.strengths, vec!["信息完整".to_string()]);
+    }
+
+    #[test]
+    fn summary_rejects_empty_overall() {
+        let raw = r#"{"overall_zh":"","overall_en":"","strengths":[],"improvements":[],"expressions":[]}"#;
+        assert!(parse_summary_payload(raw, 1, 10, 0).is_err());
     }
 
     #[test]

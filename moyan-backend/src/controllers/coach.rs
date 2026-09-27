@@ -28,3 +28,11 @@ pub async fn turn(
     let result = state.services.coach.turn(&claims.sub, req).await?;
     Ok(Json(serde_json::json!({ "success": true, "data": result })))
 }
+
+pub async fn summary(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<crate::models::CoachSummaryRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let result = state.services.coach.summary(req).await?;
+    Ok(Json(serde_json::json!({ "success": true, "data": result })))
+}

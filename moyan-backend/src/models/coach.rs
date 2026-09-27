@@ -191,6 +191,34 @@ pub struct CoachTurnResponse {
     pub feedback: Option<CoachFeedback>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CoachSummaryRequest {
+    pub scenario: CoachScenario,
+    #[serde(default)]
+    pub scenario_id: Option<String>,
+    #[serde(default)]
+    pub history: Vec<CoachTurn>,
+    #[serde(default)]
+    pub locale: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoachSummaryStats {
+    pub turns: u32,
+    pub user_chars: u32,
+    pub corrections: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoachSummaryResponse {
+    pub overall_zh: String,
+    pub overall_en: String,
+    pub strengths: Vec<String>,
+    pub improvements: Vec<String>,
+    pub expressions: Vec<CoachExpression>,
+    pub stats: CoachSummaryStats,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
