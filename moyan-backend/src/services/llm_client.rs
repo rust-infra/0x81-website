@@ -499,6 +499,21 @@ Hard requirements:
     parse_llm_cards(&content, video_id)
 }
 
+fn opencode_headers(
+    base_url: &str,
+    session_id: &str,
+    request_id: &str,
+) -> std::collections::HashMap<&'static str, String> {
+    if !base_url.to_ascii_lowercase().contains("opencode.ai") {
+        return std::collections::HashMap::new();
+    }
+    std::collections::HashMap::from([
+        ("x-opencode-session", session_id.to_string()),
+        ("x-opencode-request", request_id.to_string()),
+        ("x-opencode-client", "moyan-backend".to_string()),
+    ])
+}
+
 async fn chat_completion(
     settings: &LlmSettingsStored,
     system: &str,
@@ -544,9 +559,15 @@ async fn chat_completion(
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
-    let res = client
+    let session_id: String = uuid::Uuid::new_v4().simple().to_string();
+    let request_id: String = uuid::Uuid::new_v4().simple().to_string();
+    let mut request = client
         .post(&url)
-        .bearer_auth(settings.api_key.trim())
+        .bearer_auth(settings.api_key.trim());
+    for (name, value) in opencode_headers(&settings.base_url, &session_id, &request_id) {
+        request = request.header(name, value);
+    }
+    let res = request
         .json(&body)
         .send()
         .await
@@ -786,6 +807,27 @@ mod tests {
         assert_eq!(cards[0].pronunciation.as_deref(), Some("/həˈləʊ/"));
         assert!(cards[0].tags.contains(&"youtube".into()));
         assert!(cards[0].tags.contains(&"vid".into()));
+    }
+
+    #[test]
+    fn adds_opencode_routing_headers_only_for_opencode() {
+        let headers = opencode_headers(
+            "https://opencode.ai/zen/go/v1",
+            "session-1",
+            "request-1",
+        );
+        assert_eq!(headers.get("x-opencode-session"), Some(&"session-1".to_string()));
+        assert_eq!(headers.get("x-opencode-request"), Some(&"request-1".to_string()));
+        assert_eq!(
+            headers.get("x-opencode-client"),
+            Some(&"moyan-backend".to_string())
+        );
+        assert!(opencode_headers(
+            "https://api.deepseek.com/v1",
+            "session-1",
+            "request-1"
+        )
+        .is_empty());
     }
 
     #[test]

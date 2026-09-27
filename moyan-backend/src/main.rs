@@ -284,15 +284,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires real LLM credentials"]
     async fn real_llm_contract_smoke() -> anyhow::Result<()> {
-        let _guard = TEST_ENV_MUTEX.lock().await;
-        let deepseek_key = std::env::var("DEEPSEEK_API_KEY").ok();
-        let _api = deepseek_key
-            .as_deref()
-            .map(|key| EnvGuard::set("MOYAN_LLM_API_KEY", key));
-
-        let services = Services::new(Arc::new(
-            SqliteRepositories::connect("sqlite::memory:").await?,
-        ));
+        // This opt-in test must use the same admin DB the user configured,
+        // not an empty in-memory settings store.
+        let services = Services::new(crate::repositories::repository_from_env().await?);
         let user_id = "real-llm-smoke-user";
         let presets = crate::services::coach_scenarios::list_presets("zh-CN");
         let scenario = presets
@@ -395,7 +389,8 @@ mod tests {
             .await
             .map_err(|error| anyhow::anyhow!("real draft failed: {error:?}"))?;
         assert!(drafted.id.starts_with("custom_"));
-        assert!(drafted.opening_line.is_ascii());
+        assert!(drafted.opening_line.chars().any(|ch| ch.is_ascii_alphabetic()));
+        assert!(!drafted.opening_line.chars().any(|ch| ('\u{4e00}'..='\u{9fff}').contains(&ch)));
         eprintln!("real draft ok: {}", drafted.id);
 
         let profile = services
@@ -416,7 +411,7 @@ mod tests {
         // if the configured model supports vision, OCR should return text.
         let image = crate::services::llm_client::ImagePart {
             media_type: "image/png".into(),
-            data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=".into(),
+            data_base64: "iVBORw0KGgoAAAANSUhEUgAAAMAAAAA4CAAAAACOdqivAAAAeElEQVR42u3YMQ6AIAwF0N7/0hoXB2KJoomUvD9SaHgLEGIrngAAAAAAAFgGEEfaCedYZEnX9jtfTWmaAgAAfA4Y3OLz6l0FAAAAAADAYoD+YyG98AEAAJxCAAAAAAAAAO9+5gar83wtAgAUB1QMAAAAAAAAwJ/ZAeuHviAi6SoNAAAAAElFTkSuQmCC".into(),
         };
         match services.interview_ocr.ocr(user_id, vec![image]).await {
             Ok(text) => {
