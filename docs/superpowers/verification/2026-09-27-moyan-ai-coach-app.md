@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 33 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 34 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -89,6 +89,17 @@ Branch: `feat/ai-agent`
 - 陪练根页增加一个设计稿未画出的“AI 面试官”紧凑入口，否则面试功能无法从 App 内进入。
 
 验证：`npm test` → 30 passed；`npx tsc --noEmit` 和 `npx expo export --platform web` 均通过；并在 iPhone 15 Pro 模拟器逐页复核首页、陪练、会话、总结、AI 面试官、来源面板、材料确认、档案、场景编辑器、陪练设置、练习记录、播客和统计页。
+
+### 语音识别 locale 修复：已执行
+
+复现时 iOS 返回：`Locale en is not supported by the speech recognizer`。根因是会话页把界面语言 `lang`（英文界面时为 `en`）直接传给了 STT；iOS 支持 `en-US`、`en-GB`、`en-IN`、`en-AU` 等识别 locale，但不接受裸 `en`。
+
+修正：
+
+- STT 改为使用场景的 `persona.locale`，不再使用 UI 语言。
+- `zh-CN` 口音场景映射到 `en-US` 做英文识别；`zh-CN` 仅保留给 TTS 的中文口音朗读。
+- 对未知或不支持 locale 统一回退到 `en-US`，避免原生模块启动失败。
+- 新增 locale 映射测试，并在模拟器复现后确认识别状态进入 `Listening`、不再弹出错误。
 
 ### AI 聊天体验复核：已修正
 
