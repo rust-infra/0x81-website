@@ -8,6 +8,7 @@ use crate::middleware::error::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/quota", get(coach::quota))
         .route("/scenarios", get(coach::list_scenarios))
         .route(
             "/scenario/draft",

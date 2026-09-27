@@ -328,6 +328,48 @@ mod tests {
         Ok(())
     }
 
+    /// The coach tab needs a read-only quota snapshot before the first turn.
+    #[tokio::test]
+    async fn coach_quota_status_exposes_remaining() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        state
+            .services
+            .coach_settings
+            .update(crate::services::CoachSettings {
+                daily_turn_limit: 2,
+                enabled: true,
+            })
+            .await
+            .expect("set coach quota limit");
+        state
+            .services
+            .coach_quota
+            .check_and_consume(&sub)
+            .await
+            .expect("consume one quota unit");
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/quota")
+                    .header("authorization", bearer)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["limit"], 2);
+        assert_eq!(body["data"]["used"], 1);
+        assert_eq!(body["data"]["remaining"], 1);
+        assert!(body["data"]["resets_at"].is_string());
+        Ok(())
+    }
+
     /// 管理端配额设置：需要 X-Admin-Token，默认 100，写完能读回。
     #[tokio::test]
     async fn admin_coach_settings_require_token_and_round_trip() -> anyhow::Result<()> {

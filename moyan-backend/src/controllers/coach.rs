@@ -20,6 +20,27 @@ pub async fn list_scenarios(
     Ok(Json(serde_json::json!({ "success": true, "data": items })))
 }
 
+pub async fn quota(
+    State(state): State<AppState>,
+    axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let (limit, used, resets_at) = state.services.coach_quota.snapshot(&claims.sub).await?;
+    let remaining = if limit == 0 {
+        None
+    } else {
+        Some(limit.saturating_sub(used))
+    };
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "data": {
+            "limit": limit,
+            "used": used,
+            "remaining": remaining,
+            "resets_at": resets_at,
+        }
+    })))
+}
+
 pub async fn turn(
     State(state): State<AppState>,
     axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
