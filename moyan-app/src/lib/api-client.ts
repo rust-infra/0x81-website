@@ -25,7 +25,7 @@ export async function apiRequestWithDeps<T>(
     ...((options.headers as Record<string, string>) || {}),
   };
   headers.Authorization = `Bearer ${token}`;
-  if (options.body && !headers['Content-Type']) {
+  if (typeof options.body === 'string' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 

@@ -31,6 +31,9 @@ test('coach api uses the exact quota and turn paths', async () => {
         llm_configured: true,
       } as T;
     }
+    if (path === '/api/coach/interview/profile') {
+      return { kind: 'resume', profile: 'compact profile' } as T;
+    }
     return {
       reply: 'Nice!',
       mood: 'friendly',
@@ -56,4 +59,8 @@ test('coach api uses the exact quota and turn paths', async () => {
   assert.equal(calls[1]?.path, '/api/coach/turn');
   assert.equal(calls[1]?.options?.method, 'POST');
   assert.deepEqual(JSON.parse(String(calls[1]?.options?.body)).user_text, 'Hello');
+
+  const profile = await api.profile({ kind: 'resume', text: 'raw resume' });
+  assert.equal(profile.profile, 'compact profile');
+  assert.equal(calls[2]?.path, '/api/coach/interview/profile');
 });

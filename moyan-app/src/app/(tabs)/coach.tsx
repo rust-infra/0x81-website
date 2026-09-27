@@ -132,6 +132,21 @@ export default function CoachScreen() {
             <UnavailableState kind={startReason.reason} resetsAt={quota.resets_at} />
           ) : null}
 
+          <Pressable
+            onPress={() => router.push('/coach/interview')}
+            style={[cardStyle(c.card, c.border), styles.interviewCard]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: c.ink, fontFamily: serif }]}>
+                {t('coachInterviewTitle')}
+              </Text>
+              <Text style={{ color: c.inkMuted, fontSize: 12, marginTop: 5 }}>
+                {t('coachInterviewIntro')}
+              </Text>
+            </View>
+            <Text style={{ color: c.accent, fontSize: 20 }}>›</Text>
+          </Pressable>
+
           <Text style={[styles.sectionTitle, { color: c.inkLight }]}>
             {t('coachPresetScenarios')}
           </Text>
@@ -283,6 +298,13 @@ const styles = StyleSheet.create({
   group: { marginBottom: 8 },
   groupTitle: { fontSize: 12, marginTop: 10, marginBottom: 8 },
   card: { marginBottom: 10 },
+  interviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    marginTop: 8,
+  },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', fontFamily: serif },
   meta: { fontSize: 11, marginTop: 5 },

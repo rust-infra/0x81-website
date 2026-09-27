@@ -6,6 +6,9 @@ import type {
   CoachSummaryResponse,
   CoachTurnRequest,
   CoachTurnResponse,
+  InterviewProfileRequest,
+  InterviewProfileResponse,
+  InterviewTextResult,
 } from './coach-types';
 
 export interface CoachApi {
@@ -14,6 +17,8 @@ export interface CoachApi {
   draftScenario: (description: string, locale: string) => Promise<CoachScenario>;
   turn: (body: CoachTurnRequest) => Promise<CoachTurnResponse>;
   summary: (body: CoachSummaryRequest) => Promise<CoachSummaryResponse>;
+  extractInterviewText: (body: FormData) => Promise<InterviewTextResult>;
+  profile: (body: InterviewProfileRequest) => Promise<InterviewProfileResponse>;
 }
 
 export function createCoachApi(request: ApiRequest): CoachApi {
@@ -35,6 +40,16 @@ export function createCoachApi(request: ApiRequest): CoachApi {
       }),
     summary: (body) =>
       request<CoachSummaryResponse>('/api/coach/summary', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    extractInterviewText: (body) =>
+      request<InterviewTextResult>('/api/coach/interview/text', {
+        method: 'POST',
+        body,
+      }),
+    profile: (body) =>
+      request<InterviewProfileResponse>('/api/coach/interview/profile', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
@@ -67,6 +82,11 @@ export const postCoachTurn = (body: CoachTurnRequest) =>
   });
 export const postCoachSummary = (body: CoachSummaryRequest) =>
   defaultRequest<CoachSummaryResponse>('/api/coach/summary', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+export const postInterviewProfile = (body: InterviewProfileRequest) =>
+  defaultRequest<InterviewProfileResponse>('/api/coach/interview/profile', {
     method: 'POST',
     body: JSON.stringify(body),
   });
