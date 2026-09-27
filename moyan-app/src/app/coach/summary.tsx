@@ -10,7 +10,7 @@ import {
 } from '../../components/coach/CoachUi';
 import { listCoachScenarios, postCoachSummary } from '../../lib/coach-api-runtime';
 import { summaryRecordFromSession } from '../../lib/coach-history';
-import { saveCoachHistory } from '../../lib/coach-storage';
+import { loadCustomScenarios, saveCoachHistory } from '../../lib/coach-storage';
 import type {
   CoachHistoryRecord,
   CoachScenario,
@@ -50,21 +50,30 @@ export default function CoachSummaryScreen() {
       if (params.record) {
         try {
           const record = JSON.parse(params.record) as CoachHistoryRecord;
+          const [presets, custom] = await Promise.all([
+            listCoachScenarios(lang).catch(() => []),
+            loadCustomScenarios(),
+          ]);
+          const localized = [...presets, ...custom].find(
+            (item) => item.id === record.scenarioId
+          );
           setSummary(record.summary);
           setDurationSeconds(record.durationSeconds);
-          setScenario({
-            id: record.scenarioId,
-            source: 'custom',
-            category: 'daily',
-            title: record.scenarioTitle,
-            description: '',
-            persona: { name: 'Coach', role: 'Coach', locale: 'en-US', tone: 'friendly' },
-            setting: 'meeting',
-            opening_line: '',
-            focus_points: [],
-            difficulty: 'core',
-            max_turns: 10,
-          });
+          setScenario(
+            localized ?? {
+              id: record.scenarioId,
+              source: 'custom',
+              category: 'daily',
+              title: record.scenarioTitle,
+              description: '',
+              persona: { name: 'Coach', role: 'Coach', locale: 'en-US', tone: 'friendly' },
+              setting: 'meeting',
+              opening_line: '',
+              focus_points: [],
+              difficulty: 'core',
+              max_turns: 10,
+            }
+          );
           setSaved(true);
           setLoading(false);
           return;
@@ -76,8 +85,11 @@ export default function CoachSummaryScreen() {
       setDurationSeconds(
         Math.max(1, Math.round((Date.now() - (Number(params.startedAt) || Date.now())) / 1000))
       );
-      const presets = await listCoachScenarios(lang).catch(() => []);
-      const current = presets.find((item) => item.id === params.scenarioId) ?? null;
+      const [presets, custom] = await Promise.all([
+        listCoachScenarios(lang).catch(() => []),
+        loadCustomScenarios(),
+      ]);
+      const current = [...presets, ...custom].find((item) => item.id === params.scenarioId) ?? null;
       setScenario(current);
       const history = parseHistory(params.history);
       if (!current || history.length === 0) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summaryRecordFromSession } from './coach-history';
+import { resolveScenarioTitle, summaryRecordFromSession } from './coach-history';
 import type { CoachSummaryResponse } from './coach-types';
 
 const summary: CoachSummaryResponse = {
@@ -28,4 +28,27 @@ test('history record stores only the structured summary', () => {
   assert.equal(json.includes('13800138000'), false);
   assert.equal(json.includes('secret.jpg'), false);
   assert.equal(record.summary.stats.turns, 3);
+});
+
+test('resolves stored history titles in the current language', () => {
+  const title = resolveScenarioTitle(
+    'standup_update',
+    '每日站会 · 进度同步',
+    [
+      {
+        id: 'standup_update',
+        source: 'preset',
+        category: 'engineering',
+        title: 'Daily Standup',
+        description: '',
+        persona: { name: 'Alex', role: 'Tech Lead', locale: 'en-US', tone: 'friendly' },
+        setting: 'meeting',
+        opening_line: '',
+        focus_points: [],
+        difficulty: 'core',
+        max_turns: 10,
+      },
+    ]
+  );
+  assert.equal(title, 'Daily Standup');
 });

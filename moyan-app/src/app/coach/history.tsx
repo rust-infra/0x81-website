@@ -3,11 +3,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachGroup, CoachHeader, CoachRow, SectionLabel } from '../../components/coach/CoachUi';
+import { listCoachScenarios } from '../../lib/coach-api-runtime';
+import { resolveScenarioTitle } from '../../lib/coach-history';
 import {
   deleteCoachHistory,
   loadCoachHistory,
+  loadCustomScenarios,
 } from '../../lib/coach-storage';
-import type { CoachHistoryRecord } from '../../lib/coach-types';
+import type { CoachHistoryRecord, CoachScenario } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { confirmAsync } from '../../lib/toast';
@@ -20,16 +23,25 @@ export default function CoachHistoryScreen() {
   const { theme } = useTheme();
   const c = theme.colors;
   const [records, setRecords] = useState<CoachHistoryRecord[]>([]);
+  const [scenarios, setScenarios] = useState<CoachScenario[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
 
   useFocusEffect(
     useCallback(() => {
-      void loadCoachHistory().then(setRecords);
-    }, [])
+      void Promise.all([
+        loadCoachHistory(),
+        listCoachScenarios(lang).catch(() => []),
+        loadCustomScenarios(),
+      ]).then(([history, presets, custom]) => {
+        setRecords(history);
+        setScenarios([...presets, ...custom]);
+      });
+    }, [lang])
   );
 
   const remove = async (record: CoachHistoryRecord) => {
-    const ok = await confirmAsync(t('coachDelete'), record.scenarioTitle);
+    const title = resolveScenarioTitle(record.scenarioId, record.scenarioTitle, scenarios);
+    const ok = await confirmAsync(t('coachDelete'), title);
     if (!ok) return;
     await deleteCoachHistory(record.id);
     setRecords((items) => items.filter((item) => item.id !== record.id));
@@ -90,7 +102,14 @@ export default function CoachHistoryScreen() {
                 <SectionLabel>{t('coachThisWeek')}</SectionLabel>
                 <CoachGroup>
                   {thisWeek.map((record) => (
-                    <HistoryRow key={record.id} record={record} lang={lang} onOpen={router.push} onDelete={remove} />
+                    <HistoryRow
+                      key={record.id}
+                      record={record}
+                      scenarios={scenarios}
+                      lang={lang}
+                      onOpen={router.push}
+                      onDelete={remove}
+                    />
                   ))}
                 </CoachGroup>
               </>
@@ -100,7 +119,14 @@ export default function CoachHistoryScreen() {
                 <SectionLabel>{t('coachEarlier')}</SectionLabel>
                 <CoachGroup>
                   {earlier.map((record) => (
-                    <HistoryRow key={record.id} record={record} lang={lang} onOpen={router.push} onDelete={remove} />
+                    <HistoryRow
+                      key={record.id}
+                      record={record}
+                      scenarios={scenarios}
+                      lang={lang}
+                      onOpen={router.push}
+                      onDelete={remove}
+                    />
                   ))}
                 </CoachGroup>
               </>
@@ -117,11 +143,13 @@ export default function CoachHistoryScreen() {
 
 function HistoryRow({
   record,
+  scenarios,
   lang,
   onOpen,
   onDelete,
 }: {
   record: CoachHistoryRecord;
+  scenarios: CoachScenario[];
   lang: 'zh-CN' | 'en';
   onOpen: (options: { pathname: string; params: { record: string } }) => void;
   onDelete: (record: CoachHistoryRecord) => void;
@@ -153,7 +181,7 @@ function HistoryRow({
           }}
         />
       }
-      title={record.scenarioTitle}
+      title={resolveScenarioTitle(record.scenarioId, record.scenarioTitle, scenarios)}
       subtitle={`${record.summary.stats.corrections} ${t('coachCorrectionsInline')} · ${duration}`}
       meta={`${day} · ${t('coachTurns', { count: record.summary.stats.turns })}`}
       badge={interview ? t('coachFilterInterview') : undefined}

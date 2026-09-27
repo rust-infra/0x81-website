@@ -1,4 +1,4 @@
-import type { CoachHistoryRecord, CoachSummaryResponse } from './coach-types';
+import type { CoachHistoryRecord, CoachScenario, CoachSummaryResponse } from './coach-types';
 
 export function summaryRecordFromSession(
   session: {
@@ -24,4 +24,12 @@ export function summaryRecordFromSession(
     createdAt,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function resolveScenarioTitle(
+  scenarioId: string,
+  storedTitle: string,
+  scenarios: CoachScenario[]
+): string {
+  return scenarios.find((scenario) => scenario.id === scenarioId)?.title ?? storedTitle;
 }

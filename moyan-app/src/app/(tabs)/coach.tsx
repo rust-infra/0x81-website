@@ -11,6 +11,7 @@ import {
 } from '../../components/coach/CoachUi';
 import { UnavailableState } from '../../components/coach/UnavailableState';
 import { getCoachQuota, listCoachScenarios } from '../../lib/coach-api-runtime';
+import { resolveScenarioTitle } from '../../lib/coach-history';
 import { canStartCoach, groupScenarios, quotaLabel } from '../../lib/coach-selection';
 import {
   loadCoachHistory,
@@ -247,7 +248,11 @@ export default function CoachScreen() {
                   key={record.id}
                   plain
                   icon="history"
-                  title={record.scenarioTitle}
+                  title={resolveScenarioTitle(
+                    record.scenarioId,
+                    record.scenarioTitle,
+                    [...presets, ...customScenarios]
+                  )}
                   meta={`${t('coachTurns', {
                     count: record.summary.stats.turns,
                   })} · ${record.summary.stats.corrections} ${t('coachCorrectionsInline')}`}
