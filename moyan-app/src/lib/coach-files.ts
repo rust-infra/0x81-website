@@ -8,6 +8,7 @@ export interface PickedImage {
 
 export interface PreparedImage extends PickedImage {
   mediaType: 'image/jpeg';
+  file?: Blob;
 }
 
 export const MAX_IMAGES = 5;
@@ -59,7 +60,7 @@ export interface PreparedDocument {
   name: string;
   mimeType?: string | null;
   size?: number | null;
-  file?: File;
+  file?: Blob;
 }
 
 export function buildInterviewForm(input: {
@@ -70,11 +71,12 @@ export function buildInterviewForm(input: {
   for (const image of input.images ?? []) {
     form.append(
       'images',
-      {
-        uri: image.uri,
-        name: image.fileName || 'resume.jpg',
-        type: 'image/jpeg',
-      } as unknown as Blob
+      image.file ??
+        ({
+          uri: image.uri,
+          name: image.fileName || 'resume.jpg',
+          type: 'image/jpeg',
+        } as unknown as Blob)
     );
   }
   for (const doc of input.docs ?? []) {

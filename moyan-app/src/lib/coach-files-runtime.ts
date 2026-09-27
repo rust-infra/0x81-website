@@ -27,6 +27,7 @@ async function compressImage(image: PreparedImage): Promise<PreparedImage> {
     height: saved.height,
     fileName: 'resume.jpg',
     mediaType: 'image/jpeg',
+    file: new File(saved.uri),
   };
 }
 
@@ -79,7 +80,7 @@ export async function pickDocuments(): Promise<PreparedDocument[]> {
     name: asset.name,
     mimeType: asset.mimeType,
     size: asset.size,
-    file: asset.file,
+    file: asset.file ?? new File(asset.uri),
   }));
 }
 

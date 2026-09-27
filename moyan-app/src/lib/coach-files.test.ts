@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildInterviewForm,
   normalizePickedImages,
   resizeActionFor,
   withCleanup,
@@ -40,4 +41,12 @@ test('deletes local files even when upload fails', async () => {
     /upload failed/
   );
   assert.deepEqual(removed, [['file:///a.jpg']]);
+});
+
+test('builds native image multipart parts from blobs', () => {
+  const file = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' });
+  const form = buildInterviewForm({
+    images: [{ ...image('resume'), mediaType: 'image/jpeg', file }],
+  });
+  assert.ok(form.get('images') instanceof Blob);
 });
