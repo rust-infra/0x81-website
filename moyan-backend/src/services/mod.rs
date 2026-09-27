@@ -1,6 +1,7 @@
 //! Business services that coordinate controllers and repositories.
 
 mod admin;
+mod coach_quota;
 mod admin_collect;
 mod admin_excel;
 mod auth;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 use crate::repositories::Repository;
 
 pub use admin::AdminService;
+pub use coach_quota::{CoachQuotaService, CoachSettings};
 pub mod coach_scenarios;
 pub use admin_collect::AdminCollectService;
 pub use auth::AuthService;
@@ -40,6 +42,7 @@ pub struct Services {
     pub system_decks: SystemDecksService,
     pub admin: AdminService,
     pub admin_collect: AdminCollectService,
+    pub coach_quota: CoachQuotaService,
     pub podcast: PodcastService,
     pub typing: TypeService,
 }
@@ -57,6 +60,7 @@ impl Services {
             system_decks: SystemDecksService::new(Arc::clone(&repository)),
             admin,
             admin_collect,
+            coach_quota: CoachQuotaService::new(Arc::clone(&repository)),
             podcast: PodcastService::new(Arc::clone(&repository)),
             typing: TypeService::new(Arc::clone(&repository)),
         }

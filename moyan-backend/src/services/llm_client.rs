@@ -556,6 +556,7 @@ fn app_error_message(err: &AppError) -> String {
         | AppError::NotFound(m)
         | AppError::Internal(m)
         | AppError::ServiceUnavailable(m) => m.clone(),
+        AppError::QuotaExceeded { .. } => "quota exceeded".into(),
         AppError::ImportFailed(_) => "import failed".into(),
         AppError::Repository(e) => e.to_string(),
     }
