@@ -7,10 +7,12 @@ export function EndSessionSheet({
   visible,
   onCancel,
   onConfirm,
+  onDiscard,
 }: {
   visible: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  onDiscard?: () => void;
 }) {
   const { t } = useI18n();
   const { theme } = useTheme();
@@ -30,6 +32,16 @@ export function EndSessionSheet({
           <Pressable style={[styles.primary, { backgroundColor: c.accent }]} onPress={onConfirm}>
             <Text style={{ color: c.buttonText, fontWeight: '700' }}>{t('coachFinishNow')}</Text>
           </Pressable>
+          {onDiscard ? (
+            <Pressable style={styles.discard} onPress={onDiscard}>
+              <Text style={{ color: c.accent, fontWeight: '700', fontSize: 14 }}>
+                {t('coachDiscardSession')}
+              </Text>
+              <Text style={{ color: c.inkMuted, fontSize: 11, marginTop: 3 }}>
+                {t('coachDiscardSessionHint')}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             style={[styles.cancel, { borderColor: c.border, backgroundColor: c.card }]}
             onPress={onCancel}
@@ -50,5 +62,6 @@ const styles = StyleSheet.create({
   handle: { width: 48, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
   title: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
   primary: { alignItems: 'center', borderRadius: 14, paddingVertical: 14, marginTop: 20 },
+  discard: { alignItems: 'center', paddingVertical: 14 },
   cancel: { alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingVertical: 13, marginTop: 9 },
 });

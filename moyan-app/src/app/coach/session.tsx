@@ -21,6 +21,7 @@ import { FeedbackPanel } from '../../components/coach/FeedbackPanel';
 import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/coach-api-runtime';
 import {
   appendHistory,
+  hasUserTurn,
   initialSession,
   sessionReducer,
 } from '../../lib/coach-session';
@@ -69,10 +70,11 @@ export default function CoachSessionScreen() {
   const [volume, setVolume] = useState(0);
   const sttRef = useRef<SttSession | null>(null);
   const inputRef = useRef<TextInput | null>(null);
-  const [leaveConfirmed, setLeaveConfirmed] = useState(false);
+  const [exitMode, setExitMode] = useState<'summary' | 'discard' | null>(null);
   const finishedRef = useRef(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
+  const hasConversation = hasUserTurn(history);
 
   useEffect(() => {
     void (async () => {
@@ -113,7 +115,7 @@ export default function CoachSessionScreen() {
     if (session.state !== 'listening') setVolume(0);
   }, [session.state]);
 
-  usePreventRemove(!!scenario && !leaveConfirmed, () => {
+  usePreventRemove(!!scenario && hasConversation && !exitMode, () => {
     setShowEnd(true);
   });
 
@@ -230,9 +232,15 @@ export default function CoachSessionScreen() {
   };
 
   useEffect(() => {
-    if (!leaveConfirmed || finishedRef.current) return;
+    if (!exitMode || finishedRef.current) return;
     finishedRef.current = true;
     void stopSpeaking();
+    sttRef.current?.abort();
+    sttRef.current = null;
+    if (exitMode === 'discard') {
+      router.replace('/(tabs)/coach');
+      return;
+    }
     router.replace({
       pathname: '/coach/summary',
       params: {
@@ -244,8 +252,8 @@ export default function CoachSessionScreen() {
       },
     });
   }, [
+    exitMode,
     history,
-    leaveConfirmed,
     params.interviewKind,
     params.profile,
     router,
@@ -255,7 +263,24 @@ export default function CoachSessionScreen() {
 
   const finish = () => {
     setShowEnd(false);
-    setLeaveConfirmed(true);
+    setExitMode('summary');
+  };
+
+  const discard = () => {
+    setShowEnd(false);
+    setExitMode('discard');
+  };
+
+  const requestExit = () => {
+    if (!hasConversation) {
+      void stopSpeaking();
+      sttRef.current?.abort();
+      sttRef.current = null;
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/coach');
+      return;
+    }
+    setShowEnd(true);
   };
 
   if (!scenario) {
@@ -310,7 +335,7 @@ export default function CoachSessionScreen() {
   if (micPermissionDenied) {
     return (
       <PermissionState
-        onBack={() => setShowEnd(true)}
+        onBack={requestExit}
         onSettings={() => void Linking.openSettings()}
         onKeyboard={() => {
           setMicPermissionDenied(false);
@@ -327,7 +352,7 @@ export default function CoachSessionScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.topBar}>
-          <BackButton onPress={() => setShowEnd(true)} color={c.studyText} />
+          <BackButton onPress={requestExit} color={c.studyText} />
           <Text
             numberOfLines={1}
             style={[styles.scenarioTitle, { color: c.studyText, fontFamily: serif }]}
@@ -346,7 +371,7 @@ export default function CoachSessionScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setShowEnd(true)}
+            onPress={requestExit}
             style={[styles.endChip, { borderColor: c.border }]}
           >
             <Text style={{ color: c.studyText, fontSize: 12 }}>{t('coachEnd')}</Text>
@@ -558,10 +583,8 @@ export default function CoachSessionScreen() {
       <EndSessionSheet
         visible={showEnd}
         onCancel={() => setShowEnd(false)}
-        onConfirm={() => {
-          setShowEnd(false);
-          finish();
-        }}
+        onConfirm={finish}
+        onDiscard={hasConversation ? discard : undefined}
       />
     </SafeAreaView>
   );

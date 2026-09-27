@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendHistory, initialSession, sessionReducer } from './coach-session';
+import { appendHistory, hasUserTurn, initialSession, sessionReducer } from './coach-session';
 import type { CoachTurn } from './coach-types';
 
 test('ignores a second submit while thinking', () => {
@@ -35,4 +35,15 @@ test('history keeps the newest turns inside the total character budget', () => {
   const total = next.reduce((sum, turn) => sum + turn.content.length, 0);
   assert.ok(total <= 12_000);
   assert.equal(next.at(-1)?.content, 'latest');
+});
+
+test('detects whether a session has a user turn', () => {
+  assert.equal(hasUserTurn([{ role: 'coach', content: 'Hello' }]), false);
+  assert.equal(
+    hasUserTurn([
+      { role: 'coach', content: 'Hello' },
+      { role: 'user', content: 'Hi' },
+    ]),
+    true
+  );
 });

@@ -77,3 +77,7 @@ export function appendHistory(
   }
   return kept.reverse();
 }
+
+export function hasUserTurn(history: CoachTurn[]): boolean {
+  return history.some((turn) => turn.role === 'user');
+}
