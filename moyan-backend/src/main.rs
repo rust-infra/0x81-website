@@ -279,6 +279,160 @@ mod tests {
         Ok(())
     }
 
+    /// Explicit real-upstream smoke test. Run with:
+    /// `cargo test real_llm_contract_smoke -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "requires real LLM credentials"]
+    async fn real_llm_contract_smoke() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let deepseek_key = std::env::var("DEEPSEEK_API_KEY").ok();
+        let _api = deepseek_key
+            .as_deref()
+            .map(|key| EnvGuard::set("MOYAN_LLM_API_KEY", key));
+
+        let services = Services::new(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let user_id = "real-llm-smoke-user";
+        let presets = crate::services::coach_scenarios::list_presets("zh-CN");
+        let scenario = presets
+            .iter()
+            .find(|scenario| scenario.id == "standup_update")
+            .expect("standup preset")
+            .clone();
+
+        let settings = services
+            .admin_collect
+            .llm_settings()
+            .await
+            .map_err(|error| anyhow::anyhow!("load LLM settings failed: {error:?}"))?;
+        eprintln!(
+            "real LLM config: configured={} base_host={} model={}",
+            !settings.api_key.trim().is_empty()
+                && !settings.base_url.trim().is_empty()
+                && !settings.model.trim().is_empty(),
+            settings
+                .base_url
+                .split("://")
+                .nth(1)
+                .and_then(|rest| rest.split('/').next())
+                .unwrap_or("(empty)"),
+            settings.model
+        );
+        let _direct = crate::services::llm_client::chat_json(
+            &settings,
+            "Return JSON only: {\"ok\":true}",
+            "Return the JSON object now.",
+            None,
+            Some(64),
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("direct real LLM call failed: {error:?}"))?;
+
+        let turn = services
+            .coach
+            .turn(
+                user_id,
+                crate::models::CoachTurnRequest {
+                    scenario: scenario.clone(),
+                    scenario_id: Some("standup_update".into()),
+                    history: vec![],
+                    user_text:
+                        "We finish the API yesterday and today do the UI.".into(),
+                    coach_mode: crate::models::CoachMode::Feedback,
+                    locale: Some("zh-CN".into()),
+                    interview: None,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real turn failed: {error:?}"))?;
+        assert!(!turn.reply.trim().is_empty());
+        assert!(["neutral", "friendly", "curious", "encouraging", "concerned"]
+            .contains(&turn.mood.as_str()));
+        eprintln!(
+            "real turn ok: reply={} corrections={:?}",
+            turn.reply,
+            turn.feedback
+                .as_ref()
+                .map(|feedback| feedback.corrections.len())
+                .unwrap_or(0)
+        );
+
+        let summary = services
+            .coach
+            .summary(crate::models::CoachSummaryRequest {
+                scenario: scenario.clone(),
+                scenario_id: Some("standup_update".into()),
+                history: vec![
+                    crate::models::CoachTurn {
+                        role: crate::models::CoachRole::Coach,
+                        content: scenario.opening_line.clone(),
+                    },
+                    crate::models::CoachTurn {
+                        role: crate::models::CoachRole::User,
+                        content: "We finish the API yesterday and today do the UI.".into(),
+                    },
+                ],
+                locale: Some("zh-CN".into()),
+                interview: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("real summary failed: {error:?}"))?;
+        assert!(
+            !summary.overall_zh.trim().is_empty() || !summary.overall_en.trim().is_empty()
+        );
+        eprintln!("real summary ok: {}", summary.overall_en);
+
+        let drafted = services
+            .coach
+            .draft_scenario(
+                user_id,
+                crate::models::CoachScenarioDraftRequest {
+                    description: "我想练习线上故障时给美国同事同步进展".into(),
+                    locale: Some("zh-CN".into()),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real draft failed: {error:?}"))?;
+        assert!(drafted.id.starts_with("custom_"));
+        assert!(drafted.opening_line.is_ascii());
+        eprintln!("real draft ok: {}", drafted.id);
+
+        let profile = services
+            .interview_profile
+            .profile(
+                user_id,
+                crate::models::InterviewProfileRequest {
+                    kind: "resume".into(),
+                    text: "5 years backend engineer. Built a payments gateway, reduced P99 from 800ms to 120ms.".into(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real profile failed: {error:?}"))?;
+        assert!(!profile.profile.trim().is_empty());
+        eprintln!("real profile ok: chars={}", profile.profile.chars().count());
+
+        // A tiny valid 1x1 PNG. With a non-vision model this must map to 422;
+        // if the configured model supports vision, OCR should return text.
+        let image = crate::services::llm_client::ImagePart {
+            media_type: "image/png".into(),
+            data_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=".into(),
+        };
+        match services.interview_ocr.ocr(user_id, vec![image]).await {
+            Ok(text) => {
+                assert!(!text.trim().is_empty());
+                eprintln!("real OCR ok: chars={}", text.chars().count());
+            }
+            Err(crate::middleware::error::AppError::Unprocessable { reason, .. }) => {
+                assert_eq!(reason, "vision_not_supported");
+                eprintln!("real OCR mapping ok: vision_not_supported");
+            }
+            Err(error) => return Err(anyhow::anyhow!("real OCR failed: {error:?}")),
+        }
+
+        Ok(())
+    }
+
     /// Missing LLM configuration returns 503 before quota is consumed.
     #[tokio::test]
     async fn coach_turn_unconfigured_llm_does_not_consume_quota() -> anyhow::Result<()> {
