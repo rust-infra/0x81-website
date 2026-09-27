@@ -135,6 +135,12 @@ pub fn validate_history(history: &[CoachTurn], user_text: &str) -> Result<(), St
     Ok(())
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct InterviewContext {
+    pub kind: String,
+    pub profile: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CoachTurnRequest {
     pub scenario: CoachScenario,
@@ -147,6 +153,8 @@ pub struct CoachTurnRequest {
     pub coach_mode: CoachMode,
     #[serde(default)]
     pub locale: Option<String>,
+    #[serde(default)]
+    pub interview: Option<InterviewContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +208,8 @@ pub struct CoachSummaryRequest {
     pub history: Vec<CoachTurn>,
     #[serde(default)]
     pub locale: Option<String>,
+    #[serde(default)]
+    pub interview: Option<InterviewContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,6 +217,14 @@ pub struct CoachSummaryStats {
     pub turns: u32,
     pub user_chars: u32,
     pub corrections: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InterviewFeedback {
+    pub star_structure: String,
+    pub quantified_impact: String,
+    #[serde(default)]
+    pub weak_spots: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +235,8 @@ pub struct CoachSummaryResponse {
     pub improvements: Vec<String>,
     pub expressions: Vec<CoachExpression>,
     pub stats: CoachSummaryStats,
+    #[serde(default)]
+    pub interview_feedback: Option<InterviewFeedback>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

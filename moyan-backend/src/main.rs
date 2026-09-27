@@ -416,7 +416,7 @@ mod tests {
 
         let body = read_json(response).await?;
         let items = body["data"].as_array().expect("data is an array");
-        assert_eq!(items.len(), 8);
+        assert_eq!(items.len(), 11);
         assert_eq!(items[0]["id"], "standup_update");
         assert_eq!(items[0]["title"], "Daily Standup");
         Ok(())

@@ -186,6 +186,66 @@ const PRESETS: &[Preset] = &[
         guidance: "轻松闲聊，话题围绕远程工作日常、天气、周末、咖啡、宠物。\
                    用户只回一个词时，帮他扩展并抛出下一个话题。",
     },
+    Preset {
+        id: "interview_screening",
+        category: CoachCategory::HighStakes,
+        title_zh: "HR 初筛",
+        title_en: "HR Screening",
+        description_zh: "用英文讲清经历、动机与岗位匹配度",
+        description_en: "Explain your background, motivation, and fit",
+        name: "Rachel",
+        role: "Recruiter",
+        locale: "en-US",
+        tone: "friendly",
+        setting: "phone_call",
+        opening_line: "Thanks for making the time. Tell me a bit about yourself.",
+        focus_zh: &["经历主线", "求职动机", "岗位匹配"],
+        focus_en: &["career story", "motivation", "role fit"],
+        difficulty: "core",
+        max_turns: 12,
+        guidance: "扮演 HR 初筛面试官。关注用户能否用 60-90 秒讲清经历主线、为什么这个岗位、\
+                   为什么这家公司；回答空泛时追问 \"What specifically attracted you to this role?\"。",
+    },
+    Preset {
+        id: "interview_behavioral",
+        category: CoachCategory::HighStakes,
+        title_zh: "行为面 · STAR",
+        title_en: "Behavioural Interview",
+        description_zh: "用 STAR 结构回答冲突、失败与影响力问题",
+        description_en: "Answer conflict, failure, and impact questions with STAR",
+        name: "Marcus",
+        role: "Hiring Manager",
+        locale: "en-GB",
+        tone: "direct",
+        setting: "one_on_one",
+        opening_line: "Let's start with a time you disagreed with a teammate. What happened?",
+        focus_zh: &["情境与任务", "个人行动", "量化结果"],
+        focus_en: &["situation and task", "personal action", "quantified result"],
+        difficulty: "challenge",
+        max_turns: 12,
+        guidance: "严格按 STAR 深挖行为证据。追问用户本人做了什么、结果如何量化；\
+                   如果故事没有冲突或取舍，追问 \"What was the hardest trade-off?\"。",
+    },
+    Preset {
+        id: "interview_technical",
+        category: CoachCategory::HighStakes,
+        title_zh: "技术深挖",
+        title_en: "Technical Deep Dive",
+        description_zh: "讲架构取舍、故障场景与可扩展性",
+        description_en: "Explain architecture trade-offs, failure modes, and scale",
+        name: "Priya",
+        role: "Staff Engineer",
+        locale: "en-IN",
+        tone: "neutral",
+        setting: "meeting",
+        opening_line: "Pick a project you're proud of and walk me through the architecture.",
+        focus_zh: &["架构边界", "关键取舍", "失败场景"],
+        focus_en: &["architecture boundaries", "key trade-offs", "failure modes"],
+        difficulty: "challenge",
+        max_turns: 12,
+        guidance: "扮演 Staff Engineer 做技术深挖。沿着数据流、容量、延迟、一致性和失败恢复追问；\
+                   对自称主导的部分追问具体决策与替代方案。",
+    },
 ];
 
 fn localized<'a>(locale: &str, zh: &'a str, en: &'a str) -> String {
@@ -232,13 +292,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exposes_eight_unique_presets() {
+    fn exposes_eleven_unique_presets() {
         let list = list_presets("zh-CN");
-        assert_eq!(list.len(), 8);
+        assert_eq!(list.len(), 11);
         let mut ids: Vec<_> = list.iter().map(|s| s.id.clone()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 8);
+        assert_eq!(ids.len(), 11);
+    }
+
+    #[test]
+    fn includes_three_interview_presets() {
+        let ids: Vec<_> = list_presets("zh-CN")
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
+        for id in [
+            "interview_screening",
+            "interview_behavioral",
+            "interview_technical",
+        ] {
+            assert!(ids.contains(&id.to_string()), "{id} missing");
+        }
+        assert_eq!(ids.len(), 11);
     }
 
     #[test]
