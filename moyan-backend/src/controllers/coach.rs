@@ -25,6 +25,8 @@ pub async fn quota(
     axum::Extension(claims): axum::Extension<crate::middleware::auth::Claims>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let (limit, used, resets_at) = state.services.coach_quota.snapshot(&claims.sub).await?;
+    let settings = state.services.coach_quota.settings().await?;
+    let llm = state.services.admin_collect.get_llm_settings().await?;
     let remaining = if limit == 0 {
         None
     } else {
@@ -37,6 +39,8 @@ pub async fn quota(
             "used": used,
             "remaining": remaining,
             "resets_at": resets_at,
+            "enabled": settings.enabled,
+            "llm_configured": llm.api_key_set && !llm.base_url.trim().is_empty() && !llm.model.trim().is_empty(),
         }
     })))
 }

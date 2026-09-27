@@ -367,6 +367,8 @@ mod tests {
         assert_eq!(body["data"]["used"], 1);
         assert_eq!(body["data"]["remaining"], 1);
         assert!(body["data"]["resets_at"].is_string());
+        assert_eq!(body["data"]["enabled"], true);
+        assert!(body["data"]["llm_configured"].is_boolean());
         Ok(())
     }
 
