@@ -37,10 +37,10 @@ Branch: `feat/ai-agent`
 
 ### Expo Doctor
 
-`npx expo-doctor` 得到 17/20：
+`npx expo-doctor` 得到 18/20：
 
-- 两项检查因当前环境无法访问 `exp.host` 失败。
-- 一项报告 `expo-audio` 缺少 peer dependency `expo-asset`；这属于现有依赖问题，也需要恢复安装审批后处理。
+- 仅剩两项网络检查失败：Expo config schema 与 React Native Directory 都需要访问 `exp.host`；当前沙箱无法解析该域名。
+- `expo-audio` 的 `expo-asset` peer 已声明为直接依赖，本地检查已恢复。
 
 ### 真机验收尚未执行
 
