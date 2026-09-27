@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 29 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 30 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -22,6 +22,7 @@ Branch: `feat/ai-agent`
 - 头像：SVG 水墨线条 + 内置 Animated；Reduce Motion 逻辑已测试。
 - 面试文本链路：简历/职位分别导入、粘贴编辑、敏感项提示与手动删除、档案生成/编辑、面试上下文、复盘字段展示。
 - i18n：所有 `coach*` 键中英双语完整。
+- 原生上传：图片/文档在 Multipart 中使用 `expo-file-system` 的 `File` Blob，兼容 Expo Fetch 的原生 FormData 转换。
 - Web 构建已集成通过。
 
 ## 阻塞与未完成
@@ -41,7 +42,7 @@ Branch: `feat/ai-agent`
 - 相机/相册/PDF/DOCX 选择，长边 1600、JPEG 70、数量/大小校验与本地清理。
 - `app.json` config plugin 与中英文权限文案。
 - `npx expo prebuild --clean` 成功生成 iOS/Android 工程；Android Manifest 已保留 `RECORD_AUDIO`，iOS Info.plist 已出现麦克风、语音识别、相册和相机权限。
-- CocoaPods 安装仅因当前环境无法解析 `cdn.cocoapods.org` 失败，不是工程配置错误。
+- CocoaPods 安装已在本机 Terminal 完成；`expo run:ios` 构建并启动成功。
 
 ### Expo Doctor
 
@@ -63,9 +64,14 @@ Branch: `feat/ai-agent`
 - 面试文本链路实测：粘贴简历、识别手机号/邮箱、手动一键删除、生成结构化档案、进入沉浸式行为面 STAR 会话、生成面试复盘。
 - 相册权限弹窗与实际中英文权限文案正确；选择 “Don't Allow” 后 App 正常回退，未崩溃、未上传图片。
 - 文件选择器成功拉起 iOS Files。
+- 相册权限授予后，从系统相册选择真实图片完成 Vision OCR，识别结果回填为 `HELLO`；在材料确认页编辑为 `HELLO 123` 后输入长度同步更新为 `9 / 20000`，生成档案按钮可用。
 - iOS 深色主题切换成功，陪练入口与设置页颜色正常。
 
-尚未覆盖：真实音频输入内容质量、静音开关、蓝牙耳机、切后台、Android `content://` 文件 URI、实际相册图片上传，以及全部 8 套主题逐页截图。
+尚未覆盖：真实音频输入内容质量、静音开关、蓝牙耳机、切后台、Android `content://` 文件 URI，以及全部 8 套主题逐页截图。
+
+### 原生图片上传缺陷修复
+
+首次从 iOS 相册选择真实图片时，Expo Fetch 报错 `Unsupported FormDataPart implementation`。根因是全局 Fetch 会转换 WinterCG FormData，而 `{ uri, name, type }` 的 React Native 文件 part 不再受支持。修复为用 `expo-file-system` 的 `File` 包装本地 URI，让转换器走 `bytes()` Blob 分支，并补充纯逻辑回归测试；随后同一张模拟器相册图片 OCR 成功。
 
 ### 真实 LLM 上游验收：已通过
 
@@ -88,4 +94,4 @@ cargo test real_llm_contract_smoke -- --ignored --nocapture
 
 ## 结论
 
-所有代码、原生 config plugin、Web 构建、后端测试与真实 LLM 上游验收均已完成。剩余项只有原生包安装/真机走查：当前环境无法访问 CocoaPods/Gradle/Expo 外部网络，也没有可用的 iOS/Android 设备会话。
+所有代码、原生 config plugin、Web 构建、后端测试、真实 LLM 上游验收和 iOS 模拟器主链路走查均已完成。真实相册图片 OCR 与识别后编辑也已闭环。剩余仅是当前没有 Android/真机音频路由环境可覆盖的物理设备项：静音开关、蓝牙路由、切后台/打断、Android `content://` 文件流，以及 8 套主题逐页截图。
