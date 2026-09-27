@@ -1,13 +1,14 @@
 //! Business services that coordinate controllers and repositories.
 
 mod admin;
-mod coach;
-mod coach_quota;
-mod coach_settings;
 mod admin_collect;
 mod admin_excel;
 mod auth;
+mod coach;
+mod coach_quota;
+mod coach_settings;
 mod health;
+pub(crate) mod interview_docs;
 mod llm_client;
 mod podcast;
 mod settings;
@@ -56,8 +57,10 @@ pub struct Services {
 impl Services {
     pub fn new(repository: Arc<dyn Repository>) -> Self {
         let admin = AdminService::new(Arc::clone(&repository));
-        let admin_collect =
-            Arc::new(AdminCollectService::new(Arc::clone(&repository), admin.clone()));
+        let admin_collect = Arc::new(AdminCollectService::new(
+            Arc::clone(&repository),
+            admin.clone(),
+        ));
         let coach_quota = CoachQuotaService::new(Arc::clone(&repository));
         let coach = CoachService::new(
             Arc::clone(&repository),
