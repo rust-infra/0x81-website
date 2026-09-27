@@ -132,3 +132,26 @@ export interface InterviewProfileResponse {
   kind: InterviewKind;
   profile: string;
 }
+
+export interface CoachHistoryRecord {
+  id: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  summary: CoachSummaryResponse;
+  durationSeconds: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterviewProfileRecord {
+  id: string;
+  kind: InterviewKind | 'resume_job';
+  profile: string;
+  updatedAt: string;
+}
+
+export interface CoachPrefs {
+  defaultMode: CoachMode;
+  accentPreference: CoachLocale;
+  autoPlay: boolean;
+}
