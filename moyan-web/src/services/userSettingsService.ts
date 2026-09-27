@@ -15,7 +15,6 @@ let settingsSyncCleanup: (() => void) | null = null;
 let settingsSyncSaveTimer: number | null = null;
 let settingsSyncIsApplyingRemote = false;
 let settingsSyncSuppressedSaveSignature: string | null = null;
-let settingsSyncSkipNextScheduledSave = false;
 let settingsSyncSkippedInitialAuthEcho = false;
 
 export interface UserSettingsPayload {
@@ -253,18 +252,16 @@ export function subscribeToSettingsSync() {
       }
 
       settingsSyncSaveTimer = window.setTimeout(() => {
-        if (settingsSyncSkipNextScheduledSave) {
-          settingsSyncSkipNextScheduledSave = false;
-          settingsSyncSuppressedSaveSignature = null;
-          return;
-        }
-
         const settings = buildUserSettingsPayload();
         const signature = serializeSettingsPayload(settings);
+        // Only suppress the exact payload that was just applied from the
+        // server; any genuine change made by the user while the suppressed
+        // signature happens to be an older snapshot must still be saved.
         if (settingsSyncSuppressedSaveSignature === signature) {
           settingsSyncSuppressedSaveSignature = null;
           return;
         }
+        settingsSyncSuppressedSaveSignature = null;
 
         void saveUserSettings(settings).catch(() => {
           // Ignore background sync failures; UI remains locally consistent.
@@ -290,7 +287,6 @@ export function subscribeToSettingsSync() {
           const remote = await fetchUserSettings();
           if (remote && hasRemoteSettingsValue(remote)) {
             applyUserSettings(remote);
-            settingsSyncSkipNextScheduledSave = true;
             settingsSyncSuppressedSaveSignature = serializeSettingsPayload(
               buildUserSettingsPayload()
             );
@@ -360,7 +356,6 @@ export function subscribeToSettingsSync() {
       );
       settingsSyncIsApplyingRemote = false;
       settingsSyncSuppressedSaveSignature = null;
-      settingsSyncSkipNextScheduledSave = false;
       settingsSyncSkippedInitialAuthEcho = false;
     };
   }
