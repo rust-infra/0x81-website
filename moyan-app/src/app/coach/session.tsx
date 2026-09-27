@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove } from 'expo-router/build/react-navigation/core';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -68,6 +69,8 @@ export default function CoachSessionScreen() {
   const [volume, setVolume] = useState(0);
   const sttRef = useRef<SttSession | null>(null);
   const inputRef = useRef<TextInput | null>(null);
+  const [leaveConfirmed, setLeaveConfirmed] = useState(false);
+  const finishedRef = useRef(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
 
@@ -109,6 +112,10 @@ export default function CoachSessionScreen() {
   useEffect(() => {
     if (session.state !== 'listening') setVolume(0);
   }, [session.state]);
+
+  usePreventRemove(!!scenario && !leaveConfirmed, () => {
+    setShowEnd(true);
+  });
 
   const play = async (text: string) => {
     if (!scenario || !text.trim()) return;
@@ -222,7 +229,9 @@ export default function CoachSessionScreen() {
     }
   };
 
-  const finish = () => {
+  useEffect(() => {
+    if (!leaveConfirmed || finishedRef.current) return;
+    finishedRef.current = true;
     void stopSpeaking();
     router.replace({
       pathname: '/coach/summary',
@@ -234,6 +243,19 @@ export default function CoachSessionScreen() {
         profile: params.profile ?? '',
       },
     });
+  }, [
+    history,
+    leaveConfirmed,
+    params.interviewKind,
+    params.profile,
+    router,
+    scenario?.id,
+    startedAt,
+  ]);
+
+  const finish = () => {
+    setShowEnd(false);
+    setLeaveConfirmed(true);
   };
 
   if (!scenario) {
@@ -288,6 +310,7 @@ export default function CoachSessionScreen() {
   if (micPermissionDenied) {
     return (
       <PermissionState
+        onBack={() => setShowEnd(true)}
         onSettings={() => void Linking.openSettings()}
         onKeyboard={() => {
           setMicPermissionDenied(false);
@@ -545,9 +568,11 @@ export default function CoachSessionScreen() {
 }
 
 function PermissionState({
+  onBack,
   onSettings,
   onKeyboard,
 }: {
+  onBack: () => void;
   onSettings: () => void;
   onKeyboard: () => void;
 }) {
@@ -556,6 +581,12 @@ function PermissionState({
   const c = theme.colors;
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <View style={styles.topBar}>
+        <BackButton onPress={onBack} color={c.ink} />
+        <Text style={[styles.scenarioTitle, { color: c.ink, fontFamily: serif }]}>
+          {t('coachPageTitle')}
+        </Text>
+      </View>
       <View style={styles.permissionBody}>
         <View style={[styles.permissionIcon, { backgroundColor: c.card, borderColor: c.border }]}>
           <CoachGlyph name="micOff" color={c.ink} size={30} />
