@@ -8,7 +8,7 @@ Branch: `feat/ai-agent`
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd moyan-backend && cargo test` | 160 passed，0 failed，1 ignored |
-| App 纯逻辑测试 | `cd moyan-app && npm test` | 26 passed，0 failed |
+| App 纯逻辑测试 | `cd moyan-app && npm test` | 28 passed，0 failed |
 | App TypeScript | `cd moyan-app && npx tsc --noEmit` | passed |
 | App Web 构建 | `cd moyan-app && npx expo export --platform web` | passed |
 | 管理后台测试 | `cd moyan-admin && npx vitest run` | 5 passed |
@@ -26,14 +26,22 @@ Branch: `feat/ai-agent`
 
 ## 阻塞与未完成
 
-### 原生依赖安装被审批服务阻塞
+### 原生依赖与 config plugin：已完成
 
-`npx expo install expo-speech-recognition expo-image-picker expo-image-manipulator expo-document-picker` 多次被外部审批 reviewer 以 HTTP 502 拒绝，命令没有执行。因此：
+已安装：
 
-- STT 真机语音识别、麦克风权限流程、音量环尚未接线。
-- 相机/相册/PDF/DOCX 选择和图片压缩尚未接线。
-- `app.json` 中的 speech-recognition / image-picker / document-picker 插件尚未添加。
-- Task 7、Task 8 的语音部分、Task 10 的图片/文件部分尚未完成。
+- `expo-speech-recognition@57.1.0`
+- `expo-image-picker@57.0.20`
+- `expo-image-manipulator@57.0.20`
+- `expo-document-picker@57.0.2`
+
+已完成：
+
+- 原生 STT 适配器、权限请求、实时字幕、音量环、手动停止与自动提交。
+- 相机/相册/PDF/DOCX 选择，长边 1600、JPEG 70、数量/大小校验与本地清理。
+- `app.json` config plugin 与中英文权限文案。
+- `npx expo prebuild --clean` 成功生成 iOS/Android 工程；Android Manifest 已保留 `RECORD_AUDIO`，iOS Info.plist 已出现麦克风、语音识别、相册和相机权限。
+- CocoaPods 安装仅因当前环境无法解析 `cdn.cocoapods.org` 失败，不是工程配置错误。
 
 ### Expo Doctor
 
