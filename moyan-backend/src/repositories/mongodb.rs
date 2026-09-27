@@ -22,7 +22,7 @@ use crate::models::{
     UserIdentity, UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
-    HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
+    CoachRepository, HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
     TypeRepository, UserRepository, VocabularyRepository,
 };
 
@@ -620,6 +620,48 @@ impl LearningRepository for MongoRepositories {
         Err(RepositoryError::Configuration(
             "study daily trend requires sqlite backend".into(),
         ))
+    }
+}
+
+#[async_trait]
+impl CoachRepository for MongoRepositories {
+    async fn coach_usage_get(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        #[derive(Debug, Deserialize)]
+        struct UsageDoc {
+            #[serde(default)]
+            turns_used: i64,
+        }
+        let doc = self
+            .database
+            .collection::<UsageDoc>("coach_usage")
+            .find_one(doc! { "user_id": user_id, "day": day })
+            .await?;
+        Ok(doc.map(|d| d.turns_used.max(0) as u32).unwrap_or(0))
+    }
+
+    async fn coach_usage_increment(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct UsageDoc {
+            user_id: String,
+            day: String,
+            turns_used: i64,
+            updated_at: DateTime<Utc>,
+        }
+        let updated = self
+            .database
+            .collection::<UsageDoc>("coach_usage")
+            .find_one_and_update(
+                doc! { "user_id": user_id, "day": day },
+                doc! {
+                    "$inc": { "turns_used": 1_i64 },
+                    "$set": { "updated_at": Utc::now() },
+                    "$setOnInsert": { "user_id": user_id, "day": day },
+                },
+            )
+            .upsert(true)
+            .return_document(ReturnDocument::After)
+            .await?;
+        Ok(updated.map(|d| d.turns_used.max(0) as u32).unwrap_or(0))
     }
 }
 

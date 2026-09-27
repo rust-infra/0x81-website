@@ -15,6 +15,7 @@ use crate::models::{
     SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
+    CoachRepository,
     HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
     TypeRepository, UserRepository, VocabularyRepository,
 };
@@ -768,6 +769,37 @@ impl LearningRepository for SqliteRepositories {
                 accuracy,
             })
             .collect())
+    }
+}
+
+#[async_trait]
+impl CoachRepository for SqliteRepositories {
+    async fn coach_usage_get(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        let row: Option<(i64,)> = sqlx::query_as(
+            "SELECT turns_used FROM coach_usage WHERE user_id = ? AND day = ?",
+        )
+        .bind(user_id)
+        .bind(day)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|(v,)| v.max(0) as u32).unwrap_or(0))
+    }
+
+    async fn coach_usage_increment(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        let now = Utc::now().to_rfc3339();
+        let row: (i64,) = sqlx::query_as(
+            "INSERT INTO coach_usage (user_id, day, turns_used, updated_at)
+             VALUES (?, ?, 1, ?)
+             ON CONFLICT(user_id, day)
+             DO UPDATE SET turns_used = turns_used + 1, updated_at = excluded.updated_at
+             RETURNING turns_used",
+        )
+        .bind(user_id)
+        .bind(day)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0.max(0) as u32)
     }
 }
 
@@ -4369,4 +4401,20 @@ mod tests {
         assert!(repo.type_resume_get(&second.id, "deck_b").await?.is_none());
         Ok(())
     }
+
+    #[tokio::test]
+    async fn coach_usage_increment_is_atomic_and_scoped_by_day() -> Result<(), RepositoryError> {
+        let repo = SqliteRepositories::connect("sqlite::memory:").await?;
+
+        assert_eq!(repo.coach_usage_get("usr_1", "2026-09-27").await?, 0);
+        assert_eq!(repo.coach_usage_increment("usr_1", "2026-09-27").await?, 1);
+        assert_eq!(repo.coach_usage_increment("usr_1", "2026-09-27").await?, 2);
+        assert_eq!(repo.coach_usage_get("usr_1", "2026-09-27").await?, 2);
+
+        // 另一个用户与另一天互不影响
+        assert_eq!(repo.coach_usage_get("usr_2", "2026-09-27").await?, 0);
+        assert_eq!(repo.coach_usage_get("usr_1", "2026-09-28").await?, 0);
+        Ok(())
+    }
+
 }
