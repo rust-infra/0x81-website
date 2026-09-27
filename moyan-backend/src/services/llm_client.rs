@@ -508,6 +508,33 @@ fn opencode_headers(
     ])
 }
 
+fn build_chat_body(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user_content: serde_json::Value,
+    max_tokens: Option<u32>,
+) -> serde_json::Value {
+    let mut body = json!({
+        "model": settings.model,
+        "temperature": settings.temperature,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user_content }
+        ]
+    });
+    if settings.model.to_ascii_lowercase().contains("deepseek") {
+        // DeepSeek Flash defaults to thinking mode on the OpenCode gateway.
+        // Coach and summary JSON already carry their own reasoning fields;
+        // visible generation should stay in the normal content channel.
+        body["reasoning_effort"] = json!("none");
+    }
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = json!(max_tokens);
+    }
+    body
+}
+
 async fn chat_completion(
     settings: &LlmSettingsStored,
     system: &str,
@@ -526,18 +553,7 @@ async fn chat_completion(
         json!(build_content_parts(user, images))
     };
 
-    let mut body = json!({
-        "model": settings.model,
-        "temperature": settings.temperature,
-        "response_format": { "type": "json_object" },
-        "messages": [
-            { "role": "system", "content": system },
-            { "role": "user", "content": user_content }
-        ]
-    });
-    if let Some(max_tokens) = max_tokens {
-        body["max_tokens"] = json!(max_tokens);
-    }
+    let body = build_chat_body(settings, system, user_content, max_tokens);
 
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300));
     if let Some(proxy) = crate::services::youtube_captions::normalize_proxy(proxy) {
@@ -836,6 +852,26 @@ mod tests {
             }),
             Ok(())
         ));
+    }
+
+    #[test]
+    fn disables_deepseek_thinking_in_chat_body() {
+        let settings = LlmSettingsStored {
+            base_url: "https://opencode.ai/zen/go/v1".into(),
+            api_key: "sk-test".into(),
+            model: "deepseek-flash".into(),
+            temperature: 0.3,
+        };
+        let body = build_chat_body(&settings, "system", json!("hello"), Some(300));
+        assert_eq!(body["reasoning_effort"], "none");
+        assert_eq!(body["max_tokens"], 300);
+
+        let gpt = LlmSettingsStored {
+            model: "gpt-5.4".into(),
+            ..settings
+        };
+        let body = build_chat_body(&gpt, "system", json!("hello"), None);
+        assert!(body.get("reasoning_effort").is_none());
     }
 
     #[test]
