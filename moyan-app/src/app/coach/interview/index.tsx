@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listCoachScenarios } from '../../../lib/coach-api';
+import { listCoachScenarios } from '../../../lib/coach-api-runtime';
 import { loadInterviewProfiles } from '../../../lib/coach-storage';
 import type { CoachScenario, InterviewProfileRecord } from '../../../lib/coach-types';
 import { useI18n } from '../../../lib/i18n';

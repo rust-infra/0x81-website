@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
@@ -40,6 +41,7 @@ const PROVIDERS = [
 ] as const;
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { theme, themeName, setTheme, themes } = useTheme();
   const { user, signOut } = useAuth();
   const { lang, setLang, t } = useI18n();
@@ -256,6 +258,21 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[screen.body, styles.body]}>
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('coachSettingsTitle')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
+          <Pressable style={styles.row} onPress={() => router.push('/coach/settings')}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('coachSettingsTitle')}</Text>
+            <Text style={{ color: c.accent }}>›</Text>
+          </Pressable>
+          <Pressable style={styles.row} onPress={() => router.push('/coach/history')}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, { color: c.ink }]}>{t('coachHistoryTitle')}</Text>
+              <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{t('coachHistoryDesc')}</Text>
+            </View>
+            <Text style={{ color: c.accent }}>›</Text>
+          </Pressable>
+        </View>
+
         <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('theme')}</Text>
         <View style={[styles.card, { backgroundColor: c.card }]}>
           {themes.map((th) => {

@@ -41,6 +41,7 @@ function RootNavigator() {
           <Stack.Screen name="coach/summary" />
           <Stack.Screen name="coach/editor" />
           <Stack.Screen name="coach/history" />
+          <Stack.Screen name="coach/settings" />
           <Stack.Screen name="coach/interview/profile" />
           <Stack.Screen name="coach/interview/materials" />
           <Stack.Screen name="coach/interview/index" />

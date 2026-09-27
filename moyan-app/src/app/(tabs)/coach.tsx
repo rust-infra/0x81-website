@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UnavailableState } from '../../components/coach/UnavailableState';
-import { getCoachQuota, listCoachScenarios } from '../../lib/coach-api';
+import { getCoachQuota, listCoachScenarios } from '../../lib/coach-api-runtime';
 import { canStartCoach, groupScenarios, quotaLabel } from '../../lib/coach-selection';
 import {
   deleteCustomScenario,

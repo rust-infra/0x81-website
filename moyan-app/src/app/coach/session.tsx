@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachAvatar } from '../../components/coach/CoachAvatar';
 import { EndSessionSheet } from '../../components/coach/EndSessionSheet';
 import { FeedbackPanel } from '../../components/coach/FeedbackPanel';
-import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/coach-api';
+import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/coach-api-runtime';
 import {
   appendHistory,
   initialSession,

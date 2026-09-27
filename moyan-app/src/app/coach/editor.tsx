@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { draftCoachScenario } from '../../lib/coach-api';
+import { draftCoachScenario } from '../../lib/coach-api-runtime';
 import { loadCustomScenarios, saveCustomScenario } from '../../lib/coach-storage';
 import type {
   CoachCategory,
