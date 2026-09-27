@@ -40,7 +40,7 @@
 | POST | `/api/coach/interview/text` | multipart `docs` 或 `images` | `{ text, char_count, likely_scanned, source }` |
 | POST | `/api/coach/interview/profile` | `{ kind, text }` | `{ kind, profile }` |
 
-`remaining = null` 且 `limit = 0` 表示不限量。429 错误体含 `reason: "coach_quota_exceeded"`、`limit`、`used`、`resets_at`。图片模型不支持时返回 422 `reason: "vision_not_supported"`。
+`remaining = null` 且 `limit = 0` 表示不限量；`enabled` 表示“是否启用每日配额”，`false` 不是关闭 AI 陪练。429 错误体含 `reason: "coach_quota_exceeded"`、`limit`、`used`、`resets_at`。图片模型不支持时返回 422 `reason: "vision_not_supported"`。
 
 ## Review Focus
 
@@ -524,11 +524,11 @@ Expected: FAIL。
 
 - [ ] **Step 4: 接入无 LLM/禁用/配额态**
 
-`UnavailableState` 接收 `{ kind: 'quota' | 'disabled' | 'llm' | 'network', resetsAt?: string }`：
+`UnavailableState` 接收 `{ kind: 'quota' | 'llm' | 'network', resetsAt?: string }`：
 
 - `llm_configured === false`：提示 `coachUnavailableLLM`
-- `enabled === false`：提示 `coachDisabled`
-- `remaining === 0`：提示 `coachQuotaExceeded` 与重置时间
+- `enabled === true && remaining === 0`：提示 `coachQuotaExceeded` 与重置时间
+- `enabled === false || limit === 0`：显示“不限量”，允许开始
 - 网络失败：保留已加载场景，提示重试，不把页面清空
 
 - [ ] **Step 5: 验证**
