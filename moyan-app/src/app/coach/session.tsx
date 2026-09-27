@@ -56,7 +56,6 @@ export default function CoachSessionScreen() {
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [history, setHistory] = useState<CoachTurn[]>([]);
   const [input, setInput] = useState('');
-  const [reply, setReply] = useState('');
   const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
   const [mode, setMode] = useState<'feedback' | 'immersion'>(
     params.interviewKind ? 'immersion' : 'feedback'
@@ -70,6 +69,8 @@ export default function CoachSessionScreen() {
   const [volume, setVolume] = useState(0);
   const sttRef = useRef<SttSession | null>(null);
   const inputRef = useRef<TextInput | null>(null);
+  const chatRef = useRef<ScrollView | null>(null);
+  const shouldScrollRef = useRef(true);
   const [exitMode, setExitMode] = useState<'summary' | 'discard' | null>(null);
   const finishedRef = useRef(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -85,7 +86,7 @@ export default function CoachSessionScreen() {
       const found = [...presets, ...custom].find((item) => item.id === params.scenarioId);
       if (!found) return;
       setScenario(found);
-      setReply(found.opening_line);
+      shouldScrollRef.current = true;
       setHistory([{ role: 'coach', content: found.opening_line }]);
     })();
   }, [lang, params.scenarioId]);
@@ -148,10 +149,12 @@ export default function CoachSessionScreen() {
     sttRef.current = null;
     setInput('');
     setError('');
+    setFeedback(null);
     await stopSpeaking();
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     dispatch({ type: 'USER_SUBMIT', id, text });
     const nextHistory = appendHistory(history, { role: 'user', content: text });
+    shouldScrollRef.current = true;
     setHistory(nextHistory);
 
     try {
@@ -164,9 +167,9 @@ export default function CoachSessionScreen() {
         locale: lang,
         interview: interview(),
       });
-      setReply(response.reply);
       setFeedback(mode === 'immersion' ? null : response.feedback ?? null);
       setTurnIndex(response.turn_index);
+      shouldScrollRef.current = true;
       setHistory(
         appendHistory(nextHistory, { role: 'coach', content: response.reply })
       );
@@ -182,6 +185,13 @@ export default function CoachSessionScreen() {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       setInput(text);
+      shouldScrollRef.current = true;
+      setHistory((current) => {
+        const last = current.at(-1);
+        return last?.role === 'user' && last.content === text
+          ? current.slice(0, -1)
+          : current;
+      });
       dispatch({ type: 'TURN_ERROR', id, message });
     }
   };
@@ -379,52 +389,120 @@ export default function CoachSessionScreen() {
         </View>
 
         <ScrollView
+          ref={chatRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => {
+            if (shouldScrollRef.current) {
+              chatRef.current?.scrollToEnd({ animated: true });
+              shouldScrollRef.current = false;
+            }
+          }}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            shouldScrollRef.current =
+              contentOffset.y + layoutMeasurement.height >= contentSize.height - 36;
+          }}
+          scrollEventThrottle={16}
         >
-          <View style={[styles.stage, { backgroundColor: c.studyCard, borderColor: c.border }]}>
-            <View style={styles.stageMeta}>
-              <Text style={[styles.stageWho, { color: c.studyMuted }]}>
-                {scenario.persona.name} · {scenario.persona.role} · {scenario.persona.locale}
+          <View style={[styles.coachStrip, { backgroundColor: c.studyCard, borderColor: c.border }]}>
+            <CoachAvatar
+              state={avatarState}
+              mood="friendly"
+              size={54}
+              volume={Math.max(0, Math.min(1, (volume + 2) / 12))}
+            />
+            <View style={styles.coachStripBody}>
+              <Text style={[styles.coachName, { color: c.studyText }]}>
+                {scenario.persona.name}
               </Text>
-              <View style={styles.statusRow}>
-                <View style={[styles.liveDot, { backgroundColor: c.accent }]} />
-                <Text style={{ color: c.studyMuted, fontSize: 11 }}>{statusText}</Text>
+              <Text numberOfLines={1} style={[styles.coachRole, { color: c.studyMuted }]}>
+                {scenario.persona.role} · {scenario.persona.locale}
+              </Text>
+            </View>
+            <View style={styles.statusRow}>
+              <View style={[styles.liveDot, { backgroundColor: c.accent }]} />
+              <Text style={{ color: c.studyMuted, fontSize: 10.5 }}>{statusText}</Text>
+            </View>
+          </View>
+
+          <View style={styles.messages}>
+            {history.map((turn, index) => {
+              const isUser = turn.role === 'user';
+              const latestCoach = !isUser && index === history.length - 1;
+              return (
+                <View
+                  key={`${turn.role}-${index}-${turn.content.slice(0, 12)}`}
+                  style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowCoach]}
+                >
+                  {!isUser ? (
+                    <View style={[styles.messageAvatar, { backgroundColor: c.accentLight }]}>
+                      <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12 }}>
+                        {scenario.persona.name.slice(0, 1).toUpperCase()}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      isUser ? styles.userBubble : styles.coachBubble,
+                      {
+                        backgroundColor: isUser ? c.accentLight : c.studyCard,
+                        borderColor: isUser ? c.accentLight : c.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.messageText, { color: c.studyText }]}>
+                      {turn.content}
+                    </Text>
+                    {latestCoach ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => void play(turn.content)}
+                        style={[styles.bubbleReplay, { borderColor: c.border }]}
+                      >
+                        <CoachGlyph name="mic" color={c.inkLight} size={14} />
+                        <Text style={{ color: c.inkLight, fontSize: 10.5 }}>
+                          {t('coachReplay')}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+
+            {liveText && session.state === 'listening' ? (
+              <View style={[styles.messageRow, styles.messageRowUser]}>
+                <View
+                  style={[
+                    styles.messageBubble,
+                    styles.userBubble,
+                    { backgroundColor: c.accentLight, borderColor: c.accentLight },
+                  ]}
+                >
+                  <Text style={[styles.messageText, { color: c.studyText }]}>{liveText}</Text>
+                  <Text style={{ color: c.studyMuted, fontSize: 10.5, marginTop: 4 }}>
+                    {t('coachListening')}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.avatarWrap}>
-              <CoachAvatar
-                state={avatarState}
-                mood="friendly"
-                size={196}
-                volume={Math.max(0, Math.min(1, (volume + 2) / 12))}
-              />
-            </View>
-          </View>
+            ) : null}
 
-          <View style={[styles.replyCard, { backgroundColor: c.studyCard, borderColor: c.border }]}>
-            <Text style={[styles.reply, { color: c.studyText }]}>{reply}</Text>
-            <View style={styles.replyFooter}>
-              <Text style={{ color: c.studyMuted, fontSize: 12, flex: 1 }}>
-                {isInterview ? t('coachInterviewModeHint') : t('coachFeedbackMode')}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void play(reply)}
-                style={[styles.replayButton, { borderColor: c.border }]}
-              >
-                <CoachGlyph name="mic" color={c.inkLight} size={15} />
-                <Text style={{ color: c.inkLight, fontSize: 11 }}>{t('coachReplay')}</Text>
-              </Pressable>
-            </View>
+            {session.state === 'thinking' ? (
+              <View style={[styles.messageRow, styles.messageRowCoach]}>
+                <View style={[styles.messageAvatar, { backgroundColor: c.accentLight }]}>
+                  <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12 }}>
+                    {scenario.persona.name.slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={[styles.typingBubble, { backgroundColor: c.studyCard, borderColor: c.border }]}>
+                  <Text style={{ color: c.studyMuted, fontSize: 13 }}>{t('coachThinking')}</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
-
-          {session.state === 'thinking' ? (
-            <Text style={{ color: c.studyMuted, textAlign: 'center', marginTop: 8 }}>
-              {t('coachThinking')}
-            </Text>
-          ) : null}
 
           {error ? (
             <View style={[styles.errorCard, { backgroundColor: c.accentLight, borderLeftColor: c.accent }]}>
@@ -453,19 +531,6 @@ export default function CoachSessionScreen() {
             </View>
           ) : null}
 
-          {liveText ? (
-            <View style={styles.userLine}>
-              <View style={[styles.userRing, { backgroundColor: c.accentLight, borderColor: c.accent }]}>
-                <CoachGlyph name="mic" color={c.accent} size={17} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.studyText, fontSize: 13.5, lineHeight: 20 }}>{liveText}</Text>
-                <Text style={{ color: c.studyMuted, fontSize: 10.5, marginTop: 2 }}>
-                  {session.state === 'listening' ? t('coachListening') : t('coachKept')}
-                </Text>
-              </View>
-            </View>
-          ) : null}
         </ScrollView>
 
         <View style={[styles.controls, { borderTopColor: c.divider }]}>
@@ -646,49 +711,64 @@ const styles = StyleSheet.create({
   topPills: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headPill: { fontSize: 10.5, borderRadius: 999, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 4 },
   endChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  content: { paddingHorizontal: 16, paddingBottom: 14 },
-  stage: {
-    height: 340,
-    borderWidth: 1,
-    borderRadius: 22,
-    overflow: 'hidden',
-    paddingTop: 13,
-  },
-  stageMeta: {
+  content: { paddingHorizontal: 16, paddingBottom: 16 },
+  coachStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    gap: 8,
+    gap: 9,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  stageWho: { fontSize: 11.5, flexShrink: 1 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  liveDot: { width: 6, height: 6, borderRadius: 3 },
-  avatarWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 4 },
-  replyCard: { borderWidth: 1, borderRadius: 16, padding: 15, marginTop: 12 },
-  reply: { fontSize: 15, lineHeight: 24 },
-  replyFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 },
-  replayButton: {
+  coachStripBody: { flex: 1, minWidth: 0 },
+  coachName: { fontSize: 13.5, fontWeight: '700' },
+  coachRole: { fontSize: 10.5, marginTop: 2 },
+  messages: { gap: 10, marginTop: 12 },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
+  messageRowUser: { justifyContent: 'flex-end' },
+  messageRowCoach: { justifyContent: 'flex-start' },
+  messageAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  messageBubble: {
+    maxWidth: '82%',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  userBubble: { borderBottomRightRadius: 5 },
+  coachBubble: { borderBottomLeftRadius: 5 },
+  messageText: { fontSize: 14, lineHeight: 21 },
+  bubbleReplay: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 8,
   },
+  typingBubble: {
+    borderRadius: 16,
+    borderBottomLeftRadius: 5,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
   errorCard: { marginTop: 10, borderLeftWidth: 3, borderRadius: 14, padding: 13 },
   retryButton: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, marginTop: 10 },
   modeNote: { marginTop: 10, borderRadius: 12, padding: 11 },
-  userLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  userRing: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   controls: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 20,
