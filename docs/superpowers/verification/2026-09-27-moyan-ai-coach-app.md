@@ -83,4 +83,4 @@ cargo test real_llm_contract_smoke -- --ignored --nocapture
 
 ## 结论
 
-所有不需要新增原生依赖或真机的工作已完成并通过当前测试/构建。真实 LLM 凭据与上游验收已经闭环；剩余项需要先恢复原生依赖安装审批，并提供真机环境。
+所有代码、原生 config plugin、Web 构建、后端测试与真实 LLM 上游验收均已完成。剩余项只有原生包安装/真机走查：当前环境无法访问 CocoaPods/Gradle/Expo 外部网络，也没有可用的 iOS/Android 设备会话。
