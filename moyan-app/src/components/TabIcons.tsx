@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import type { TabIconName } from '../lib/navigation-contract';
 
-export type TabIconName = 'home' | 'decks' | 'podcast' | 'stats' | 'settings';
+export type { TabIconName } from '../lib/navigation-contract';
 
 function renderIcon(name: TabIconName, color: string) {
   const common = {
@@ -22,14 +23,13 @@ function renderIcon(name: TabIconName, color: string) {
           <Path {...common} d="M10.6 17.3c.5.5 2.3.5 2.8 0" />
         </Svg>
       );
-    case 'decks':
+    case 'coach':
       return (
         <Svg width={22} height={22} viewBox="0 0 24 24">
-          <Path {...common} d="M4 5.5c3-1.4 6-1.4 8 0v13c-2-1.4-5-1.4-8 0z" />
-          <Path {...common} d="M20 5.5c-3-1.4-6-1.4-8 0v13c2-1.4 5-1.4 8 0z" />
-          <Circle cx="9.5" cy="11" r="0.7" fill={color} stroke="none" />
-          <Circle cx="14.5" cy="11" r="0.7" fill={color} stroke="none" />
-          <Path {...common} d="M11 13.6c.6.5 1.4.5 2 0" />
+          <Path {...common} d="M4.5 5.5h15v10h-8l-4.5 3v-3H4.5z" />
+          <Circle cx="9.5" cy="10" r="0.7" fill={color} stroke="none" />
+          <Circle cx="14.5" cy="10" r="0.7" fill={color} stroke="none" />
+          <Path {...common} d="M10.7 12.5c.7.6 1.9.6 2.6 0" />
         </Svg>
       );
     case 'podcast':

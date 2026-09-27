@@ -11,12 +11,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createDeck, deleteDeck, listDecks } from '../../lib/api';
-import { useI18n } from '../../lib/i18n';
-import { useTheme } from '../../lib/theme-context';
-import { confirmAsync, useToast } from '../../lib/toast';
-import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
-import type { Deck } from '../../lib/types';
+import { createDeck, deleteDeck, listDecks } from '../lib/api';
+import { useI18n } from '../lib/i18n';
+import { useTheme } from '../lib/theme-context';
+import { confirmAsync, useToast } from '../lib/toast';
+import { cardStyle, roundButton, screen, serif } from '../lib/ui';
+import type { Deck } from '../lib/types';
 
 export default function DecksScreen() {
   const router = useRouter();
@@ -123,6 +123,14 @@ export default function DecksScreen() {
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={screen.header}>
         <View style={styles.titleRow}>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={() => router.back()}
+            style={[roundButton, { backgroundColor: `${c.ink}10` }]}
+          >
+            <Text style={{ color: c.ink, fontSize: 24, marginTop: -2 }}>‹</Text>
+          </Pressable>
           <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
             {t('tabDecks')}
           </Text>
@@ -207,6 +215,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
   list: { paddingBottom: 100 },
   section: { marginBottom: 20 },

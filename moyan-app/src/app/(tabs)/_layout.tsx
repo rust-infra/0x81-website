@@ -2,7 +2,8 @@ import { Tabs } from 'expo-router';
 import { useEffect, useState } from 'react';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TabIcon, type TabIconName } from '../../components/TabIcons';
+import { TabIcon } from '../../components/TabIcons';
+import { TAB_SCREENS, type TabIconName } from '../../lib/navigation-contract';
 import { getAppConfig } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
@@ -74,42 +75,18 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabHome'),
-          tabBarIcon: tabIcon('home'),
-        }}
-      />
-      <Tabs.Screen
-        name="decks"
-        options={{
-          title: t('tabDecks'),
-          tabBarIcon: tabIcon('decks'),
-        }}
-      />
-      <Tabs.Screen
-        name="podcast"
-        options={{
-          title: t('tabPodcast'),
-          tabBarIcon: tabIcon('podcast'),
-          href: podcastEnabled ? undefined : null,
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: t('tabStats'),
-          tabBarIcon: tabIcon('stats'),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t('tabSettings'),
-          tabBarIcon: tabIcon('settings'),
-        }}
-      />
+      {TAB_SCREENS.map((screen) => (
+        <Tabs.Screen
+          key={screen.name}
+          name={screen.name}
+          options={{
+            title: t(screen.titleKey),
+            tabBarIcon: tabIcon(screen.icon),
+            href:
+              screen.name === 'podcast' && !podcastEnabled ? null : undefined,
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
