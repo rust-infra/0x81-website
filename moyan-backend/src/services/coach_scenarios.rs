@@ -18,6 +18,7 @@ struct Preset {
     tone: &'static str,
     setting: &'static str,
     opening_line: &'static str,
+    opening_line_zh: &'static str,
     focus_zh: &'static [&'static str],
     focus_en: &'static [&'static str],
     difficulty: &'static str,
@@ -39,6 +40,7 @@ const PRESETS: &[Preset] = &[
         tone: "friendly",
         setting: "meeting",
         opening_line: "Morning! How's the feature going?",
+        opening_line_zh: "早！功能做得怎么样了？",
         focus_zh: &["进度说清楚", "主动提阻塞", "明确下一步"],
         focus_en: &["state progress", "raise blockers", "name next step"],
         difficulty: "core",
@@ -59,6 +61,7 @@ const PRESETS: &[Preset] = &[
         tone: "direct",
         setting: "meeting",
         opening_line: "I left a few comments on your PR. Want to walk through them?",
+        opening_line_zh: "我在你的 PR 上留了几条评论，要不要一起过一下？",
         focus_zh: &["接受合理意见", "解释取舍", "礼貌坚持"],
         focus_en: &["accept feedback", "explain trade-offs", "push back politely"],
         difficulty: "challenge",
@@ -79,6 +82,7 @@ const PRESETS: &[Preset] = &[
         tone: "neutral",
         setting: "meeting",
         opening_line: "So, you're proposing we add a queue in front of the writer. Why?",
+        opening_line_zh: "也就是说，你提议在写入前面加一个队列。为什么？",
         focus_zh: &["先给结论", "讲 trade-off", "回答追问"],
         focus_en: &["lead with the answer", "name trade-offs", "handle follow-ups"],
         difficulty: "challenge",
@@ -99,6 +103,7 @@ const PRESETS: &[Preset] = &[
         tone: "direct",
         setting: "meeting",
         opening_line: "We're getting error spikes in eu-west. What do you know so far?",
+        opening_line_zh: "eu-west 这边错误在飙升。你目前了解到什么？",
         focus_zh: &["先说影响面", "区分已知与未知", "给 ETA 或下次更新"],
         focus_en: &["state impact first", "separate known from unknown", "give an ETA"],
         difficulty: "challenge",
@@ -119,6 +124,7 @@ const PRESETS: &[Preset] = &[
         tone: "challenging",
         setting: "one_on_one",
         opening_line: "Can we ship this by Friday? Sales is asking.",
+        opening_line_zh: "这个周五能上线吗？销售那边在催。",
         focus_zh: &["不裸拒", "给替代方案", "把取舍摆到台面"],
         focus_en: &["don't just say no", "offer options", "surface the trade-off"],
         difficulty: "challenge",
@@ -139,6 +145,7 @@ const PRESETS: &[Preset] = &[
         tone: "friendly",
         setting: "one_on_one",
         opening_line: "Hey, you look stuck. What's going on?",
+        opening_line_zh: "嘿，你看起来卡住了。怎么了？",
         focus_zh: &["描述现象", "列出已尝试", "提出具体请求"],
         focus_en: &["describe the symptom", "list what you tried", "make a specific ask"],
         difficulty: "core",
@@ -159,6 +166,7 @@ const PRESETS: &[Preset] = &[
         tone: "friendly",
         setting: "one_on_one",
         opening_line: "How's everything going lately? Anything on your mind?",
+        opening_line_zh: "最近一切都还好吗？有什么心事？",
         focus_zh: &["表达真实状态", "给具体例子", "提出诉求"],
         focus_en: &["be honest", "give concrete examples", "make a request"],
         difficulty: "core",
@@ -179,6 +187,7 @@ const PRESETS: &[Preset] = &[
         tone: "friendly",
         setting: "coffee_chat",
         opening_line: "Hey! How's your week going? Surviving the meetings?",
+        opening_line_zh: "嘿！这周过得怎么样？会议还扛得住吗？",
         focus_zh: &["回应加反问", "分享一个小细节", "延续话题"],
         focus_en: &["answer and ask back", "share a detail", "keep it going"],
         difficulty: "easy",
@@ -199,6 +208,7 @@ const PRESETS: &[Preset] = &[
         tone: "friendly",
         setting: "phone_call",
         opening_line: "Thanks for making the time. Tell me a bit about yourself.",
+        opening_line_zh: "谢谢你抽时间。先简单介绍一下你自己吧。",
         focus_zh: &["经历主线", "求职动机", "岗位匹配"],
         focus_en: &["career story", "motivation", "role fit"],
         difficulty: "core",
@@ -219,6 +229,7 @@ const PRESETS: &[Preset] = &[
         tone: "direct",
         setting: "one_on_one",
         opening_line: "Let's start with a time you disagreed with a teammate. What happened?",
+        opening_line_zh: "我们从一次你和同事意见不合说起吧。当时发生了什么？",
         focus_zh: &["情境与任务", "个人行动", "量化结果"],
         focus_en: &["situation and task", "personal action", "quantified result"],
         difficulty: "challenge",
@@ -239,6 +250,7 @@ const PRESETS: &[Preset] = &[
         tone: "neutral",
         setting: "meeting",
         opening_line: "Pick a project you're proud of and walk me through the architecture.",
+        opening_line_zh: "挑一个你引以为豪的项目，讲讲它的架构。",
         focus_zh: &["架构边界", "关键取舍", "失败场景"],
         focus_en: &["architecture boundaries", "key trade-offs", "failure modes"],
         difficulty: "challenge",
@@ -268,6 +280,8 @@ fn to_scenario(preset: &Preset, locale: &str) -> CoachScenario {
         setting: preset.setting.to_string(),
         // 开场白始终为英文：它会被直接朗读给用户
         opening_line: preset.opening_line.to_string(),
+        // 展示用的中文对照；朗读仍然只用上面的英文
+        opening_line_zh: preset.opening_line_zh.to_string(),
         focus_points: if locale.starts_with("en") {
             preset.focus_en.iter().map(|s| s.to_string()).collect()
         } else {
@@ -327,6 +341,12 @@ mod tests {
         assert_eq!(en_standup.title, "Daily Standup");
         // 开场白始终是英文，供 AI 直接朗读
         assert_eq!(zh_standup.opening_line, en_standup.opening_line);
+        // 但中文对照是展示用的，与 locale 无关，且每条预置都要有
+        assert_eq!(zh_standup.opening_line_zh, en_standup.opening_line_zh);
+        assert_eq!(zh_standup.opening_line_zh, "早！功能做得怎么样了？");
+        for s in &zh {
+            assert!(!s.opening_line_zh.is_empty(), "{} 缺开场白中文", s.id);
+        }
     }
 
     #[test]

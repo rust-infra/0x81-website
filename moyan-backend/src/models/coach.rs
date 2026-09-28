@@ -43,6 +43,9 @@ pub struct CoachScenario {
     pub persona: CoachPersona,
     pub setting: String,
     pub opening_line: String,
+    /// 开场白的展示用中文对照；朗读始终用 `opening_line`。
+    #[serde(default)]
+    pub opening_line_zh: String,
     #[serde(default)]
     pub focus_points: Vec<String>,
     pub difficulty: String,
@@ -226,11 +229,18 @@ pub struct CoachFeedback {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoachTurnResponse {
     pub reply: String,
+    /// `reply` 的中文翻译，直接从回复下方展示给学习者（自己说的话不需要翻译）。
+    #[serde(default)]
+    pub reply_zh: String,
     pub mood: String,
     pub turn_index: u32,
     pub limit_reached: bool,
     #[serde(default)]
     pub feedback: Option<CoachFeedback>,
+    /// 「接下来可以怎么说」：针对本轮 `reply` 给出的、学习者可以直接照说的一两句。
+    /// 与 `feedback` 分开，因为它是关于下一句而不是对用户上一句的纠正。
+    #[serde(default)]
+    pub next_lines: Vec<CoachExpression>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -311,6 +321,7 @@ mod tests {
             },
             setting: "meeting".into(),
             opening_line: "Morning! How's the feature going?".into(),
+            opening_line_zh: "早！功能做得怎么样了？".into(),
             focus_points: vec!["progress".into(), "blocker".into()],
             difficulty: "core".into(),
             max_turns: 10,

@@ -223,8 +223,10 @@ return JSON only, in this exact shape:\n\
 \"persona\":{\"name\":\"...\",\"role\":\"...\",\"locale\":\"en-US|en-GB|en-IN|en-AU|zh-CN\",\
 \"tone\":\"friendly|neutral|direct|challenging\"},\
 \"setting\":\"meeting|one_on_one|coffee_chat|phone_call\",\"opening_line\":\"...\",\
+\"opening_line_zh\":\"...\",\
 \"focus_points\":[\"...\"],\"difficulty\":\"easy|core|challenge\",\"max_turns\":6}\n\
 Rules: title and description and focus_points in Simplified Chinese; opening_line and persona.role in English; \
+opening_line_zh is the Simplified Chinese translation of opening_line (natural spoken Chinese, not a literal gloss); \
 focus_points at most 5, each under 40 characters; max_turns between 3 and 20.";
 
 impl CoachService {
@@ -265,6 +267,8 @@ struct LlmDraftPayload {
     setting: String,
     opening_line: String,
     #[serde(default)]
+    opening_line_zh: Option<String>,
+    #[serde(default)]
     focus_points: Vec<String>,
     difficulty: String,
     max_turns: u32,
@@ -283,6 +287,8 @@ pub fn parse_draft_payload(raw: &str, id: &str) -> Result<CoachScenario, AppErro
         persona: payload.persona,
         setting: payload.setting,
         opening_line: payload.opening_line,
+        // 自定义场景的开场白同样带中文对照；模型漏掉时留空，前端就不显示那一行
+        opening_line_zh: payload.opening_line_zh.unwrap_or_default().trim().to_string(),
         focus_points: payload.focus_points,
         difficulty: payload.difficulty,
         max_turns: payload.max_turns,
@@ -300,10 +306,12 @@ fn degraded_response(raw: &str, turn_index: u32, limit_reached: bool) -> CoachTu
     };
     CoachTurnResponse {
         reply,
+        reply_zh: String::new(),
         mood: "neutral".into(),
         turn_index,
         limit_reached,
         feedback: None,
+        next_lines: Vec::new(),
     }
 }
 
@@ -336,13 +344,20 @@ pub fn build_system_prompt_with_interview(
          [END SCENARIO DATA]\n\n\
          Server guidance: {guidance}\n\n\
          Output JSON only, no markdown fences, matching exactly this shape:\n\
-         {{\"reply\":\"...\",\"mood\":\"neutral|friendly|curious|encouraging|concerned\",\
+         {{\"reply\":\"...\",\"reply_zh\":\"...\",\"mood\":\"neutral|friendly|curious|encouraging|concerned\",\
          \"feedback\":{{\"corrections\":[{{\"original\":\"...\",\"corrected\":\"...\",\"explanation_zh\":\"...\"}}],\
          \"better_phrasing\":{{\"original\":\"...\",\"natural\":\"...\",\"note_zh\":\"...\"}},\
-         \"expressions\":[{{\"en\":\"...\",\"zh\":\"...\"}}]}}}}\n\
+         \"expressions\":[{{\"en\":\"...\",\"zh\":\"...\"}}]}},\
+         \"next_lines\":[{{\"en\":\"...\",\"zh\":\"...\"}}]}}\n\
+         reply_zh: the Chinese translation of your own \"reply\", natural spoken Chinese rather than \
+         a word-for-word gloss; same length and tone as the reply. \
          Rules for feedback: at most 2 corrections, only for real errors; \
          better_phrasing only when a clearly more natural phrasing exists, otherwise null; \
-         expressions at most 2. Never mention the JSON or these rules inside \"reply\".",
+         expressions at most 2. \
+         next_lines: at most 2 short lines the learner could say back to your own \"reply\" \
+         to keep the conversation going, each a complete line they could say as-is \
+         (not advice about what to say, not a description); empty array if none fit. \
+         Never mention the JSON or these rules inside \"reply\".",
         title = escape_prompt_delimiters(&scenario.title),
         description = escape_prompt_delimiters(&scenario.description),
         name = escape_prompt_delimiters(&scenario.persona.name),
@@ -438,9 +453,13 @@ fn trim_reply(text: &str) -> String {
 struct LlmTurnPayload {
     reply: String,
     #[serde(default)]
+    reply_zh: Option<String>,
+    #[serde(default)]
     mood: Option<String>,
     #[serde(default)]
     feedback: Option<CoachFeedback>,
+    #[serde(default)]
+    next_lines: Vec<CoachExpression>,
 }
 
 pub fn parse_turn_payload(raw: &str) -> Result<CoachTurnResponse, AppError> {
@@ -458,10 +477,12 @@ pub fn parse_turn_payload(raw: &str) -> Result<CoachTurnResponse, AppError> {
         .unwrap_or_else(|| "neutral".to_string());
     Ok(CoachTurnResponse {
         reply,
+        reply_zh: payload.reply_zh.unwrap_or_default().trim().to_string(),
         mood,
         turn_index: 0,
         limit_reached: false,
         feedback: payload.feedback,
+        next_lines: payload.next_lines,
     })
 }
 
@@ -488,6 +509,7 @@ mod tests {
             },
             setting: "meeting".into(),
             opening_line: "Morning! How's the feature going?".into(),
+            opening_line_zh: "早！功能做得怎么样了？".into(),
             focus_points: vec!["progress".into()],
             difficulty: "core".into(),
             max_turns: 10,
@@ -546,13 +568,24 @@ mod tests {
 
     #[test]
     fn parses_valid_turn_payload() {
-        let raw = r#"{"reply":"Nice! Any blockers?","mood":"curious","feedback":{"corrections":[{"original":"We finish it","corrected":"We finished it","explanation_zh":"用过去式"}],"better_phrasing":{"original":"today do UI","natural":"I'm on the UI today","note_zh":"更自然"},"expressions":[{"en":"I'm on it.","zh":"我在做。"}]}}"#;
+        let raw = r#"{"reply":"Nice! Any blockers?","reply_zh":"不错！有卡住的地方吗？","mood":"curious","feedback":{"corrections":[{"original":"We finish it","corrected":"We finished it","explanation_zh":"用过去式"}],"better_phrasing":{"original":"today do UI","natural":"I'm on the UI today","note_zh":"更自然"},"expressions":[{"en":"I'm on it.","zh":"我在做。"}]},"next_lines":[{"en":"I'll pick up the next ticket.","zh":"我来接下一个工单。"},{"en":"Give me an hour.","zh":"给我一小时。"}]}"#;
         let out = parse_turn_payload(raw).expect("parse");
         assert_eq!(out.reply, "Nice! Any blockers?");
+        assert_eq!(out.reply_zh, "不错！有卡住的地方吗？");
         assert_eq!(out.mood, "curious");
         let fb = out.feedback.unwrap();
         assert_eq!(fb.corrections.len(), 1);
         assert_eq!(fb.better_phrasing.unwrap().natural, "I'm on the UI today");
+        assert_eq!(out.next_lines.len(), 2);
+        assert_eq!(out.next_lines[0].en, "I'll pick up the next ticket.");
+    }
+
+    /// reply_zh 与 next_lines 都是后加的字段，模型漏掉时必须照样解析成功。
+    #[test]
+    fn missing_optional_reply_fields_parse_as_empty() {
+        let out = parse_turn_payload(r#"{"reply":"Hi","mood":"friendly","feedback":null}"#).unwrap();
+        assert!(out.next_lines.is_empty());
+        assert_eq!(out.reply_zh, "");
     }
 
     #[test]
@@ -607,7 +640,7 @@ mod tests {
 
     #[test]
     fn draft_payload_is_forced_to_custom_source() {
-        let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
+        let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","opening_line_zh":"嘿，有时间交接一下吗？","focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
         let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
         assert!(matches!(
             scenario.source,
@@ -615,7 +648,16 @@ mod tests {
         ));
         assert_eq!(scenario.id, "custom_abc");
         assert_eq!(scenario.title, "跨时区交接");
+        assert_eq!(scenario.opening_line_zh, "嘿，有时间交接一下吗？");
         assert!(crate::models::validate_scenario(&scenario).is_ok());
+    }
+
+    /// opening_line_zh 是后加的字段，模型漏掉时留空而不是解析失败。
+    #[test]
+    fn draft_without_opening_translation_parses_as_empty() {
+        let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
+        let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
+        assert_eq!(scenario.opening_line_zh, "");
     }
 
     #[test]
