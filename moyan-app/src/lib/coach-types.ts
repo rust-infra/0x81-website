@@ -21,6 +21,8 @@ export interface CoachScenario {
   };
   setting: CoachSetting;
   opening_line: string;
+  /** 开场白的展示用中文对照（预置场景有，自定义场景暂缺）。 */
+  opening_line_zh?: string;
   focus_points: string[];
   difficulty: CoachDifficulty;
   max_turns: number;
@@ -80,10 +82,14 @@ export interface CoachTurnRequest {
 
 export interface CoachTurnResponse {
   reply: string;
+  /** `reply` 的中文翻译，展示在回复下方（后端新加，可能缺失）。 */
+  reply_zh?: string;
   mood: CoachMood;
   turn_index: number;
   limit_reached: boolean;
   feedback?: CoachFeedback | null;
+  /** 针对本轮的 reply，学习者下一句可以直接照说的表达（后端新加，可能缺失）。 */
+  next_lines?: CoachExpression[];
 }
 
 export interface CoachSummaryRequest {

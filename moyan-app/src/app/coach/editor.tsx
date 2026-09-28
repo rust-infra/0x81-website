@@ -283,7 +283,10 @@ export default function CoachEditorScreen() {
         <Field
           label={t('coachOpeningLine')}
           value={scenario.opening_line}
-          onChange={(value) => apply({ ...scenario, opening_line: value })}
+          onChange={(value) =>
+            // 英文改了就丢掉旧的中文对照，免得显示一句对不上的翻译
+            apply({ ...scenario, opening_line: value, opening_line_zh: undefined })
+          }
           invalid={!!errors.opening_line}
           multiline
           maxLength={220}

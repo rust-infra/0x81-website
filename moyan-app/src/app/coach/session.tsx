@@ -17,19 +17,21 @@ import { BackButton } from '../../components/AppHeader';
 import { CoachAvatar } from '../../components/coach/CoachAvatar';
 import { CoachGlyph, PrimaryButton, SecondaryButton } from '../../components/coach/CoachUi';
 import { EndSessionSheet } from '../../components/coach/EndSessionSheet';
-import { FeedbackPanel } from '../../components/coach/FeedbackPanel';
+import { InlineFeedback } from '../../components/coach/InlineFeedback';
+import { NextLinesPanel } from '../../components/coach/NextLinesPanel';
 import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/coach-api-runtime';
 import {
   appendHistory,
   hasUserTurn,
   initialSession,
   sessionReducer,
+  wireHistory,
+  type SessionTurn,
 } from '../../lib/coach-session';
 import { loadCoachPrefs, loadCustomScenarios } from '../../lib/coach-storage';
 import type {
-  CoachFeedback,
+  CoachExpression,
   CoachScenario,
-  CoachTurn,
   InterviewContext,
   InterviewKind,
 } from '../../lib/coach-types';
@@ -54,9 +56,10 @@ export default function CoachSessionScreen() {
   const c = theme.colors;
   const [scenario, setScenario] = useState<CoachScenario | null>(null);
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
-  const [history, setHistory] = useState<CoachTurn[]>([]);
+  const [history, setHistory] = useState<SessionTurn[]>([]);
   const [input, setInput] = useState('');
-  const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
+  // 「接下来可以怎么说」：始终只保留最新一轮的，由底部面板展示。
+  const [nextLines, setNextLines] = useState<CoachExpression[]>([]);
   const [mode, setMode] = useState<'feedback' | 'immersion'>(
     params.interviewKind ? 'immersion' : 'feedback'
   );
@@ -87,7 +90,13 @@ export default function CoachSessionScreen() {
       if (!found) return;
       setScenario(found);
       shouldScrollRef.current = true;
-      setHistory([{ role: 'coach', content: found.opening_line }]);
+      setHistory([
+        {
+          role: 'coach',
+          content: found.opening_line,
+          contentZh: found.opening_line_zh?.trim() || undefined,
+        },
+      ]);
     })();
   }, [lang, params.scenarioId]);
 
@@ -149,7 +158,7 @@ export default function CoachSessionScreen() {
     sttRef.current = null;
     setInput('');
     setError('');
-    setFeedback(null);
+    setNextLines([]);
     await stopSpeaking();
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     dispatch({ type: 'USER_SUBMIT', id, text });
@@ -161,17 +170,28 @@ export default function CoachSessionScreen() {
       const response = await postCoachTurn({
         scenario,
         scenario_id: scenario.source === 'preset' ? scenario.id : undefined,
-        history,
+        history: wireHistory(history),
         user_text: text,
         coach_mode: mode,
         locale: lang,
         interview: interview(),
       });
-      setFeedback(mode === 'immersion' ? null : response.feedback ?? null);
+      const turnFeedback = mode === 'immersion' ? null : response.feedback ?? null;
+      // 「接下来可以怎么说」是聊天辅助而不是纠错，沉浸模式下也保留（后端在沉浸模式只清 feedback）。
+      setNextLines(response.next_lines ?? []);
       setTurnIndex(response.turn_index);
       shouldScrollRef.current = true;
+      // Tag the user turn we just appended, then append the reply. Trimming only
+      // ever drops the oldest turns, so the one being tagged always survives.
+      const tagged = nextHistory.map((turn, index) =>
+        index === nextHistory.length - 1 ? { ...turn, feedback: turnFeedback } : turn
+      );
       setHistory(
-        appendHistory(nextHistory, { role: 'coach', content: response.reply })
+        appendHistory(tagged, {
+          role: 'coach',
+          content: response.reply,
+          contentZh: response.reply_zh?.trim() || undefined,
+        })
       );
       dispatch({ type: 'TURN_SUCCESS', id });
       if (autoPlay) await play(response.reply);
@@ -257,7 +277,7 @@ export default function CoachSessionScreen() {
       pathname: '/coach/summary',
       params: {
         scenarioId: scenario?.id ?? '',
-        history: JSON.stringify(history),
+        history: JSON.stringify(wireHistory(history)),
         startedAt: String(startedAt),
         interviewKind: params.interviewKind ?? '',
         profile: params.profile ?? '',
@@ -320,6 +340,8 @@ export default function CoachSessionScreen() {
           ? 'speaking'
           : 'idle';
   const isInterview = !!params.interviewKind;
+  // 逐轮反馈只存在于非面试 + 反馈模式；它同时管住消息内联的那张卡。
+  const showFeedback = !isInterview && mode === 'feedback';
   const liveText =
     input.trim() ||
     (session.state === 'listening'
@@ -433,12 +455,24 @@ export default function CoachSessionScreen() {
             {history.map((turn, index) => {
               const isUser = turn.role === 'user';
               const latestCoach = !isUser && index === history.length - 1;
+              const turnFeedback =
+                isUser && showFeedback ? turn.feedback ?? null : null;
+              // 连续同角色的消息贴紧，换角色时多留白：让「一问一答」在视觉上成组，
+              // 头像也只出现在每一组的头一条（主流聊天应用的做法）。
+              const previous = history[index - 1];
+              const startsTurn = !previous || previous.role !== turn.role;
+              const showAvatar = !isUser && startsTurn;
               return (
                 <View
                   key={`${turn.role}-${index}-${turn.content.slice(0, 12)}`}
-                  style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowCoach]}
+                  style={[
+                    styles.messageRow,
+                    isUser ? styles.messageRowUser : styles.messageRowCoach,
+                    !showAvatar && !isUser ? styles.messageRowIndent : null,
+                    index === 0 ? null : startsTurn ? styles.turnGap : styles.sameRoleGap,
+                  ]}
                 >
-                  {!isUser ? (
+                  {showAvatar ? (
                     <View style={[styles.messageAvatar, { backgroundColor: c.accentLight }]}>
                       <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12 }}>
                         {scenario.persona.name.slice(0, 1).toUpperCase()}
@@ -458,6 +492,17 @@ export default function CoachSessionScreen() {
                     <Text style={[styles.messageText, { color: c.studyText }]}>
                       {turn.content}
                     </Text>
+                    {turn.contentZh ? (
+                      <Text style={[styles.messageZh, { color: c.studyMuted }]}>
+                        {turn.contentZh}
+                      </Text>
+                    ) : null}
+                    {turnFeedback ? (
+                      <InlineFeedback
+                        feedback={turnFeedback}
+                        onSpeak={(text) => void play(text)}
+                      />
+                    ) : null}
                     {latestCoach ? (
                       <Pressable
                         accessibilityRole="button"
@@ -476,7 +521,7 @@ export default function CoachSessionScreen() {
             })}
 
             {liveText && session.state === 'listening' ? (
-              <View style={[styles.messageRow, styles.messageRowUser]}>
+              <View style={[styles.messageRow, styles.messageRowUser, styles.turnGap]}>
                 <View
                   style={[
                     styles.messageBubble,
@@ -493,7 +538,7 @@ export default function CoachSessionScreen() {
             ) : null}
 
             {session.state === 'thinking' ? (
-              <View style={[styles.messageRow, styles.messageRowCoach]}>
+              <View style={[styles.messageRow, styles.messageRowCoach, styles.turnGap]}>
                 <View style={[styles.messageAvatar, { backgroundColor: c.accentLight }]}>
                   <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12 }}>
                     {scenario.persona.name.slice(0, 1).toUpperCase()}
@@ -521,8 +566,8 @@ export default function CoachSessionScreen() {
             </View>
           ) : null}
 
-          {!isInterview && mode === 'feedback' ? (
-            <FeedbackPanel feedback={feedback} onSpeak={(text) => void play(text)} />
+          {!isInterview ? (
+            <NextLinesPanel lines={nextLines} onSpeak={(text) => void play(text)} />
           ) : null}
 
           {isInterview ? (
@@ -726,10 +771,15 @@ const styles = StyleSheet.create({
   coachStripBody: { flex: 1, minWidth: 0 },
   coachName: { fontSize: 13.5, fontWeight: '700' },
   coachRole: { fontSize: 10.5, marginTop: 2 },
-  messages: { gap: 10, marginTop: 12 },
+  // 行间距由每一行自己的 marginTop 控制（同组贴紧 / 换组留白），所以这里不用 gap。
+  messages: { marginTop: 12 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
   messageRowUser: { justifyContent: 'flex-end' },
   messageRowCoach: { justifyContent: 'flex-start' },
+  sameRoleGap: { marginTop: 4 },
+  turnGap: { marginTop: 12 },
+  // 同一组里第二条起不画头像，但要缩进到与第一条气泡的左缘对齐（头像 28 + gap 7）。
+  messageRowIndent: { paddingLeft: 35 },
   messageAvatar: {
     width: 28,
     height: 28,
@@ -748,6 +798,8 @@ const styles = StyleSheet.create({
   userBubble: { borderBottomRightRadius: 5 },
   coachBubble: { borderBottomLeftRadius: 5 },
   messageText: { fontSize: 14, lineHeight: 21 },
+  // 教练回复下方的中文翻译：比正文小一号、用弱化色，不抢英文原文。
+  messageZh: { fontSize: 12, lineHeight: 18, marginTop: 4 },
   bubbleReplay: {
     alignSelf: 'flex-start',
     flexDirection: 'row',

@@ -49,3 +49,25 @@ test('templates are valid custom scenarios', () => {
     assert.doesNotMatch(templateEn?.title ?? '', /[\u4e00-\u9fff]/);
   }
 });
+
+test('every template carries a Chinese line for its English opening', () => {
+  for (const id of ['incident_sync', 'scope_deadline', 'cross_timezone_handoff', 'growth_1on1']) {
+    // 中英两套模板都要有，界面语言不决定是否显示译文
+    for (const lang of ['zh-CN', 'en'] as const) {
+      const template = scenarioFromTemplate(id, lang);
+      assert.ok(template?.opening_line_zh, `${id}/${lang} 缺开场白中文`);
+      // 英文开场白本身保持英文，译文只作对照
+      assert.doesNotMatch(template?.opening_line ?? '', /[\u4e00-\u9fff]/);
+    }
+  }
+});
+
+test('normalizing a scenario keeps its opening translation', () => {
+  const template = scenarioFromTemplate('incident_sync') as CoachScenario;
+  const result = normalizeCoachScenario(template);
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.ok ? result.scenario.opening_line_zh : null,
+    template.opening_line_zh
+  );
+});
