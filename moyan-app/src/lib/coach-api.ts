@@ -15,7 +15,7 @@ export interface CoachApi {
   getQuota: () => Promise<CoachQuotaStatus>;
   listScenarios: (locale: string) => Promise<CoachScenario[]>;
   draftScenario: (description: string, locale: string) => Promise<CoachScenario>;
-  turn: (body: CoachTurnRequest) => Promise<CoachTurnResponse>;
+  turn: (body: CoachTurnRequest, signal?: AbortSignal) => Promise<CoachTurnResponse>;
   summary: (body: CoachSummaryRequest) => Promise<CoachSummaryResponse>;
   extractInterviewText: (body: FormData) => Promise<InterviewTextResult>;
   profile: (body: InterviewProfileRequest) => Promise<InterviewProfileResponse>;
@@ -33,10 +33,11 @@ export function createCoachApi(request: ApiRequest): CoachApi {
         method: 'POST',
         body: JSON.stringify({ description, locale }),
       }),
-    turn: (body) =>
+    turn: (body, signal) =>
       request<CoachTurnResponse>('/api/coach/turn', {
         method: 'POST',
         body: JSON.stringify(body),
+        signal,
       }),
     summary: (body) =>
       request<CoachSummaryResponse>('/api/coach/summary', {
@@ -55,4 +56,3 @@ export function createCoachApi(request: ApiRequest): CoachApi {
       }),
   };
 }
-

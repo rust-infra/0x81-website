@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -12,7 +12,12 @@ import {
 import { UnavailableState } from '../../components/coach/UnavailableState';
 import { getCoachQuota, listCoachScenarios } from '../../lib/coach-api-runtime';
 import { resolveScenarioTitle } from '../../lib/coach-history';
-import { canStartCoach, groupScenarios, quotaLabel } from '../../lib/coach-selection';
+import {
+  canStartCoach,
+  groupScenarios,
+  quotaLabel,
+  shouldShowCoachInitialLoading,
+} from '../../lib/coach-selection';
 import {
   loadCoachHistory,
   loadCustomScenarios,
@@ -65,10 +70,12 @@ export default function CoachScreen() {
   const [history, setHistory] = useState<CoachHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const hasLoadedRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(false);
+    const requestId = ++loadRequestRef.current;
+    if (shouldShowCoachInitialLoading(hasLoadedRef.current)) setLoading(true);
     const [quotaResult, scenarioResult, customResult, historyResult] =
       await Promise.allSettled([
         getCoachQuota(),
@@ -76,6 +83,7 @@ export default function CoachScreen() {
         loadCustomScenarios(),
         loadCoachHistory(),
       ]);
+    if (requestId !== loadRequestRef.current) return;
 
     if (quotaResult.status === 'fulfilled') setQuota(quotaResult.value);
     if (scenarioResult.status === 'fulfilled') setPresets(scenarioResult.value);
@@ -83,13 +91,19 @@ export default function CoachScreen() {
     if (historyResult.status === 'fulfilled') setHistory(historyResult.value);
     if (quotaResult.status === 'rejected' && scenarioResult.status === 'rejected') {
       setLoadError(true);
+    } else {
+      setLoadError(false);
     }
+    hasLoadedRef.current = true;
     setLoading(false);
   }, [lang]);
 
   useFocusEffect(
     useCallback(() => {
       void load();
+      return () => {
+        loadRequestRef.current += 1;
+      };
     }, [load])
   );
 

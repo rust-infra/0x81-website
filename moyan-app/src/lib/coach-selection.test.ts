@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canStartCoach, groupScenarios } from './coach-selection';
+import {
+  canStartCoach,
+  groupScenarios,
+  shouldShowCoachInitialLoading,
+} from './coach-selection';
 import type { CoachQuotaStatus, CoachScenario } from './coach-types';
 
 const scenario = (id: string, category: CoachScenario['category']): CoachScenario => ({
@@ -62,4 +66,9 @@ test('disables start only for exhausted or unavailable states', () => {
     }),
     { ok: true }
   );
+});
+
+test('refocusing the coach screen does not show the full-screen loader again', () => {
+  assert.equal(shouldShowCoachInitialLoading(false), true);
+  assert.equal(shouldShowCoachInitialLoading(true), false);
 });

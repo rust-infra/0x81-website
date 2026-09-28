@@ -3,8 +3,6 @@
 export type ThemeName =
   | 'xuanzhi'
   | 'shenyemo'
-  | 'zhuqing'
-  | 'zhusha'
   | 'dailan'
   | 'fense'
   | 'ios'
@@ -105,68 +103,6 @@ export const THEMES: Theme[] = [
       divider: '#3A3A3C',
       hoverBg: '#363638',
       inputBg: '#2C2C2E',
-    },
-  },
-  {
-    name: 'zhuqing',
-    label: '竹青',
-    description: '清雅翠绿，生机盎然',
-    preview: '#EEF3EF',
-    colors: {
-      paper: '#EEF3EF',
-      paperGradient: '#EEF3EF',
-      card: '#FFFFFF',
-      ink: '#1E3328',
-      inkLight: '#4A6B5A',
-      inkMuted: '#7A9A8A',
-      accent: '#2B6B4F',
-      accentLight: '#2B6B4F18',
-      border: '#D0DDD4',
-      navBg: '#FFFFFF',
-      navText: '#4A6B5A',
-      studyBg: '#EEF3EF',
-      studyCard: '#FFFFFF',
-      studyText: '#1E3328',
-      studyMuted: 'rgba(30, 51, 40, 0.55)',
-      progressBar: '#2B6B4F',
-      tagBg: 'rgba(43, 107, 79, 0.08)',
-      tagText: '#4A6B5A',
-      buttonBg: '#1E3328',
-      buttonText: '#FFFFFF',
-      divider: '#D0DDD4',
-      hoverBg: '#E2EBE4',
-      inputBg: '#EEF3EF',
-    },
-  },
-  {
-    name: 'zhusha',
-    label: '朱砂',
-    description: '暖红沉韵，喜庆雅致',
-    preview: '#FDF5F0',
-    colors: {
-      paper: '#FDF5F0',
-      paperGradient: '#FDF5F0',
-      card: '#FFFFFF',
-      ink: '#3A1A18',
-      inkLight: '#6B4846',
-      inkMuted: '#9B7A78',
-      accent: '#A84040',
-      accentLight: '#A8404018',
-      border: '#E8D4CC',
-      navBg: '#FFFFFF',
-      navText: '#6B4846',
-      studyBg: '#FDF5F0',
-      studyCard: '#FFFFFF',
-      studyText: '#3A1A18',
-      studyMuted: 'rgba(58, 26, 24, 0.55)',
-      progressBar: '#A84040',
-      tagBg: 'rgba(168, 64, 64, 0.08)',
-      tagText: '#6B4846',
-      buttonBg: '#3A1A18',
-      buttonText: '#FFFFFF',
-      divider: '#E8D4CC',
-      hoverBg: '#F5E8E0',
-      inputBg: '#FDF5F0',
     },
   },
   {

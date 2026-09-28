@@ -36,8 +36,6 @@ import {
 const THEME_TEXT: Record<string, { label: string; description: string }> = {
   xuanzhi: { label: 'themeXuanzhi', description: 'themeXuanzhiDesc' },
   shenyemo: { label: 'themeShenyemo', description: 'themeShenyemoDesc' },
-  zhuqing: { label: 'themeZhuqing', description: 'themeZhuqingDesc' },
-  zhusha: { label: 'themeZhusha', description: 'themeZhushaDesc' },
   dailan: { label: 'themeDailan', description: 'themeDailanDesc' },
   fense: { label: 'themeFense', description: 'themeFenseDesc' },
   ios: { label: 'themeIos', description: 'themeIosDesc' },
@@ -49,6 +47,12 @@ const PROVIDERS = [
   { key: 'google', labelKey: 'providerGoogle' },
   { key: 'elevenlabs', labelKey: 'providerElevenlabs' },
   { key: 'aliyun', labelKey: 'providerAliyun' },
+] as const;
+
+const STT_PROVIDERS = [
+  { key: 'system', labelKey: 'sttSystem' },
+  { key: 'google-cloud', labelKey: 'sttGoogleCloud' },
+  { key: 'gemini', labelKey: 'sttGemini' },
 ] as const;
 
 export default function SettingsScreen() {
@@ -328,6 +332,103 @@ export default function SettingsScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('speechRecognition')}</Text>
+        <View style={[styles.card, { backgroundColor: c.card }]}>
+          {STT_PROVIDERS.map((provider) => {
+            const active = (speech?.sttProvider ?? 'system') === provider.key;
+            return (
+              <Pressable
+                key={provider.key}
+                style={[styles.row, active && { backgroundColor: c.tagBg }]}
+                onPress={() => updateSpeech({ sttProvider: provider.key })}
+              >
+                <Text style={[styles.rowTitle, { color: c.ink }]}>{t(provider.labelKey)}</Text>
+                <Text style={[styles.check, active ? { color: c.accent } : { color: 'transparent' }]}>
+                  ✓
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {speech?.sttProvider === 'google-cloud' ? (
+            <>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.serviceAccountInput,
+                  { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border },
+                ]}
+                placeholder={t('googleCloudServiceAccount')}
+                placeholderTextColor={c.inkMuted}
+                value={speech.googleCloudServiceAccountJson || ''}
+                onChangeText={(value) => updateSpeech({ googleCloudServiceAccountJson: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('googleCloudProject')}
+                placeholderTextColor={c.inkMuted}
+                value={speech.googleCloudProjectId || ''}
+                onChangeText={(value) => updateSpeech({ googleCloudProjectId: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('googleCloudLocation')}
+                placeholderTextColor={c.inkMuted}
+                value={speech.googleCloudLocation || ''}
+                onChangeText={(value) => updateSpeech({ googleCloudLocation: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('googleCloudModel')}
+                placeholderTextColor={c.inkMuted}
+                value={speech.googleCloudSttModel || ''}
+                onChangeText={(value) => updateSpeech({ googleCloudSttModel: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={[styles.keyHint, { color: c.inkMuted }]}>{t('googleCloudKeyHint')}</Text>
+              {!speech.googleCloudServiceAccountJson?.trim() ? (
+                <Text style={[styles.keyHint, { color: c.accent }]}>
+                  {t('googleCloudKeyMissing')}
+                </Text>
+              ) : null}
+            </>
+          ) : speech?.sttProvider === 'gemini' ? (
+            <>
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('geminiApiKey')}
+                placeholderTextColor={c.inkMuted}
+                secureTextEntry
+                value={speech.geminiApiKey || ''}
+                onChangeText={(value) => updateSpeech({ geminiApiKey: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
+                placeholder={t('geminiModel')}
+                placeholderTextColor={c.inkMuted}
+                value={speech.geminiSttModel || ''}
+                onChangeText={(value) => updateSpeech({ geminiSttModel: value })}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={[styles.keyHint, { color: c.inkMuted }]}>{t('geminiKeyHint')}</Text>
+              {!speech.geminiApiKey?.trim() ? (
+                <Text style={[styles.keyHint, { color: c.accent }]}>{t('geminiKeyMissing')}</Text>
+              ) : null}
+            </>
+          ) : null}
         </View>
 
         <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('voice')}</Text>
@@ -637,4 +738,5 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
   keyHint: { fontSize: 12, paddingHorizontal: 12, paddingBottom: 4 },
+  serviceAccountInput: { minHeight: 118, textAlignVertical: 'top' },
 });

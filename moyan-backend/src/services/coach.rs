@@ -8,10 +8,9 @@ use std::sync::Arc;
 use crate::middleware::error::AppError;
 use crate::models::{
     validate_history, validate_interview_context, validate_scenario, validate_summary_history,
-    CoachExpression, CoachFeedback, CoachMode, CoachRole,
-    CoachScenario, CoachScenarioDraftRequest, CoachSummaryRequest, CoachSummaryResponse,
-    CoachSummaryStats, CoachTurn, CoachTurnRequest, CoachTurnResponse, InterviewContext,
-    InterviewFeedback,
+    CoachExpression, CoachFeedback, CoachMode, CoachRole, CoachScenario,
+    CoachScenarioDraftRequest, CoachSummaryRequest, CoachSummaryResponse, CoachSummaryStats,
+    CoachTurn, CoachTurnRequest, CoachTurnResponse, InterviewContext, InterviewFeedback,
 };
 use crate::repositories::Repository;
 use crate::services::admin_collect::AdminCollectService;
@@ -45,6 +44,12 @@ impl CoachService {
     ) -> Result<CoachTurnResponse, AppError> {
         let scenario = validate_scenario(&req.scenario).map_err(AppError::BadRequest)?;
         validate_history(&req.history, &req.user_text).map_err(AppError::BadRequest)?;
+        let turn_index = next_turn_index(
+            &req.history,
+            req.completed_turns,
+            scenario.max_turns,
+        )
+        .map_err(AppError::BadRequest)?;
         if let Some(interview) = req.interview.as_ref() {
             validate_interview_context(interview).map_err(AppError::BadRequest)?;
         }
@@ -89,8 +94,6 @@ impl CoachService {
             .await;
         }
 
-        let turn_index =
-            (req.history.iter().filter(|t| t.role == CoachRole::User).count() as u32) + 1;
         let limit_reached = turn_index >= scenario.max_turns;
 
         match raw {
@@ -99,6 +102,11 @@ impl CoachService {
                     if matches!(req.coach_mode, CoachMode::Immersion) {
                         parsed.feedback = None;
                     }
+                    parsed.next_lines = sanitize_next_lines(
+                        parsed.next_lines,
+                        parsed.feedback.as_ref(),
+                        &parsed.reply,
+                    );
                     parsed.turn_index = turn_index;
                     parsed.limit_reached = limit_reached;
                     Ok(parsed)
@@ -110,6 +118,81 @@ impl CoachService {
             )),
         }
     }
+}
+
+fn next_turn_index(
+    history: &[CoachTurn],
+    completed_turns: Option<u32>,
+    max_turns: u32,
+) -> Result<u32, String> {
+    let inferred = history
+        .iter()
+        .filter(|turn| turn.role == CoachRole::User)
+        .count() as u32;
+    let previous = completed_turns.unwrap_or(inferred).max(inferred);
+    if previous >= max_turns {
+        return Err(format!("turn limit of {max_turns} has been reached"));
+    }
+    Ok(previous + 1)
+}
+
+fn normalized_phrase(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_alphanumeric())
+        .flat_map(|ch| ch.to_lowercase())
+        .collect()
+}
+
+fn sanitize_next_lines(
+    lines: Vec<CoachExpression>,
+    feedback: Option<&CoachFeedback>,
+    reply: &str,
+) -> Vec<CoachExpression> {
+    let mut blocked = vec![normalized_phrase(reply)];
+    if let Some(feedback) = feedback {
+        blocked.extend(
+            feedback
+                .corrections
+                .iter()
+                .flat_map(|correction| [&correction.original, &correction.corrected])
+                .map(|value| normalized_phrase(value)),
+        );
+        if let Some(better) = feedback.better_phrasing.as_ref() {
+            blocked.push(normalized_phrase(&better.original));
+            blocked.push(normalized_phrase(&better.natural));
+        }
+        blocked.extend(
+            feedback
+                .expressions
+                .iter()
+                .map(|expression| normalized_phrase(&expression.en)),
+        );
+    }
+    let blocked: std::collections::HashSet<_> = blocked.into_iter().filter(|s| !s.is_empty()).collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::with_capacity(2);
+    for line in lines {
+        let en = line.en.trim();
+        let zh = line.zh.trim();
+        let normalized = normalized_phrase(en);
+        if en.is_empty()
+            || zh.is_empty()
+            || normalized.is_empty()
+            || blocked.contains(&normalized)
+            || !seen.insert(normalized)
+        {
+            continue;
+        }
+        out.push(CoachExpression {
+            en: en.to_string(),
+            zh: zh.to_string(),
+        });
+        if out.len() == 2 {
+            break;
+        }
+    }
+    out
 }
 
 const MAX_SUMMARY_TOKENS: u32 = 3_000;
@@ -289,6 +372,8 @@ pub fn parse_draft_payload(raw: &str, id: &str) -> Result<CoachScenario, AppErro
         opening_line: payload.opening_line,
         // 自定义场景的开场白同样带中文对照；模型漏掉时留空，前端就不显示那一行
         opening_line_zh: payload.opening_line_zh.unwrap_or_default().trim().to_string(),
+        // 自定义场景没有预置的配套推荐，首轮推荐仍由 AI 在第一次回复里返回
+        opening_next_lines: vec![],
         focus_points: payload.focus_points,
         difficulty: payload.difficulty,
         max_turns: payload.max_turns,
@@ -475,14 +560,16 @@ pub fn parse_turn_payload(raw: &str) -> Result<CoachTurnResponse, AppError> {
         .map(|m| m.trim().to_ascii_lowercase())
         .filter(|m| MOODS.contains(&m.as_str()))
         .unwrap_or_else(|| "neutral".to_string());
+    let feedback = payload.feedback;
+    let next_lines = sanitize_next_lines(payload.next_lines, None, &reply);
     Ok(CoachTurnResponse {
         reply,
         reply_zh: payload.reply_zh.unwrap_or_default().trim().to_string(),
         mood,
         turn_index: 0,
         limit_reached: false,
-        feedback: payload.feedback,
-        next_lines: payload.next_lines,
+        feedback,
+        next_lines,
     })
 }
 
@@ -490,8 +577,8 @@ pub fn parse_turn_payload(raw: &str) -> Result<CoachTurnResponse, AppError> {
 mod tests {
     use super::*;
     use crate::models::{
-        CoachCategory, CoachPersona, CoachRole, CoachScenario, CoachScenarioSource, CoachTurn,
-        CoachTurnRequest, InterviewContext,
+        CoachBetterPhrasing, CoachCategory, CoachCorrection, CoachPersona, CoachRole,
+        CoachScenario, CoachScenarioSource, CoachTurn, CoachTurnRequest, InterviewContext,
     };
 
     fn scenario() -> CoachScenario {
@@ -510,6 +597,7 @@ mod tests {
             setting: "meeting".into(),
             opening_line: "Morning! How's the feature going?".into(),
             opening_line_zh: "早！功能做得怎么样了？".into(),
+            opening_next_lines: vec![],
             focus_points: vec!["progress".into()],
             difficulty: "core".into(),
             max_turns: 10,
@@ -636,6 +724,50 @@ mod tests {
         assert!(out.limit_reached);
         assert_eq!(out.turn_index, 3);
         assert_eq!(out.mood, "neutral");
+    }
+
+    #[test]
+    fn next_turn_index_rejects_turns_after_the_scenario_limit() {
+        let history = vec![
+            CoachTurn { role: CoachRole::Coach, content: "Hi".into() },
+            CoachTurn { role: CoachRole::User, content: "Hello".into() },
+        ];
+        assert_eq!(next_turn_index(&history, Some(1), 3).unwrap(), 2);
+        assert_eq!(next_turn_index(&history, Some(0), 3).unwrap(), 2);
+        assert!(next_turn_index(&history, Some(3), 3).is_err());
+        assert_eq!(next_turn_index(&[], None, 3).unwrap(), 1);
+    }
+
+    #[test]
+    fn next_lines_drop_blank_duplicate_and_feedback_echoes() {
+        let feedback = CoachFeedback {
+            corrections: vec![CoachCorrection {
+                original: "We finish it".into(),
+                corrected: "We finished it".into(),
+                explanation_zh: String::new(),
+            }],
+            better_phrasing: Some(CoachBetterPhrasing {
+                original: "today do UI".into(),
+                natural: "I am on the UI today".into(),
+                note_zh: String::new(),
+            }),
+            expressions: vec![CoachExpression {
+                en: "No worries, we have all been there.".into(),
+                zh: "没事，我们都经历过。".into(),
+            }],
+        };
+        let lines = vec![
+            CoachExpression { en: "No worries we have all been there".into(), zh: "没事，我们都经历过。".into() },
+            CoachExpression { en: "I am on the UI today.".into(), zh: "我今天在做 UI。".into() },
+            CoachExpression { en: "We finished it.".into(), zh: "我们完成了。".into() },
+            CoachExpression { en: "What is blocking you?".into(), zh: "什么卡住你了？".into() },
+            CoachExpression { en: "WHAT IS BLOCKING YOU".into(), zh: "重复项".into() },
+            CoachExpression { en: "   ".into(), zh: "空".into() },
+        ];
+
+        let filtered = sanitize_next_lines(lines, Some(&feedback), "Nice work.");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].en, "What is blocking you?");
     }
 
     #[test]

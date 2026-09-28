@@ -18,6 +18,11 @@ export function groupScenarios(scenarios: CoachScenario[]): CoachScenarioGroup[]
   })).filter((group) => group.items.length > 0);
 }
 
+/** The full-screen spinner belongs to the first visit only; refocus refreshes silently. */
+export function shouldShowCoachInitialLoading(hasLoadedOnce: boolean): boolean {
+  return !hasLoadedOnce;
+}
+
 export type CoachStartCheck =
   | { ok: true }
   | { ok: false; reason: 'quota' | 'llm' };

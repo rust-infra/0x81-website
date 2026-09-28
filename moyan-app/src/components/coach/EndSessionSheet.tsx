@@ -8,11 +8,13 @@ export function EndSessionSheet({
   onCancel,
   onConfirm,
   onDiscard,
+  cancelLabel,
 }: {
   visible: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   onDiscard?: () => void;
+  cancelLabel?: string;
 }) {
   const { t } = useI18n();
   const { theme } = useTheme();
@@ -47,7 +49,7 @@ export function EndSessionSheet({
             onPress={onCancel}
           >
             <Text style={{ color: c.studyText, fontWeight: '600' }}>
-              {t('coachContinuePractice')}
+              {cancelLabel ?? t('coachContinuePractice')}
             </Text>
           </Pressable>
         </Pressable>

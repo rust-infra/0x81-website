@@ -235,6 +235,7 @@ App 负责：麦克风权限、STT、TTS、音频会话、会话本地存储、�
   },
   "history": [{ "role": "coach", "content": "Morning! How's the feature going?" }],
   "user_text": "We finish the API yesterday and today do the UI.",
+  "completed_turns": 0,
   "coach_mode": "feedback",
   "locale": "zh-CN"
 }
@@ -247,6 +248,7 @@ App 负责：麦克风权限、STT、TTS、音频会话、会话本地存储、�
 - `history` 最多 40 条
 - `history` + `user_text` 合计最多 12,000 字符
 - `user_text` 最多 2,000 字符
+- `completed_turns` 为客户端草稿保存的已完成用户轮数；服务端取它与 `history` 中用户轮数的较大值，达到场景 `max_turns` 时拒绝新请求
 - 场景各字段满足 §4.2 的限长与枚举约束
 
 响应：
@@ -458,6 +460,14 @@ GET /api/coach/quota
 
 ### 5.1 语音识别（STT）
 
+内置两种可选引擎：
+
+- **系统识别**：iOS `SFSpeechRecognizer` / Android `SpeechRecognizer`，无需密钥。
+- **Google Cloud STT**：客户端 BYOK，用户粘贴自己的服务账号 JSON；App 本地签发短期 OAuth token，调用 Speech-to-Text V2 `recognize`。
+- **Gemini 转写**：客户端 BYOK，用户填写自己的 Gemini API Key；App 录音后将短音频直接发送到 Gemini Interactions API 做逐字转写。密钥只保存在本机，不进入后端同步。
+
+Google Cloud STT 不接受普通 API Key，只支持服务账号/OAuth。上述 Google 凭据都属于客户端密钥，无法对高级用户完全保密，因此界面会明确提示用户使用个人额度并自行管理。
+
 以 `expo-speech-recognition@57.1.0` 为例：
 
 ```ts
@@ -634,7 +644,7 @@ App 为 `orientation: portrait`，所有布局按竖屏设计，不引入屏幕�
 - 本次数据（轮数、纠错数、时长）
 - 亮点 / 待改进 / 推荐句型（带朗读按钮）
 - 「再来一次」「换个场景」「保存到本地历史」
-- v1 不支持断点续聊，历史仅用于回看总结
+- 支持同一场景 12 小时内的会话草稿恢复；未收到回复的最后一轮会显示为重试，不直接续写
 
 ### 6.7 视觉与交互一致性（硬约束）
 
@@ -643,7 +653,7 @@ App 为 `orientation: portrait`，所有布局按竖屏设计，不引入屏幕�
 **颜色**
 
 - 所有颜色取自 `useTheme().theme.colors`，禁止硬编码色值（阴影除外）
-- 必须在全部 8 套主题下走查：`xuanzhi`、`shenyemo`、`zhuqing`、`zhusha`、`dailan`、`fense`、`ios`、`ios-dark`
+- 必须在 6 套主题下走查：`xuanzhi`、`shenyemo`、`dailan`、`fense`、`ios`、`ios-dark`
 - 页面底色分工：
   - 场景选择、场景编辑器、总结页 → `paper` / `card` / `ink` / `border`，与 Home、Decks 同族
   - 会话页 → `studyBg` / `studyCard` / `studyText` / `studyMuted`。Study 页已经在用这套深色沉浸面，所以它属于应用既有语言，不是为陪练新造的风格
@@ -743,7 +753,7 @@ App 与后端**实际能保证**的部分（可执行、可测试）：
 - Rust 隐私测试：`/interview/text` 与 `/interview/profile` 的日志中不含材料样本身份串
 - App 材料测试：图片压到长边 ≤ 1600 且为 JPEG、超过 5 张报错、提取成功后删除本地图片
 - App 单元测试：会话状态机、历史裁剪、STT 不可用/权限被拒降级、反馈渲染、本地历史读写、自定义场景增删改与限长校验
-- 视觉一致性检查：新增页面无硬编码色值、8 套主题下走查对比度、浅色与深色主题各截关键页面
+- 视觉一致性检查：新增页面无硬编码色值、6 套主题下走查对比度、浅色与深色主题各截关键页面
 - 真机手工验证（模拟器不可靠）：iOS 与 Android 各一台，麦克风授权、识别准确度、TTS 在静音开关下可听、打断、蓝牙耳机、弱网超时重试
 - 回归：确认新增 config plugin 后现有 podcast/study 的音频播放不受影响
 
@@ -776,7 +786,7 @@ M8 需要 `expo-image-picker` 与 `expo-image-manipulator`，和 M5 的 `expo-sp
 | 自定义场景同步 | v1 不同步，跨设备同步放 v2 |
 | AI 生成场景草稿 | v1 支持，一次额外 LLM 调用 |
 | 逐轮反馈 | 默认开启，可切「沉浸模式」 |
-| 会话历史 | 只存 App 本地，不支持断点续聊 |
+| 会话历史 | 只存 App 本地；进行中的会话支持短时草稿恢复，总结历史仅用于回看 |
 | 用户摄像头 | v1 不启用，只显示麦克风音量 |
 | 头像方案 | SVG + RN `Animated`，不引入 reanimated/lottie |
 | 视觉风格 | 复用现有主题 token 与水墨线条母题，不引入新设计体系、不加图标库 |

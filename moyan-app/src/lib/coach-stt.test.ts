@@ -21,24 +21,31 @@ function fakeModule() {
 test('starts recognition with the required native options', async () => {
   const fake = fakeModule();
   const adapter = createSttAdapter(fake.module);
-  await adapter.start('en-US', {
-    onInterim: () => {},
-    onFinal: () => {},
-    onVolume: () => {},
-    onError: () => {},
-    onEnd: () => {},
-  });
+  await adapter.start(
+    'en-US',
+    {
+      onInterim: () => {},
+      onFinal: () => {},
+      onVolume: () => {},
+      onError: () => {},
+      onEnd: () => {},
+    },
+    ['API', 'rollback']
+  );
   assert.deepEqual(fake.options[0], {
     lang: 'en-US',
     interimResults: true,
     continuous: false,
     addsPunctuation: true,
     requiresOnDeviceRecognition: false,
+    maxAlternatives: 1,
+    contextualStrings: ['API', 'rollback'],
+    iosTaskHint: 'dictation',
     volumeChangeEventOptions: { enabled: true, intervalMillis: 200 },
     iosCategory: {
       category: 'playAndRecord',
       categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
-      mode: 'measurement',
+      mode: 'voiceChat',
     },
     recordingOptions: { persist: false },
   });
@@ -62,11 +69,11 @@ test('forwards interim, final and volume events', async () => {
     isFinal: false,
     results: [{ transcript: 'hello' }],
   });
+  fake.listeners.get('volumechange')?.({ value: 4.5 });
   fake.listeners.get('result')?.({
     isFinal: true,
     results: [{ transcript: 'hello world' }],
   });
-  fake.listeners.get('volumechange')?.({ value: 4.5 });
 
   assert.deepEqual(interim, ['hello']);
   assert.deepEqual(final, ['hello world']);
@@ -92,6 +99,54 @@ test('reports permission denial without starting', async () => {
     /permission-denied/
   );
   assert.equal(fake.options.length, 0);
+});
+
+test('final result removes native listeners and prevents a late end callback', async () => {
+  const fake = fakeModule();
+  const finals: string[] = [];
+  const ends: string[] = [];
+  const adapter = createSttAdapter(fake.module);
+  await adapter.start('en-US', {
+    onInterim: () => {},
+    onFinal: (text) => finals.push(text),
+    onVolume: () => {},
+    onError: () => {},
+    onEnd: () => ends.push('end'),
+  });
+
+  const lateEnd = fake.listeners.get('end');
+  fake.listeners.get('result')?.({
+    isFinal: true,
+    results: [{ transcript: 'hello world' }],
+  });
+  lateEnd?.({});
+
+  assert.deepEqual(finals, ['hello world']);
+  assert.equal(fake.listeners.size, 0);
+  assert.deepEqual(ends, []);
+});
+
+test('error removes native listeners and aborts the recognition session', async () => {
+  const fake = fakeModule();
+  let aborted = 0;
+  fake.module.abort = () => {
+    aborted += 1;
+  };
+  const errors: string[] = [];
+  const adapter = createSttAdapter(fake.module);
+  await adapter.start('en-US', {
+    onInterim: () => {},
+    onFinal: () => {},
+    onVolume: () => {},
+    onError: (message) => errors.push(message),
+    onEnd: () => {},
+  });
+
+  fake.listeners.get('error')?.({ message: 'native failure', error: 'native' });
+
+  assert.deepEqual(errors, ['native failure']);
+  assert.equal(aborted, 1);
+  assert.equal(fake.listeners.size, 0);
 });
 
 test('maps UI and Chinese-accent locales to supported STT locales', () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CoachFeedback } from '../../lib/coach-types';
 import { useI18n } from '../../lib/i18n';
@@ -60,13 +60,8 @@ export function FeedbackBody({
         </View>
       ) : null}
 
-      {first || natural || feedback.expressions.length > 0 ? (
+      {natural || feedback.expressions.length > 0 ? (
         <View style={styles.chips}>
-          {first ? (
-            <Text style={[styles.chip, { backgroundColor: c.inputBg, color: c.inkLight }]}>
-              {first.original} → {first.corrected}
-            </Text>
-          ) : null}
           {natural ? (
             <Pressable
               onPress={() => onSpeak(natural)}
@@ -128,13 +123,19 @@ function FeedbackPreview({ feedback }: { feedback: CoachFeedback }) {
 export function InlineFeedback({
   feedback,
   onSpeak,
+  defaultOpen = true,
 }: {
   feedback: CoachFeedback;
   onSpeak: (text: string) => void;
+  defaultOpen?: boolean;
 }) {
   const { theme } = useTheme();
   const c = theme.colors;
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    setOpen(defaultOpen);
+  }, [defaultOpen]);
 
   return (
     <View style={[styles.section, { borderTopColor: c.border }]}>

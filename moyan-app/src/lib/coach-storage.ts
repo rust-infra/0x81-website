@@ -2,6 +2,7 @@ import type {
   CoachHistoryRecord,
   CoachPrefs,
   CoachScenario,
+  CoachSessionDraft,
   InterviewProfileRecord,
 } from './coach-types';
 
@@ -16,6 +17,8 @@ const KEYS = {
   history: 'coach_history_v1',
   profiles: 'coach_interview_profiles_v1',
   prefs: 'coach_prefs_v1',
+  /** 进行中的会话草稿：只有一份（同一时刻只在一个场景里练）。 */
+  draft: 'coach_session_draft_v1',
 } as const;
 
 export const DEFAULT_COACH_PREFS: CoachPrefs = {
@@ -47,6 +50,17 @@ async function writeJson<T>(
 }
 
 export function createCoachStorage(store: KeyValueStore) {
+  let draftMutationTail: Promise<void> = Promise.resolve();
+
+  function enqueueDraftMutation<T>(task: () => Promise<T>): Promise<T> {
+    const result = draftMutationTail.then(task, task);
+    draftMutationTail = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
+
   return {
     async loadCustomScenarios(): Promise<CoachScenario[]> {
       const value = await readJson<unknown>(store, KEYS.scenarios, []);
@@ -121,6 +135,21 @@ export function createCoachStorage(store: KeyValueStore) {
     async saveCoachPrefs(prefs: CoachPrefs): Promise<void> {
       await writeJson(store, KEYS.prefs, prefs);
     },
+
+    /** 进行中的会话草稿；没有或已损坏时返回 null。 */
+    async loadSessionDraft(): Promise<CoachSessionDraft | null> {
+      await draftMutationTail;
+      const value = await readJson<CoachSessionDraft | null>(store, KEYS.draft, null);
+      return value && typeof value === 'object' ? value : null;
+    },
+
+    saveSessionDraft(draft: CoachSessionDraft): Promise<void> {
+      return enqueueDraftMutation(() => writeJson(store, KEYS.draft, draft));
+    },
+
+    clearSessionDraft(): Promise<void> {
+      return enqueueDraftMutation(() => store.removeItem(KEYS.draft));
+    },
   };
 }
 
@@ -131,8 +160,13 @@ async function defaultStore(): Promise<KeyValueStore> {
   return AsyncStorage as unknown as KeyValueStore;
 }
 
+let defaultStoragePromise: Promise<ReturnType<typeof createCoachStorage>> | null = null;
+
 async function defaultStorage() {
-  return createCoachStorage(await defaultStore());
+  if (!defaultStoragePromise) {
+    defaultStoragePromise = defaultStore().then((store) => createCoachStorage(store));
+  }
+  return defaultStoragePromise;
 }
 
 export const loadCustomScenarios = async () =>
@@ -158,3 +192,8 @@ export const deleteInterviewProfile = async (id: string) =>
 export const loadCoachPrefs = async () => (await defaultStorage()).loadCoachPrefs();
 export const saveCoachPrefs = async (prefs: CoachPrefs) =>
   (await defaultStorage()).saveCoachPrefs(prefs);
+export const loadSessionDraft = async () => (await defaultStorage()).loadSessionDraft();
+export const saveSessionDraft = async (draft: CoachSessionDraft) =>
+  (await defaultStorage()).saveSessionDraft(draft);
+export const clearSessionDraft = async () =>
+  (await defaultStorage()).clearSessionDraft();

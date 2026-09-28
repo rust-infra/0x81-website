@@ -93,3 +93,72 @@ test('corrupt JSON falls back without throwing', async () => {
   const storage = createCoachStorage(store);
   assert.deepEqual(await storage.loadCustomScenarios(), []);
 });
+
+test('session draft round-trips and is cleared when the session ends', async () => {
+  const storage = createCoachStorage(memoryStore());
+  assert.equal(await storage.loadSessionDraft(), null);
+
+  await storage.saveSessionDraft({
+    scenarioId: 'standup_update',
+    history: [
+      { role: 'coach', content: 'Morning!', nextLines: [{ en: 'Any blockers?', zh: '有卡点吗？' }] },
+      { role: 'user', content: 'It is on track.', id: 'turn_1' },
+    ],
+    turnIndex: 1,
+    mode: 'feedback',
+    startedAt: 1_000,
+    savedAt: 5_000,
+  });
+
+  const loaded = await storage.loadSessionDraft();
+  assert.equal(loaded?.scenarioId, 'standup_update');
+  assert.equal(loaded?.history.length, 2);
+  // 仅本地字段要跟着草稿一起留存，恢复后气泡/纠错/推荐语才能原样回来。
+  assert.equal((loaded?.history[1] as { id?: string })?.id, 'turn_1');
+  assert.equal(loaded?.history[0]?.nextLines?.[0]?.en, 'Any blockers?');
+
+  await storage.clearSessionDraft();
+  assert.equal(await storage.loadSessionDraft(), null);
+});
+
+test('a corrupt session draft reads as null instead of breaking restore', async () => {
+  const store = memoryStore();
+  await store.setItem('coach_session_draft_v1', '{broken');
+  const storage = createCoachStorage(store);
+  assert.equal(await storage.loadSessionDraft(), null);
+});
+
+test('session draft clears are serialized after pending saves', async () => {
+  const events: string[] = [];
+  let releaseSave: (() => void) | undefined;
+  const store = {
+    getItem: async () => null,
+    setItem: async (_key: string, _value: string) => {
+      events.push('save:start');
+      await new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      events.push('save:end');
+    },
+    removeItem: async () => {
+      events.push('clear');
+    },
+  };
+  const storage = createCoachStorage(store);
+
+  const save = storage.saveSessionDraft({
+    scenarioId: 'standup_update',
+    history: [{ role: 'user', content: 'hello' }],
+    turnIndex: 1,
+    mode: 'feedback',
+    startedAt: 1,
+    savedAt: 2,
+  });
+  await Promise.resolve();
+  const clear = storage.clearSessionDraft();
+
+  assert.deepEqual(events, ['save:start']);
+  releaseSave?.();
+  await Promise.all([save, clear]);
+  assert.deepEqual(events, ['save:start', 'save:end', 'clear']);
+});

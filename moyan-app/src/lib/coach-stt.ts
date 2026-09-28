@@ -56,18 +56,31 @@ export function createSttAdapter(module: SpeechModuleLike) {
       }
     },
 
-    async start(locale: string, callbacks: SttCallbacks): Promise<SttSession> {
+    async start(
+      locale: string,
+      callbacks: SttCallbacks,
+      contextualStrings: string[] = []
+    ): Promise<SttSession> {
       const permission = await this.requestPermissions();
       if (!permission.granted) {
         throw new Error(permission.reason === 'denied' ? 'permission-denied' : 'permission-restricted');
       }
+
+      let cleaned = false;
+      const cleanup = () => subscriptions.forEach((subscription) => subscription.remove());
+      const finish = (callback: () => void) => {
+        if (cleaned) return;
+        cleaned = true;
+        cleanup();
+        callback();
+      };
 
       const subscriptions: Subscription[] = [
         module.addListener('result', (raw) => {
           const event = raw as ExpoSpeechRecognitionResultEvent;
           const transcript = event.results[0]?.transcript ?? '';
           if (!transcript) return;
-          if (event.isFinal) callbacks.onFinal(transcript.trim());
+          if (event.isFinal) finish(() => callbacks.onFinal(transcript.trim()));
           else callbacks.onInterim(transcript.trim());
         }),
         module.addListener('volumechange', (raw) => {
@@ -76,35 +89,45 @@ export function createSttAdapter(module: SpeechModuleLike) {
         }),
         module.addListener('error', (raw) => {
           const event = raw as ExpoSpeechRecognitionErrorEvent;
-          callbacks.onError(event.message || event.error);
+          finish(() => {
+            module.abort();
+            callbacks.onError(event.message || event.error);
+          });
         }),
-        module.addListener('end', () => callbacks.onEnd()),
+        module.addListener('end', () => finish(() => callbacks.onEnd())),
       ];
-
-      const cleanup = () => subscriptions.forEach((subscription) => subscription.remove());
       module.start({
         lang: locale,
         interimResults: true,
         continuous: false,
         addsPunctuation: true,
         requiresOnDeviceRecognition: false,
+        maxAlternatives: 1,
+        contextualStrings: Array.from(
+          new Set(contextualStrings.map((value) => value.trim()).filter(Boolean))
+        ).slice(0, 20),
+        iosTaskHint: 'dictation',
         volumeChangeEventOptions: { enabled: true, intervalMillis: 200 },
         iosCategory: {
           category: 'playAndRecord',
           categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
-          mode: 'measurement',
+          mode: 'voiceChat',
         },
         recordingOptions: { persist: false },
       });
 
       return {
         stop: () => {
-          module.stop();
+          if (cleaned) return;
+          cleaned = true;
           cleanup();
+          module.stop();
         },
         abort: () => {
-          module.abort();
+          if (cleaned) return;
+          cleaned = true;
           cleanup();
+          module.abort();
         },
       };
     },
@@ -118,5 +141,8 @@ async function defaultAdapter() {
 
 export const requestMicPermissions = async () =>
   (await defaultAdapter()).requestPermissions();
-export const startListening = async (locale: string, callbacks: SttCallbacks) =>
-  (await defaultAdapter()).start(locale, callbacks);
+export const startListening = async (
+  locale: string,
+  callbacks: SttCallbacks,
+  contextualStrings: string[] = []
+) => (await defaultAdapter()).start(locale, callbacks, contextualStrings);

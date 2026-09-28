@@ -46,19 +46,23 @@ test('coach api uses the exact quota and turn paths', async () => {
   const quota = await api.getQuota();
   assert.equal(quota.remaining, 96);
 
+  const controller = new AbortController();
   await api.turn({
     scenario,
     scenario_id: 'standup_update',
     history: [],
     user_text: 'Hello',
+    completed_turns: 2,
     coach_mode: 'feedback',
     locale: 'zh-CN',
-  });
+  }, controller.signal);
 
   assert.equal(calls[0]?.path, '/api/coach/quota');
   assert.equal(calls[1]?.path, '/api/coach/turn');
   assert.equal(calls[1]?.options?.method, 'POST');
   assert.deepEqual(JSON.parse(String(calls[1]?.options?.body)).user_text, 'Hello');
+  assert.equal(JSON.parse(String(calls[1]?.options?.body)).completed_turns, 2);
+  assert.equal(calls[1]?.options?.signal, controller.signal);
 
   const profile = await api.profile({ kind: 'resume', text: 'raw resume' });
   assert.equal(profile.profile, 'compact profile');

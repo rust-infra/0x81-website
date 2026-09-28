@@ -279,6 +279,31 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn coach_turn_rejects_after_turn_limit_before_llm() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let mut payload = coach_turn_payload("One more turn");
+        payload["completed_turns"] = serde_json::json!(6);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
     /// Explicit real-upstream smoke test. Run with:
     /// `cargo test real_llm_contract_smoke -- --ignored --nocapture`
     #[tokio::test]
@@ -333,6 +358,7 @@ mod tests {
                     history: vec![],
                     user_text:
                         "We finish the API yesterday and today do the UI.".into(),
+                    completed_turns: None,
                     coach_mode: crate::models::CoachMode::Feedback,
                     locale: Some("zh-CN".into()),
                     interview: None,

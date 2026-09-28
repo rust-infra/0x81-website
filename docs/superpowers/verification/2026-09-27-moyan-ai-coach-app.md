@@ -67,7 +67,7 @@ Branch: `feat/ai-agent`
 - 相册权限授予后，从系统相册选择真实图片完成 Vision OCR，识别结果回填为 `HELLO`；在材料确认页编辑为 `HELLO 123` 后输入长度同步更新为 `9 / 20000`，生成档案按钮可用。
 - iOS 深色主题切换成功，陪练入口与设置页颜色正常。
 
-尚未覆盖：真实音频输入内容质量、静音开关、蓝牙耳机、切后台、Android `content://` 文件 URI，以及全部 8 套主题逐页截图。
+尚未覆盖：真实音频输入内容质量、静音开关、蓝牙耳机、切后台、Android `content://` 文件 URI，以及全部 6 套主题逐页截图。
 
 ### 页面 UI 还原度复核：已执行
 
@@ -164,6 +164,23 @@ cargo test real_llm_contract_smoke -- --ignored --nocapture
 
 真实模型的上游契约、JSON 解析与 Vision OCR 已全部闭环。
 
+### 会话健壮性补丁：已执行
+
+- 请求改为同步 single-flight，支持 `AbortController`；停止、开麦或退出会取消当前请求，晚到响应不会再写入聊天记录或重复扣额度。
+- 发送前统一裁剪 `history + user_text + reply reserve`，修复长会话达到 12,000 字符后永久 400 的问题。
+- 草稿增加 `pendingText`：App 在 AI 回复前退出时，恢复后显示“上一轮未完成”并允许重试或改用键盘，不再形成连续两条用户消息。
+- 草稿保存与清除改为串行队列，结束会话会等待清除完成后再导航，避免旧草稿复活。
+- STT 在 final/error 时主动移除订阅；开麦启动增加同步锁和启动序号，避免快速点击产生多个识别会话。
+- 服务端按 `completed_turns` 硬校验 `max_turns`；达到上限后 App 禁止继续发送并只允许查看总结。
+- 每条预置开场白现在携带自己的推荐回答；服务端和 App 双层去除 `next_lines` 与 reply/feedback 的重复内容。
+- 会话顶部额度移入教练信息条，旧 feedback 自动折叠；思考动画支持 Reduce Motion。
+- Coach 首页只有首次进入显示全屏 loader；从会话页返回时改为静默刷新，消除返回时的闪动。
+- 语音识别增加系统识别 / Google Cloud STT / Gemini 三引擎；Google Cloud 使用用户自己的服务账号 JSON 换短期 OAuth token，Gemini 使用用户 API Key，凭据均不经过后端。
+- 系统识别改用用户口音偏好而非 AI persona locale，并增加技术词 `contextualStrings`、`iosTaskHint: dictation` 与 voiceChat 音频模式。
+- 主题目录从 8 套缩减为 6 套，移除竹青和朱砂；旧设备若保存了已删除主题会自动回退宣纸白。
+
+验证：App `npm test` 75 passed；`npx tsc --noEmit`、`npx expo export --platform web` 通过；后端 `cargo test` 169 passed、1 ignored。
+
 ## 结论
 
-所有代码、原生 config plugin、Web 构建、后端测试、真实 LLM 上游验收和 iOS 模拟器主链路走查均已完成。真实相册图片 OCR 与识别后编辑也已闭环。剩余仅是当前没有 Android/真机音频路由环境可覆盖的物理设备项：静音开关、蓝牙路由、切后台/打断、Android `content://` 文件流，以及 8 套主题逐页截图。
+所有代码、原生 config plugin、Web 构建、后端测试、真实 LLM 上游验收和 iOS 模拟器主链路走查均已完成。真实相册图片 OCR 与识别后编辑也已闭环。剩余仅是当前没有 Android/真机音频路由环境可覆盖的物理设备项：静音开关、蓝牙路由、切后台/打断、Android `content://` 文件流，以及 6 套主题逐页截图。

@@ -46,6 +46,9 @@ pub struct CoachScenario {
     /// 开场白的展示用中文对照；朗读始终用 `opening_line`。
     #[serde(default)]
     pub opening_line_zh: String,
+    /// 开场白对应的首轮推荐表达，场景加载后立即展示，不必等待第一轮 AI 响应。
+    #[serde(default)]
+    pub opening_next_lines: Vec<CoachExpression>,
     #[serde(default)]
     pub focus_points: Vec<String>,
     pub difficulty: String,
@@ -186,6 +189,9 @@ pub struct CoachTurnRequest {
     #[serde(default)]
     pub history: Vec<CoachTurn>,
     pub user_text: String,
+    /// Number of completed user turns already persisted by the client draft.
+    #[serde(default)]
+    pub completed_turns: Option<u32>,
     #[serde(default)]
     pub coach_mode: CoachMode,
     #[serde(default)]
@@ -322,6 +328,7 @@ mod tests {
             setting: "meeting".into(),
             opening_line: "Morning! How's the feature going?".into(),
             opening_line_zh: "早！功能做得怎么样了？".into(),
+            opening_next_lines: vec![],
             focus_points: vec!["progress".into(), "blocker".into()],
             difficulty: "core".into(),
             max_turns: 10,
