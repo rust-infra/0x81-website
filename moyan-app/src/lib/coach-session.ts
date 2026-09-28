@@ -1,4 +1,21 @@
-import type { CoachTurn } from './coach-types';
+import type { CoachFeedback, CoachTurn } from './coach-types';
+
+/**
+ * A transcript turn. `feedback` is local-only: it is attached to the user turn
+ * it corrects so the transcript can show it beside that message, and
+ * `wireHistory` strips it back off before anything is sent upstream or handed
+ * to the summary screen.
+ */
+export type SessionTurn = CoachTurn & {
+  feedback?: CoachFeedback | null;
+  /** 该轮的中文翻译（目前只有教练的回复有）。 */
+  contentZh?: string;
+};
+
+/** The upstream payload is `{ role, content }` only. */
+export function wireHistory(history: SessionTurn[]): CoachTurn[] {
+  return history.map(({ role, content }) => ({ role, content }));
+}
 
 export type CoachSessionState =
   | 'idle'
@@ -58,14 +75,24 @@ export function sessionReducer(
 const MAX_HISTORY_TURNS = 40;
 const MAX_HISTORY_CHARS = 12_000;
 
-export function appendHistory(
-  history: CoachTurn[],
-  turn: CoachTurn,
+/**
+ * Append a turn, then trim from the front to stay within the caps. The newest
+ * turn is always kept.
+ *
+ * Generic so a caller can hang local-only fields off a turn — the session page
+ * stores each turn's feedback on the user turn it corrects, so the transcript
+ * can show it next to that message. Those fields ride along with the turn;
+ * the payload sent upstream is projected back to `{ role, content }` by the
+ * caller.
+ */
+export function appendHistory<T extends CoachTurn>(
+  history: T[],
+  turn: T,
   maxTurns = MAX_HISTORY_TURNS,
   maxChars = MAX_HISTORY_CHARS
-): CoachTurn[] {
+): T[] {
   const candidates = [...history, turn].slice(-maxTurns);
-  const kept: CoachTurn[] = [];
+  const kept: T[] = [];
   let total = 0;
   for (let index = candidates.length - 1; index >= 0; index -= 1) {
     const candidate = candidates[index];
