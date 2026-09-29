@@ -392,8 +392,32 @@ export default function CoachSessionScreen() {
   const sttStartSeqRef = useRef(0);
   const sttStartingRef = useRef(false);
   const cloudRecordingRef = useRef(false);
+  /** 录音器已经 prepare 过（在录，或录完待停止）—— 决定 stop 到底该不该调。 */
+  const recorderArmedRef = useRef(false);
   const mountedRef = useRef(true);
   const audioRecorder = useAudioRecorder(CLOUD_RECORDING_OPTIONS);
+
+  /**
+   * 停止录音的唯一入口。
+   *
+   * expo-audio 的 `stop()` 在「没在录」或「shared object 已经随卸载释放」时会 reject
+   * （`Cannot use shared object that was already released`）。页面里原本有 4 处
+   * fire-and-forget 的 stop（卸载、退出、放弃、取消启动），它们都不做状态判断，
+   * 于是日志里持续刷未捕获的 promise rejection。收成一个幂等入口：
+   * 只在确实 prepare 过时调一次，并吞掉「已经无法停止」。
+   */
+  const stopRecording = useCallback(async (): Promise<boolean> => {
+    if (!recorderArmedRef.current) return false;
+    recorderArmedRef.current = false;
+    cloudRecordingRef.current = false;
+    try {
+      await audioRecorder.stop();
+      return true;
+    } catch {
+      // 录音对象可能已经随卸载释放；此时没有可停止的会话。
+      return false;
+    }
+  }, [audioRecorder]);
 
   const scenarioLoadIdRef = useRef<string | undefined>(undefined);
   /** 草稿读取完成前不要落盘，否则会用空历史覆盖掉还没恢复的草稿。 */
@@ -509,12 +533,11 @@ export default function CoachSessionScreen() {
   useEffect(
     () => () => {
       turnGate.cancel();
-      cloudRecordingRef.current = false;
-      void audioRecorder.stop();
+      void stopRecording();
       sttRef.current?.abort();
       void stopSpeaking();
     },
-    [audioRecorder, turnGate]
+    [stopRecording, turnGate]
   );
 
   useEffect(() => {
@@ -710,8 +733,9 @@ export default function CoachSessionScreen() {
         interruptionMode: 'doNotMix',
       });
       await audioRecorder.prepareToRecordAsync(CLOUD_RECORDING_OPTIONS);
+      recorderArmedRef.current = true;
       if (!mountedRef.current || startSeq !== sttStartSeqRef.current) {
-        await audioRecorder.stop();
+        await stopRecording();
         return;
       }
       audioRecorder.record();
@@ -731,11 +755,12 @@ export default function CoachSessionScreen() {
   const stopCloudRecording = async (transcribe: boolean) => {
     if (!scenario || !cloudRecordingRef.current) return;
     const hints = scenarioSttHints(scenario);
+    // 立刻置位：并发进来的第二次调用会在上面那行被判掉。
     cloudRecordingRef.current = false;
     const requestSeq = sttStartSeqRef.current;
     setTranscribing(transcribe);
     try {
-      await audioRecorder.stop();
+      await stopRecording();
       await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: true,
@@ -873,8 +898,7 @@ export default function CoachSessionScreen() {
     turnGate.cancel();
     sttStartSeqRef.current += 1;
     sttStartingRef.current = false;
-    cloudRecordingRef.current = false;
-    void audioRecorder.stop();
+    void stopRecording();
     void stopSpeaking();
     sttRef.current?.abort();
     sttRef.current = null;
@@ -926,8 +950,7 @@ export default function CoachSessionScreen() {
       void stopSpeaking();
       sttStartSeqRef.current += 1;
       sttStartingRef.current = false;
-      cloudRecordingRef.current = false;
-      void audioRecorder.stop();
+      void stopRecording();
       sttRef.current?.abort();
       sttRef.current = null;
       setStartingMic(false);
