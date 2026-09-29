@@ -4,9 +4,7 @@ export type ThemeName =
   | 'xuanzhi'
   | 'shenyemo'
   | 'dailan'
-  | 'fense'
-  | 'ios'
-  | 'ios-dark';
+  | 'fense';
 
 export interface ThemeColors {
   paper: string;
@@ -165,68 +163,6 @@ export const THEMES: Theme[] = [
       divider: '#E8D8D8',
       hoverBg: '#F0E4E0',
       inputBg: '#FAF2F0',
-    },
-  },
-  {
-    name: 'ios',
-    label: 'iOS 浅色',
-    description: '系统蓝，简洁明快',
-    preview: '#F2F2F7',
-    colors: {
-      paper: '#F2F2F7',
-      paperGradient: '#F2F2F7',
-      card: '#FFFFFF',
-      ink: '#000000',
-      inkLight: '#3C3C43',
-      inkMuted: '#747479',
-      accent: '#007AFF',
-      accentLight: '#007AFF18',
-      border: '#E5E5EA',
-      navBg: '#F9F9F9',
-      navText: '#3C3C43',
-      studyBg: '#F2F2F7',
-      studyCard: '#FFFFFF',
-      studyText: '#000000',
-      studyMuted: 'rgba(0, 0, 0, 0.55)',
-      progressBar: '#007AFF',
-      tagBg: 'rgba(0, 122, 255, 0.08)',
-      tagText: '#3C3C43',
-      buttonBg: '#007AFF',
-      buttonText: '#FFFFFF',
-      divider: '#E5E5EA',
-      hoverBg: '#E9E9EB',
-      inputBg: '#FFFFFF',
-    },
-  },
-  {
-    name: 'ios-dark',
-    label: 'iOS 深色',
-    description: 'iOS 深色模式，护眼自然',
-    preview: '#000000',
-    colors: {
-      paper: '#000000',
-      paperGradient: '#000000',
-      card: '#1C1C1E',
-      ink: '#FFFFFF',
-      inkLight: '#EBEBF5',
-      inkMuted: '#98989D',
-      accent: '#0A84FF',
-      accentLight: '#0A84FF26',
-      border: '#38383A',
-      navBg: '#1C1C1E',
-      navText: '#EBEBF5',
-      studyBg: '#000000',
-      studyCard: '#1C1C1E',
-      studyText: '#FFFFFF',
-      studyMuted: 'rgba(255, 255, 255, 0.55)',
-      progressBar: '#0A84FF',
-      tagBg: 'rgba(10, 132, 255, 0.12)',
-      tagText: '#EBEBF5',
-      buttonBg: '#0A84FF',
-      buttonText: '#FFFFFF',
-      divider: '#38383A',
-      hoverBg: '#2C2C2E',
-      inputBg: '#1C1C1E',
     },
   },
 ];
