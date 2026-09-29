@@ -307,9 +307,12 @@ return JSON only, in this exact shape:\n\
 \"tone\":\"friendly|neutral|direct|challenging\"},\
 \"setting\":\"meeting|one_on_one|coffee_chat|phone_call\",\"opening_line\":\"...\",\
 \"opening_line_zh\":\"...\",\
+\"opening_next_lines\":[{\"en\":\"...\",\"zh\":\"...\"}],\
 \"focus_points\":[\"...\"],\"difficulty\":\"easy|core|challenge\",\"max_turns\":6}\n\
 Rules: title and description and focus_points in Simplified Chinese; opening_line and persona.role in English; \
 opening_line_zh is the Simplified Chinese translation of opening_line (natural spoken Chinese, not a literal gloss); \
+opening_next_lines is exactly 2 natural first-person English replies the learner could open the conversation with, \
+each one answering the opening_line directly (zh is its Simplified Chinese translation); \
 focus_points at most 5, each under 40 characters; max_turns between 3 and 20.";
 
 impl CoachService {
@@ -331,7 +334,7 @@ impl CoachService {
         llm_client::ensure_configured(&settings)?;
         self.quota.check_and_consume(user_id).await?;
 
-        let raw = llm_client::chat_json(&settings, DRAFT_SYSTEM_PROMPT, description, None, Some(900))
+        let raw = llm_client::chat_json(&settings, DRAFT_SYSTEM_PROMPT, description, None, Some(1100))
             .await
             .map_err(|_| {
                 AppError::ServiceUnavailable("AI scenario drafting is temporarily unavailable".into())
@@ -351,10 +354,44 @@ struct LlmDraftPayload {
     opening_line: String,
     #[serde(default)]
     opening_line_zh: Option<String>,
+    /// 开场白配套的「可以怎么说」。模型漏掉时留空（老格式仍然可解析）。
+    #[serde(default)]
+    opening_next_lines: Vec<DraftExpression>,
     #[serde(default)]
     focus_points: Vec<String>,
     difficulty: String,
     max_turns: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct DraftExpression {
+    #[serde(default)]
+    en: String,
+    #[serde(default)]
+    zh: String,
+}
+
+/// 推荐语要能塞进聊天里的一个小卡片，不能是一段话；超长的直接丢掉。
+const MAX_OPENING_SUGGESTION_CHARS: usize = 160;
+/// 与前端 `filterNextLines` 的上限一致：只展示两条。
+const MAX_OPENING_SUGGESTIONS: usize = 2;
+
+/// 清洗开场推荐语：丢掉空行与超长行，最多留两条。
+fn sanitize_opening_next_lines(lines: Vec<DraftExpression>) -> Vec<CoachExpression> {
+    lines
+        .into_iter()
+        .filter_map(|line| {
+            let en = line.en.trim().to_string();
+            if en.is_empty() || en.chars().count() > MAX_OPENING_SUGGESTION_CHARS {
+                return None;
+            }
+            Some(CoachExpression {
+                en,
+                zh: line.zh.trim().to_string(),
+            })
+        })
+        .take(MAX_OPENING_SUGGESTIONS)
+        .collect()
 }
 
 pub fn parse_draft_payload(raw: &str, id: &str) -> Result<CoachScenario, AppError> {
@@ -372,8 +409,9 @@ pub fn parse_draft_payload(raw: &str, id: &str) -> Result<CoachScenario, AppErro
         opening_line: payload.opening_line,
         // 自定义场景的开场白同样带中文对照；模型漏掉时留空，前端就不显示那一行
         opening_line_zh: payload.opening_line_zh.unwrap_or_default().trim().to_string(),
-        // 自定义场景没有预置的配套推荐，首轮推荐仍由 AI 在第一次回复里返回
-        opening_next_lines: vec![],
+        // 开场白配套的推荐语跟这篇草稿一起生成：用户的第一句最容易卡住，
+        // 不能等到「第一次 AI 回复」才给提示 —— 那要等用户先开口。
+        opening_next_lines: sanitize_opening_next_lines(payload.opening_next_lines),
         focus_points: payload.focus_points,
         difficulty: payload.difficulty,
         max_turns: payload.max_turns,
@@ -790,6 +828,46 @@ mod tests {
         let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
         let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
         assert_eq!(scenario.opening_line_zh, "");
+    }
+
+    /// 开场推荐语：空行丢掉、最多留两条（与前端 `filterNextLines` 的上限一致）。
+    #[test]
+    fn draft_keeps_opening_suggestions_and_caps_them() {
+        let raw = r#"{"category":"engineering","title":"跨时区交接","description":"和澳洲同事交接任务","persona":{"name":"Emma","role":"Teammate","locale":"en-AU","tone":"friendly"},"setting":"meeting","opening_line":"Hey, got a minute to hand over?","opening_line_zh":"嘿，有时间交接一下吗？","opening_next_lines":[{"en":"Sure, let's start with the current state.","zh":"好，我们先说当前状态。"},{"en":"   ","zh":"x"},{"en":"I'm mid-migration, here's where things stand.","zh":"我在迁移中，现状是这样。"},{"en":"third","zh":"三"}],"focus_points":["说清状态"],"difficulty":"core","max_turns":10}"#;
+        let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
+        let lines: Vec<&str> = scenario
+            .opening_next_lines
+            .iter()
+            .map(|line| line.en.as_str())
+            .collect();
+        assert_eq!(
+            lines,
+            vec![
+                "Sure, let's start with the current state.",
+                "I'm mid-migration, here's where things stand."
+            ]
+        );
+        assert_eq!(scenario.opening_next_lines[0].zh, "好，我们先说当前状态。");
+    }
+
+    /// 模型漏掉推荐语（或旧格式）不能解析失败，只是首句没有提示。
+    #[test]
+    fn draft_without_opening_suggestions_parses_as_empty() {
+        let raw = r#"{"category":"daily","title":"站会","description":"同步进度","persona":{"name":"Alex","role":"Tech Lead","locale":"en-US","tone":"friendly"},"setting":"meeting","opening_line":"Morning!","focus_points":[],"difficulty":"easy","max_turns":6}"#;
+        let scenario = parse_draft_payload(raw, "custom_abc").unwrap();
+        assert!(scenario.opening_next_lines.is_empty());
+    }
+
+    /// 推荐语在 UI 里是一张小卡片，不是一段话 —— 超长行直接丢掉。
+    #[test]
+    fn draft_drops_overlong_opening_suggestions() {
+        let long = "x".repeat(200);
+        let raw = format!(
+            r#"{{"category":"daily","title":"站会","description":"同步进度","persona":{{"name":"Alex","role":"Tech Lead","locale":"en-US","tone":"friendly"}},"setting":"meeting","opening_line":"Morning!","opening_next_lines":[{{"en":"{long}","zh":"中"}},{{"en":"Short one.","zh":"短的"}}],"focus_points":[],"difficulty":"easy","max_turns":6}}"#
+        );
+        let scenario = parse_draft_payload(&raw, "custom_abc").unwrap();
+        assert_eq!(scenario.opening_next_lines.len(), 1);
+        assert_eq!(scenario.opening_next_lines[0].en, "Short one.");
     }
 
     #[test]

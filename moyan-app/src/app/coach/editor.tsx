@@ -284,8 +284,14 @@ export default function CoachEditorScreen() {
           label={t('coachOpeningLine')}
           value={scenario.opening_line}
           onChange={(value) =>
-            // 英文改了就丢掉旧的中文对照，免得显示一句对不上的翻译
-            apply({ ...scenario, opening_line: value, opening_line_zh: undefined })
+            // 英文改了就丢掉旧的中文对照与推荐语 —— 它们是为原来那句生成的，
+            // 留着会显示出对不上的翻译和建议。
+            apply({
+              ...scenario,
+              opening_line: value,
+              opening_line_zh: undefined,
+              opening_next_lines: undefined,
+            })
           }
           invalid={!!errors.opening_line}
           multiline
