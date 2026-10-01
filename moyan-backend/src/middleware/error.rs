@@ -36,6 +36,17 @@ pub enum AppError {
     NotFound(String),
     Internal(String),
     ServiceUnavailable(String),
+    /// 每日用量用尽：返回 429，并带上 limit / used / resets_at 供 App 展示。
+    QuotaExceeded {
+        limit: u32,
+        used: u32,
+        resets_at: String,
+    },
+    /// Request was valid JSON but cannot be processed with current upstream capability.
+    Unprocessable {
+        reason: &'static str,
+        message: String,
+    },
     ImportFailed(Vec<ImportErrorItem>),
     Repository(RepositoryError),
 }
@@ -47,6 +58,31 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
+            AppError::QuotaExceeded {
+                limit,
+                used,
+                resets_at,
+            } => {
+                let body = Json(json!({
+                    "success": false,
+                    "error": {
+                        "code": 429,
+                        "reason": "coach_quota_exceeded",
+                        "message": "Daily coach quota exceeded",
+                        "limit": limit,
+                        "used": used,
+                        "resets_at": resets_at,
+                    }
+                }));
+                return (StatusCode::TOO_MANY_REQUESTS, body).into_response();
+            }
+            AppError::Unprocessable { reason, message } => {
+                let body = Json(json!({
+                    "success": false,
+                    "error": { "code": 422, "reason": reason, "message": message }
+                }));
+                return (StatusCode::UNPROCESSABLE_ENTITY, body).into_response();
+            }
             AppError::ImportFailed(errors) => {
                 let body = Json(json!({
                     "success": false,

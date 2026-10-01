@@ -18,7 +18,7 @@ mod services;
 
 use crate::middleware::error::AppState;
 use crate::repositories::repository_from_env;
-use crate::routes::{admin, auth, health, podcast, settings, sync, typing, vocabulary};
+use crate::routes::{admin, auth, coach, health, podcast, settings, sync, typing, vocabulary};
 use crate::services::Services;
 
 fn parse_allowed_origins() -> Vec<HeaderValue> {
@@ -70,6 +70,7 @@ fn build_app(state: AppState) -> Router {
         .route("/api/config", get(crate::controllers::podcast::config))
         .nest("/api/type", typing::routes())
         .nest("/api/health", health::routes())
+        .nest("/api/coach", coach::routes())
         .nest("/api/admin", admin::routes())
         .route("/", get(root_handler))
         .layer(Extension(state.clone()))
@@ -238,9 +239,553 @@ mod tests {
         })
     }
 
+    fn coach_turn_payload(user_text: &str) -> serde_json::Value {
+        serde_json::json!({
+            "scenario": {
+                "id": "custom_x", "source": "custom", "category": "daily",
+                "title": "t", "description": "d",
+                "persona": { "name": "A", "role": "R", "locale": "en-US", "tone": "friendly" },
+                "setting": "meeting", "opening_line": "Hi",
+                "focus_points": [], "difficulty": "easy", "max_turns": 6
+            },
+            "history": [],
+            "user_text": user_text,
+            "coach_mode": "feedback"
+        })
+    }
+
+    /// 超过 user_text 上限时必须在调用 LLM 之前就 400（校验先于配额与上游请求）。
+    #[tokio::test]
+    async fn coach_turn_rejects_overlong_user_text_before_llm() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let payload = coach_turn_payload(&"x".repeat(2_001));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn coach_turn_rejects_after_turn_limit_before_llm() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let mut payload = coach_turn_payload("One more turn");
+        payload["completed_turns"] = serde_json::json!(6);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        Ok(())
+    }
+
+    /// Explicit real-upstream smoke test. Run with:
+    /// `cargo test real_llm_contract_smoke -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "requires real LLM credentials"]
+    async fn real_llm_contract_smoke() -> anyhow::Result<()> {
+        // This opt-in test must use the same admin DB the user configured,
+        // not an empty in-memory settings store.
+        let services = Services::new(crate::repositories::repository_from_env().await?);
+        let user_id = "real-llm-smoke-user";
+        let presets = crate::services::coach_scenarios::list_presets("zh-CN");
+        let scenario = presets
+            .iter()
+            .find(|scenario| scenario.id == "standup_update")
+            .expect("standup preset")
+            .clone();
+
+        let settings = services
+            .admin_collect
+            .llm_settings()
+            .await
+            .map_err(|error| anyhow::anyhow!("load LLM settings failed: {error:?}"))?;
+        eprintln!(
+            "real LLM config: configured={} base_host={} model={}",
+            !settings.api_key.trim().is_empty()
+                && !settings.base_url.trim().is_empty()
+                && !settings.model.trim().is_empty(),
+            settings
+                .base_url
+                .split("://")
+                .nth(1)
+                .and_then(|rest| rest.split('/').next())
+                .unwrap_or("(empty)"),
+            settings.model
+        );
+        let _direct = crate::services::llm_client::chat_json(
+            &settings,
+            "Return JSON only: {\"ok\":true}",
+            "Return the JSON object now.",
+            None,
+            Some(64),
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("direct real LLM call failed: {error:?}"))?;
+
+        let turn = services
+            .coach
+            .turn(
+                user_id,
+                crate::models::CoachTurnRequest {
+                    scenario: scenario.clone(),
+                    scenario_id: Some("standup_update".into()),
+                    history: vec![],
+                    user_text:
+                        "We finish the API yesterday and today do the UI.".into(),
+                    completed_turns: None,
+                    coach_mode: crate::models::CoachMode::Feedback,
+                    locale: Some("zh-CN".into()),
+                    interview: None,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real turn failed: {error:?}"))?;
+        assert!(!turn.reply.trim().is_empty());
+        assert!(["neutral", "friendly", "curious", "encouraging", "concerned"]
+            .contains(&turn.mood.as_str()));
+        eprintln!(
+            "real turn ok: reply={} corrections={:?}",
+            turn.reply,
+            turn.feedback
+                .as_ref()
+                .map(|feedback| feedback.corrections.len())
+                .unwrap_or(0)
+        );
+
+        let summary = services
+            .coach
+            .summary(crate::models::CoachSummaryRequest {
+                scenario: scenario.clone(),
+                scenario_id: Some("standup_update".into()),
+                history: vec![
+                    crate::models::CoachTurn {
+                        role: crate::models::CoachRole::Coach,
+                        content: scenario.opening_line.clone(),
+                    },
+                    crate::models::CoachTurn {
+                        role: crate::models::CoachRole::User,
+                        content: "We finish the API yesterday and today do the UI.".into(),
+                    },
+                ],
+                locale: Some("zh-CN".into()),
+                interview: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("real summary failed: {error:?}"))?;
+        assert!(
+            !summary.overall_zh.trim().is_empty() || !summary.overall_en.trim().is_empty()
+        );
+        eprintln!("real summary ok: {}", summary.overall_en);
+
+        let drafted = services
+            .coach
+            .draft_scenario(
+                user_id,
+                crate::models::CoachScenarioDraftRequest {
+                    description: "我想练习线上故障时给美国同事同步进展".into(),
+                    locale: Some("zh-CN".into()),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real draft failed: {error:?}"))?;
+        assert!(drafted.id.starts_with("custom_"));
+        assert!(drafted.opening_line.chars().any(|ch| ch.is_ascii_alphabetic()));
+        assert!(!drafted.opening_line.chars().any(|ch| ('\u{4e00}'..='\u{9fff}').contains(&ch)));
+        eprintln!("real draft ok: {}", drafted.id);
+
+        let profile = services
+            .interview_profile
+            .profile(
+                user_id,
+                crate::models::InterviewProfileRequest {
+                    kind: "resume".into(),
+                    text: "5 years backend engineer. Built a payments gateway, reduced P99 from 800ms to 120ms.".into(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("real profile failed: {error:?}"))?;
+        assert!(!profile.profile.trim().is_empty());
+        eprintln!("real profile ok: chars={}", profile.profile.chars().count());
+
+        // A tiny valid 1x1 PNG. With a non-vision model this must map to 422;
+        // if the configured model supports vision, OCR should return text.
+        let image = crate::services::llm_client::ImagePart {
+            media_type: "image/png".into(),
+            data_base64: "iVBORw0KGgoAAAANSUhEUgAAAMAAAAA4CAAAAACOdqivAAAAeElEQVR42u3YMQ6AIAwF0N7/0hoXB2KJoomUvD9SaHgLEGIrngAAAAAAAFgGEEfaCedYZEnX9jtfTWmaAgAAfA4Y3OLz6l0FAAAAAADAYoD+YyG98AEAAJxCAAAAAAAAAO9+5gar83wtAgAUB1QMAAAAAAAAwJ/ZAeuHviAi6SoNAAAAAElFTkSuQmCC".into(),
+        };
+        match services.interview_ocr.ocr(user_id, vec![image]).await {
+            Ok(text) => {
+                assert!(!text.trim().is_empty());
+                eprintln!("real OCR ok: chars={}", text.chars().count());
+            }
+            Err(crate::middleware::error::AppError::Unprocessable { reason, .. }) => {
+                assert_eq!(reason, "vision_not_supported");
+                eprintln!("real OCR mapping ok: vision_not_supported");
+            }
+            Err(error) => return Err(anyhow::anyhow!("real OCR failed: {error:?}")),
+        }
+
+        Ok(())
+    }
+
+    /// Missing LLM configuration returns 503 before quota is consumed.
+    #[tokio::test]
+    async fn coach_turn_unconfigured_llm_does_not_consume_quota() -> anyhow::Result<()> {
+        let _guard = TEST_ENV_MUTEX.lock().await;
+        let _api = EnvGuard::set("MOYAN_LLM_API_KEY", "");
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(coach_turn_payload("Hello there").to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0);
+        Ok(())
+    }
+
+    /// 配额用尽返回 429，且带上 limit / used / resets_at。
+    #[tokio::test]
+    async fn coach_quota_returns_429_with_details() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        state
+            .services
+            .admin_collect
+            .update_llm_settings(crate::models::UpdateLlmSettingsRequest {
+                base_url: Some("https://api.example.com/v1".into()),
+                api_key: Some("test-key".into()),
+                model: Some("test-model".into()),
+                temperature: None,
+                clear_api_key: false,
+            })
+            .await
+            .expect("configure fake llm for quota test");
+        state
+            .services
+            .coach_settings
+            .update(crate::services::CoachSettings {
+                daily_turn_limit: 1,
+                enabled: true,
+            })
+            .await
+            .expect("set coach quota limit");
+
+        // 先真实消费一次额度，使 used == limit == 1
+        state
+            .services
+            .coach_quota
+            .check_and_consume(&sub)
+            .await
+            .expect("consume one quota unit");
+
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let payload = coach_turn_payload("Hello there");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/turn")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["error"]["reason"], "coach_quota_exceeded");
+        assert_eq!(body["error"]["limit"], 1);
+        assert_eq!(body["error"]["used"], 1);
+        assert!(body["error"]["resets_at"].is_string());
+        Ok(())
+    }
+
+    /// The coach tab needs a read-only quota snapshot before the first turn.
+    #[tokio::test]
+    async fn coach_quota_status_exposes_remaining() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        state
+            .services
+            .coach_settings
+            .update(crate::services::CoachSettings {
+                daily_turn_limit: 2,
+                enabled: true,
+            })
+            .await
+            .expect("set coach quota limit");
+        state
+            .services
+            .coach_quota
+            .check_and_consume(&sub)
+            .await
+            .expect("consume one quota unit");
+        let app = build_app(state);
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/quota")
+                    .header("authorization", bearer)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["limit"], 2);
+        assert_eq!(body["data"]["used"], 1);
+        assert_eq!(body["data"]["remaining"], 1);
+        assert!(body["data"]["resets_at"].is_string());
+        assert_eq!(body["data"]["enabled"], true);
+        assert!(body["data"]["llm_configured"].is_boolean());
+        Ok(())
+    }
+
+    /// 管理端配额设置：需要 X-Admin-Token，默认 100，写完能读回。
+    #[tokio::test]
+    async fn admin_coach_settings_require_token_and_round_trip() -> anyhow::Result<()> {
+        let mut state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        // `check_admin_token` 在 configured 为空时返回 503，所以测试必须显式设置 token
+        state.admin_token = "test-admin-token".to_string();
+        let app = build_app(state);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 100);
+        assert_eq!(body["data"]["enabled"], true);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"daily_turn_limit":250,"enabled":true}"#))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 250);
+
+        // 再读一次，确认真落库
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/admin/settings/coach")
+                    .header("x-admin-token", "test-admin-token")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["daily_turn_limit"], 250);
+
+        Ok(())
+    }
+
+    /// `GET /api/coach/scenarios` 需要 JWT；带合法 token 时按 locale 返回预置场景。
+    /// 这一条替代了计划里的手工 curl 步骤——同样验证路由挂载与鉴权，但可重复执行。
+    #[tokio::test]
+    async fn coach_scenarios_require_auth_and_return_presets() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/scenarios")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/coach/scenarios?locale=en")
+                    .header("authorization", bearer)
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        let items = body["data"].as_array().expect("data is an array");
+        assert_eq!(items.len(), 11);
+        assert_eq!(items[0]["id"], "standup_update");
+        assert_eq!(items[0]["title"], "Daily Standup");
+        Ok(())
+    }
+
     async fn read_json(response: axum::response::Response) -> anyhow::Result<serde_json::Value> {
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await?;
         Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    /// DOCX extraction works through the real multipart route and does not consume quota.
+    #[tokio::test]
+    async fn interview_text_extracts_docx_without_consuming_quota() -> anyhow::Result<()> {
+        use std::io::Write as _;
+
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+
+        let cursor = std::io::Cursor::new(Vec::new());
+        let mut zip = zip::ZipWriter::new(cursor);
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )?;
+        zip.write_all(
+            br#"<w:body><w:p><w:r><w:t>Alice Chen</w:t></w:r></w:p><w:p><w:r><w:t>Backend Engineer</w:t></w:r></w:p></w:body>"#,
+        )?;
+        let docx = zip.finish()?.into_inner();
+
+        let boundary = "moyan-test-boundary";
+        let mut body = Vec::new();
+        write!(
+            body,
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"docs\"; filename=\"resume.docx\"\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n"
+        )?;
+        body.extend_from_slice(&docx);
+        write!(body, "\r\n--{boundary}--\r\n")?;
+
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/interview/text")
+                    .header("authorization", bearer)
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = read_json(response).await?;
+        assert_eq!(body["data"]["source"], "document");
+        assert_eq!(body["data"]["text"], "Alice Chen\nBackend Engineer");
+        assert_eq!(body["data"]["char_count"], 27);
+        assert_eq!(body["data"]["likely_scanned"], true);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0, "document extraction must not consume quota");
+        Ok(())
+    }
+
+    /// Profile validation runs through the real route before quota is consumed.
+    #[tokio::test]
+    async fn interview_profile_rejects_invalid_kind_before_quota() -> anyhow::Result<()> {
+        let state = test_state(Arc::new(
+            SqliteRepositories::connect("sqlite::memory:").await?,
+        ));
+        let sub = seed_test_user(&state).await;
+        let app = build_app(state.clone());
+        let bearer = format!("Bearer {}", test_bearer_for(&sub));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/coach/interview/profile")
+                    .header("authorization", bearer)
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"kind":"cv","text":"resume text"}"#))?,
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let (_, used, _) = state
+            .services
+            .coach_quota
+            .snapshot(&sub)
+            .await
+            .expect("read quota snapshot");
+        assert_eq!(used, 0, "invalid profile input must not consume quota");
+        Ok(())
     }
 
     #[tokio::test]
@@ -766,12 +1311,34 @@ mod tests {
     }
 
     /// 设置一个环境变量，测试结束（含 panic）时自动清掉。
-    struct EnvGuard(&'static str);
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var_os(key);
+            unsafe { std::env::set_var(key, value) };
+            Self { key, previous }
+        }
+    }
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
-            unsafe { std::env::remove_var(self.0) }
+            match &self.previous {
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
         }
+    }
+
+    fn kimi_test_env(base: &str) -> [EnvGuard; 3] {
+        [
+            EnvGuard::set("MOYAN_KIMI_BASE_URL", base),
+            EnvGuard::set("NO_PROXY", "127.0.0.1,localhost"),
+            EnvGuard::set("no_proxy", "127.0.0.1,localhost"),
+        ]
     }
 
     /// 一个假的 Kimi：`/api/oauth/token` 返回给定的授权结果，
@@ -966,8 +1533,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(true, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1007,8 +1573,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(false, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1024,8 +1589,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let foreign = es256_access_token("kimi-user-1", "evil-issuer", "access");
         let base = start_kimi_es256_stub(true, &foreign).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1046,8 +1610,7 @@ mod tests {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let kimi_token = es256_access_token("kimi-user-1", "kimi-auth", "access");
         let base = start_kimi_es256_stub(true, &kimi_token).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1086,8 +1649,7 @@ mod tests {
     async fn kimi_userinfo_profile_still_overwrites_stored_values() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("kimi-access-token"), true).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let state = test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
@@ -1121,15 +1683,12 @@ mod tests {
     async fn kimi_token_poll_returns_our_jwt_and_never_the_kimi_token() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("kimi-access-token"), true).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,
         )));
         let response = app.clone().oneshot(kimi_poll_request("dc-1")?).await?;
-        assert_eq!(response.status(), StatusCode::OK);
-
         let body = read_json(response).await?;
         let token = body["data"]["token"]
             .as_str()
@@ -1166,8 +1725,7 @@ mod tests {
     async fn kimi_token_poll_rejects_a_token_kimi_would_not_verify() -> anyhow::Result<()> {
         let _guard = TEST_ENV_MUTEX.lock().await;
         let base = start_kimi_stub(Some("forged-token"), false).await;
-        unsafe { std::env::set_var("MOYAN_KIMI_BASE_URL", &base) };
-        let _env = EnvGuard("MOYAN_KIMI_BASE_URL");
+        let _env = kimi_test_env(&base);
 
         let app = build_app(test_state(Arc::new(
             SqliteRepositories::connect("sqlite::memory:").await?,

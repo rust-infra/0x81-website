@@ -14,9 +14,9 @@ export const screen = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   headerTitle: {
     fontSize: 24,
@@ -35,11 +35,6 @@ export function cardStyle(bg: string, border?: string) {
     padding: 20,
     borderWidth: border ? 1 : 0,
     borderColor: border,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
   };
 }
 

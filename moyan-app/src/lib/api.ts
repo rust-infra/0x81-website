@@ -1,7 +1,9 @@
 // 后端 API 客户端（由 moyan-web/src/services/vocabularyApi.ts 移植，
 // localStorage 换成 AsyncStorage；不包含打字相关接口）
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiRequestWithDeps } from './api-client';
 import { getApiBase } from './config';
+import { translate } from './i18n';
 import type {
   CardProgress,
   AppConfig,
@@ -30,48 +32,20 @@ async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
 
-async function apiRequest<T>(
+export async function apiRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = await getToken();
-  if (!token) {
-    throw new Error('未登录');
-  }
-
-  const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
-  };
-  headers['Authorization'] = `Bearer ${token}`;
-  if (options.body && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
+  return apiRequestWithDeps<T>(path, options, {
+    baseUrl: API_BASE,
+    getToken,
   });
-
-  if (!res.ok) {
-    let message = `请求失败 (${res.status})`;
-    try {
-      const body = await res.json();
-      message = body?.error?.message || message;
-    } catch {
-      // ignore parse errors
-    }
-    throw new Error(message);
-  }
-
-  const result = await res.json();
-  return result.data as T;
 }
-
 async function publicGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `请求失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('requestFailed', { status: res.status }));
   }
   return body.data as T;
 }
@@ -84,7 +58,7 @@ async function publicPost<T>(path: string, body: unknown): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.success) {
-    throw new Error(data?.error?.message || `请求失败 (${res.status})`);
+    throw new Error(data?.error?.message || translate('requestFailed', { status: res.status }));
   }
   return data.data as T;
 }
@@ -237,7 +211,7 @@ export async function kimiDevice(deviceId: string): Promise<KimiDeviceInfo> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `设备授权失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('deviceAuthFailed', { status: res.status }));
   }
   return body.data as KimiDeviceInfo;
 }
@@ -270,7 +244,7 @@ export async function kimiTokenPoll(
   if (/authorization_pending|slow_down|pending/i.test(message)) {
     return { status: 'pending' };
   }
-  throw new Error(message || `登录轮询失败 (${res.status})`);
+  throw new Error(message || translate('loginPollFailed', { status: res.status }));
 }
 
 export async function googleMobileLogin(
@@ -283,7 +257,7 @@ export async function googleMobileLogin(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.message || `Google 登录失败 (${res.status})`);
+    throw new Error(body?.error?.message || translate('googleLoginFailed', { status: res.status }));
   }
   const data = body.data as { token: string; user: User };
   return { token: data.token, user: data.user };

@@ -28,7 +28,8 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -48,8 +49,28 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio",
-      "./plugins/withSwift5Podfile"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "墨言需要使用麦克风进行英语口语练习。"
+        }
+      ],
+      "./plugins/withSwift5Podfile",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "墨言需要使用麦克风进行英语口语练习。",
+          "speechRecognitionPermission": "墨言需要使用系统语音识别把你说的话转成文字。"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "墨言需要读取你选择的简历或职位图片。",
+          "cameraPermission": "墨言需要使用相机拍摄简历或职位图片。"
+        }
+      ],
+      "expo-document-picker"
     ]
   }
 }

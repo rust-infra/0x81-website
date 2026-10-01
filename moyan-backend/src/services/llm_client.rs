@@ -18,6 +18,34 @@ const TRANSLATE_CHUNK_CHARS: usize = 1_500;
 const TRANSLATE_MAX_TOKENS: u32 = 8_192;
 const TRANSLATE_MAX_CONCURRENCY: usize = 6;
 
+/// An in-memory image supplied to an OpenAI-compatible vision request.
+///
+/// Kept separate from the public JSON request types so clients can never
+/// smuggle arbitrary data URLs into coach prompts.
+#[derive(Debug, Clone)]
+pub struct ImagePart {
+    pub media_type: String,
+    pub data_base64: String,
+}
+
+/// Build an OpenAI-compatible content-parts array with the text first.
+///
+/// `detail: high` is deliberate: low-detail image input drops small text,
+/// which makes resume and job-posting transcription unreliable.
+pub fn build_content_parts(text: &str, images: &[ImagePart]) -> Vec<serde_json::Value> {
+    let mut parts = vec![json!({ "type": "text", "text": text })];
+    for image in images {
+        parts.push(json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:{};base64,{}", image.media_type, image.data_base64),
+                "detail": "high"
+            }
+        }));
+    }
+    parts
+}
+
 #[derive(Debug, Deserialize)]
 struct ChatCompletionResponse {
     choices: Vec<ChatChoice>,
@@ -32,9 +60,6 @@ struct ChatChoice {
 struct ChatMessage {
     #[serde(default)]
     content: Option<MessageContent>,
-    /// Some reasoning models put text here instead of `content`.
-    #[serde(default)]
-    reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,10 +96,7 @@ impl ChatMessage {
                 MessageContent::Text(_) => {}
             }
         }
-        self.reasoning_content
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        None
     }
 }
 
@@ -184,8 +206,8 @@ pub async fn translate_caption_lines(
         });
     }
     while let Some(joined) = tasks.join_next().await {
-        let pairs = joined
-            .map_err(|e| AppError::BadRequest(format!("translation task failed: {e}")))??;
+        let pairs =
+            joined.map_err(|e| AppError::BadRequest(format!("translation task failed: {e}")))??;
         for (global, zh) in pairs {
             if global < out.len() {
                 out[global] = zh;
@@ -255,13 +277,15 @@ async fn translate_chunk_attempt(
     proxy: Option<&str>,
     semaphore: Arc<tokio::sync::Semaphore>,
 ) -> Result<Vec<(usize, String)>, AppError> {
-    let _permit = semaphore.acquire().await.map_err(|e| {
-        AppError::BadRequest(format!("translation concurrency: {e}"))
-    })?;
+    let _permit = semaphore
+        .acquire()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("translation concurrency: {e}")))?;
     let content = chat_completion(
         settings,
         TRANSLATE_SYSTEM_PROMPT,
         user,
+        &[],
         proxy,
         true,
         Some(TRANSLATE_MAX_TOKENS),
@@ -340,9 +364,7 @@ where
         ));
     }
     if settings.api_key.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "请先在设置中配置 LLM api_key".into(),
-        ));
+        return Err(AppError::BadRequest("请先在设置中配置 LLM api_key".into()));
     }
 
     let chunks = caption_chunks(caption_text);
@@ -416,7 +438,11 @@ where
         } else {
             format!(
                 "LLM produced no usable vocabulary cards ({})",
-                chunk_errors.join("; ").chars().take(500).collect::<String>()
+                chunk_errors
+                    .join("; ")
+                    .chars()
+                    .take(500)
+                    .collect::<String>()
             )
         };
         return Err(AppError::BadRequest(detail));
@@ -463,14 +489,57 @@ Hard requirements:
         "Video id: {video_id}\nTitle: {title}\nSegment: {chunk_index}/{chunk_total}\nTranscript segment:\n{caption}"
     );
 
-    let content = chat_completion(settings, system, &user, proxy, false, None).await?;
+    let content = chat_completion(settings, system, &user, &[], proxy, false, None).await?;
     parse_llm_cards(&content, video_id)
+}
+
+fn opencode_headers(
+    base_url: &str,
+    session_id: &str,
+    request_id: &str,
+) -> std::collections::HashMap<&'static str, String> {
+    if !base_url.to_ascii_lowercase().contains("opencode.ai") {
+        return std::collections::HashMap::new();
+    }
+    std::collections::HashMap::from([
+        ("x-opencode-session", session_id.to_string()),
+        ("x-opencode-request", request_id.to_string()),
+        ("x-opencode-client", "moyan-backend".to_string()),
+    ])
+}
+
+fn build_chat_body(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user_content: serde_json::Value,
+    max_tokens: Option<u32>,
+) -> serde_json::Value {
+    let mut body = json!({
+        "model": settings.model,
+        "temperature": settings.temperature,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user_content }
+        ]
+    });
+    if settings.model.to_ascii_lowercase().contains("deepseek") {
+        // DeepSeek Flash defaults to thinking mode on the OpenCode gateway.
+        // Coach and summary JSON already carry their own reasoning fields;
+        // visible generation should stay in the normal content channel.
+        body["reasoning_effort"] = json!("none");
+    }
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = json!(max_tokens);
+    }
+    body
 }
 
 async fn chat_completion(
     settings: &LlmSettingsStored,
     system: &str,
     user: &str,
+    images: &[ImagePart],
     proxy: Option<&str>,
     direct: bool,
     max_tokens: Option<u32>,
@@ -478,18 +547,13 @@ async fn chat_completion(
     let base = settings.base_url.trim_end_matches('/');
     let url = format!("{base}/chat/completions");
 
-    let mut body = json!({
-        "model": settings.model,
-        "temperature": settings.temperature,
-        "response_format": { "type": "json_object" },
-        "messages": [
-            { "role": "system", "content": system },
-            { "role": "user", "content": user }
-        ]
-    });
-    if let Some(max_tokens) = max_tokens {
-        body["max_tokens"] = json!(max_tokens);
-    }
+    let user_content = if images.is_empty() {
+        json!(user)
+    } else {
+        json!(build_content_parts(user, images))
+    };
+
+    let body = build_chat_body(settings, system, user_content, max_tokens);
 
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300));
     if let Some(proxy) = crate::services::youtube_captions::normalize_proxy(proxy) {
@@ -505,9 +569,15 @@ async fn chat_completion(
         .build()
         .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
 
-    let res = client
+    let session_id: String = uuid::Uuid::new_v4().simple().to_string();
+    let request_id: String = uuid::Uuid::new_v4().simple().to_string();
+    let mut request = client
         .post(&url)
-        .bearer_auth(settings.api_key.trim())
+        .bearer_auth(settings.api_key.trim());
+    for (name, value) in opencode_headers(&settings.base_url, &session_id, &request_id) {
+        request = request.header(name, value);
+    }
+    let res = request
         .json(&body)
         .send()
         .await
@@ -549,6 +619,42 @@ async fn chat_completion(
     Ok(content.to_string())
 }
 
+/// Validate the admin-provided client before a request is sent. This keeps
+/// unconfigured deployments from consuming quota for a call that cannot work.
+pub fn ensure_configured(settings: &LlmSettingsStored) -> Result<(), AppError> {
+    if settings.base_url.trim().is_empty()
+        || settings.api_key.trim().is_empty()
+        || settings.model.trim().is_empty()
+    {
+        return Err(AppError::ServiceUnavailable(
+            "AI service is not configured".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// 供陪练等通用场景使用：走 OpenAI-compatible chat completions，要求 JSON 输出。
+pub async fn chat_json(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user: &str,
+    proxy: Option<&str>,
+    max_tokens: Option<u32>,
+) -> Result<String, AppError> {
+    chat_completion(settings, system, user, &[], proxy, true, max_tokens).await
+}
+
+/// Vision-capable sibling of `chat_json`; used only by interview OCR.
+pub async fn chat_json_with_images(
+    settings: &LlmSettingsStored,
+    system: &str,
+    user: &str,
+    images: &[ImagePart],
+    max_tokens: Option<u32>,
+) -> Result<String, AppError> {
+    chat_completion(settings, system, user, images, None, true, max_tokens).await
+}
+
 fn app_error_message(err: &AppError) -> String {
     match err {
         AppError::Unauthorized(m)
@@ -556,6 +662,8 @@ fn app_error_message(err: &AppError) -> String {
         | AppError::NotFound(m)
         | AppError::Internal(m)
         | AppError::ServiceUnavailable(m) => m.clone(),
+        AppError::QuotaExceeded { .. } => "quota exceeded".into(),
+        AppError::Unprocessable { message, .. } => message.clone(),
         AppError::ImportFailed(_) => "import failed".into(),
         AppError::Repository(e) => e.to_string(),
     }
@@ -709,6 +817,61 @@ mod tests {
         assert_eq!(cards[0].pronunciation.as_deref(), Some("/həˈləʊ/"));
         assert!(cards[0].tags.contains(&"youtube".into()));
         assert!(cards[0].tags.contains(&"vid".into()));
+    }
+
+    #[test]
+    fn adds_opencode_routing_headers_only_for_opencode() {
+        let headers = opencode_headers(
+            "https://opencode.ai/zen/go/v1",
+            "session-1",
+            "request-1",
+        );
+        assert_eq!(headers.get("x-opencode-session"), Some(&"session-1".to_string()));
+        assert_eq!(headers.get("x-opencode-request"), Some(&"request-1".to_string()));
+        assert_eq!(
+            headers.get("x-opencode-client"),
+            Some(&"moyan-backend".to_string())
+        );
+        assert!(opencode_headers(
+            "https://api.deepseek.com/v1",
+            "session-1",
+            "request-1"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn rejects_unconfigured_llm_before_network_use() {
+        assert!(ensure_configured(&LlmSettingsStored::default()).is_err());
+        assert!(matches!(
+            ensure_configured(&LlmSettingsStored {
+                base_url: "https://api.example.com/v1".into(),
+                api_key: "sk-test".into(),
+                model: "model".into(),
+                temperature: 0.3,
+            }),
+            Ok(())
+        ));
+    }
+
+    #[test]
+    fn disables_deepseek_thinking_in_chat_body() {
+        let settings = LlmSettingsStored {
+            base_url: "https://opencode.ai/zen/go/v1".into(),
+            api_key: "sk-test".into(),
+            model: "deepseek-flash".into(),
+            temperature: 0.3,
+        };
+        let body = build_chat_body(&settings, "system", json!("hello"), Some(300));
+        assert_eq!(body["reasoning_effort"], "none");
+        assert_eq!(body["max_tokens"], 300);
+
+        let gpt = LlmSettingsStored {
+            model: "gpt-5.4".into(),
+            ..settings
+        };
+        let body = build_chat_body(&gpt, "system", json!("hello"), None);
+        assert!(body.get("reasoning_effort").is_none());
     }
 
     #[test]

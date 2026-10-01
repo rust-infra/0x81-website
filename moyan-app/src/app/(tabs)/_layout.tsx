@@ -1,29 +1,17 @@
 import { Tabs } from 'expo-router';
 import { useEffect, useState } from 'react';
-import type { ColorValue } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TabIcon, type TabIconName } from '../../components/TabIcons';
+import { TabIcon } from '../../components/TabIcons';
+import { TAB_SCREENS, type TabIconName } from '../../lib/navigation-contract';
 import { getAppConfig } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 
 export default function TabsLayout() {
-  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { t } = useI18n();
   const [podcastEnabled, setPodcastEnabled] = useState(false);
-
-  const tabIcon =
-    (name: TabIconName) =>
-    ({ color, focused }: { color: ColorValue; focused: boolean }) =>
-      (
-        <TabIcon
-          name={name}
-          color={color as string}
-          focused={focused}
-          pillColor={c.accentLight}
-        />
-      );
 
   useEffect(() => {
     let cancelled = false;
@@ -38,78 +26,149 @@ export default function TabsLayout() {
       cancelled = true;
     };
   }, []);
-  const c = theme.colors;
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: c.ink,
-        tabBarInactiveTintColor: c.inkLight,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 24,
-          right: 24,
-          bottom: 16,
-          // 高度需包含底部安全区：React Navigation 内部会加 paddingBottom = insets.bottom，
-          // 若高度只有 62，内容区会被压缩到 ~20pt，导致标签文字被 Yoga 压缩裁切。
-          // 取 62 + min(insets.bottom, 20) 保证内容区足够、标签完整渲染，同时不过高。
-          height: 62 + Math.min(insets.bottom, 20),
-          borderRadius: 999,
-          backgroundColor: c.navBg,
-          borderTopWidth: 0,
-          shadowColor: '#000',
-          shadowOpacity: 0.08,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 8,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
-        // 内容（图标+文字）整体下移一点，让胶囊视觉更均衡、底部空白更小。
-        // 无 Home 指示条设备（insets.bottom 小）时保持原样。
-        tabBarItemStyle: {
-          paddingVertical: 2,
-          transform: [{ translateY: Math.max(0, insets.bottom - 30) }],
-        },
+        tabBarActiveTintColor: theme.colors.ink,
+        tabBarInactiveTintColor: theme.colors.inkLight,
       }}
+      tabBar={(props) => <AppTabBar {...props} podcastEnabled={podcastEnabled} />}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabHome'),
-          tabBarIcon: tabIcon('home'),
-        }}
-      />
-      <Tabs.Screen
-        name="decks"
-        options={{
-          title: t('tabDecks'),
-          tabBarIcon: tabIcon('decks'),
-        }}
-      />
-      <Tabs.Screen
-        name="podcast"
-        options={{
-          title: t('tabPodcast'),
-          tabBarIcon: tabIcon('podcast'),
-          href: podcastEnabled ? undefined : null,
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: t('tabStats'),
-          tabBarIcon: tabIcon('stats'),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t('tabSettings'),
-          tabBarIcon: tabIcon('settings'),
-        }}
-      />
+      {TAB_SCREENS.map((screen) => (
+        <Tabs.Screen
+          key={screen.name}
+          name={screen.name}
+          options={{
+            title: t(screen.titleKey),
+            href: screen.name === 'podcast' && !podcastEnabled ? null : undefined,
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
+
+type AppTabBarProps = {
+  state: {
+    index: number;
+    routes: Array<{ key: string; name: string; params?: object }>;
+  };
+  descriptors: Record<string, { options?: { title?: string } }>;
+  navigation: {
+    emit: (event: {
+      type: 'tabPress';
+      target: string;
+      canPreventDefault: true;
+    }) => { defaultPrevented: boolean };
+    navigate: (name: string, params?: object) => void;
+  };
+};
+
+function AppTabBar({
+  state,
+  descriptors,
+  navigation,
+  podcastEnabled,
+}: AppTabBarProps & { podcastEnabled: boolean }) {
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  const c = theme.colors;
+  const routes = state.routes.filter((route) => {
+    if (route.name === 'podcast' && !podcastEnabled) return false;
+    return true;
+  });
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.outer, { height: 58 + insets.bottom + 14 }]}
+    >
+      <View
+        style={[
+          styles.bar,
+          {
+            marginBottom: insets.bottom + 8,
+            backgroundColor: c.navBg,
+            borderColor: c.border,
+          },
+        ]}
+      >
+        {routes.map((route) => {
+          const index = state.routes.findIndex((item) => item.key === route.key);
+          const focused = state.index === index;
+          const options = descriptors[route.key]?.options;
+          const label = options?.title ?? t(TAB_SCREENS.find((item) => item.name === route.name)?.titleKey ?? '');
+          const iconName = TAB_SCREENS.find((item) => item.name === route.name)?.icon as
+            | TabIconName
+            | undefined;
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!focused && !event.defaultPrevented) {
+              navigation.navigate(route.name, route.params);
+            }
+          };
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={focused ? { selected: true } : {}}
+              accessibilityLabel={label}
+              onPress={onPress}
+              style={styles.item}
+            >
+              {iconName ? (
+                <TabIcon
+                  name={iconName}
+                  color={focused ? c.ink : c.navText}
+                  focused={focused}
+                  pillColor={c.accentLight}
+                />
+              ) : null}
+              <Text
+                style={[
+                  styles.label,
+                  { color: focused ? c.ink : c.navText, fontWeight: focused ? '600' : '500' },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  outer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    height: 58,
+    marginHorizontal: 22,
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  label: { fontSize: 9 },
+});

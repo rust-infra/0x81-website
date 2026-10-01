@@ -11,12 +11,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createDeck, deleteDeck, listDecks } from '../../lib/api';
-import { useI18n } from '../../lib/i18n';
-import { useTheme } from '../../lib/theme-context';
-import { confirmAsync, useToast } from '../../lib/toast';
-import { cardStyle, roundButton, screen, serif } from '../../lib/ui';
-import type { Deck } from '../../lib/types';
+import { BackButton } from '../components/AppHeader';
+import { createDeck, deleteDeck, listDecks } from '../lib/api';
+import { useI18n } from '../lib/i18n';
+import { useTheme } from '../lib/theme-context';
+import { confirmAsync, useToast } from '../lib/toast';
+import { cardStyle, roundButton, screen, serif } from '../lib/ui';
+import type { Deck } from '../lib/types';
 
 export default function DecksScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function DecksScreen() {
   const renderDeck = (deck: Deck) => (
     <Pressable
       key={deck.id}
-      style={cardStyle(c.card)}
+      style={cardStyle(c.card, c.border)}
       onPress={() => router.push(`/deck/${deck.id}`)}
     >
       <View style={styles.deckRow}>
@@ -123,6 +124,7 @@ export default function DecksScreen() {
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
       <View style={screen.header}>
         <View style={styles.titleRow}>
+          <BackButton onPress={() => router.back()} />
           <Text style={[screen.headerTitle, { color: c.ink, fontFamily: serif }]}>
             {t('tabDecks')}
           </Text>
@@ -207,6 +209,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
   list: { paddingBottom: 100 },
   section: { marginBottom: 20 },

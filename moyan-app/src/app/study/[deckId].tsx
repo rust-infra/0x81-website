@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from '../../components/AppHeader';
 import {
   createReviewLog,
   listStudyCards,
@@ -161,7 +162,7 @@ export default function StudyScreen() {
 
   const renderContent = () => {
     if (loading) {
-      return <Text style={{ color: c.inkMuted }}>加载中...</Text>;
+      return <Text style={{ color: c.inkMuted }}>{t('studyLoading')}</Text>;
     }
     if (queue.length === 0 || index >= queue.length) {
       const total =
@@ -287,17 +288,15 @@ export default function StudyScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.studyBg }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Text style={{ color: c.studyMuted, fontSize: 16 }}>‹ {t('exit')}</Text>
-          </Pressable>
+          <BackButton onPress={() => router.back()} color={c.studyMuted} />
           <Pressable onPress={toggleSpeak} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 16 }}>
-              {speakEnabled ? '🔊' : '🔇'}
+              {speakEnabled ? t('voiceOn') : t('voiceOff')}
             </Text>
           </Pressable>
           <Pressable onPress={toggleMode} hitSlop={12}>
             <Text style={{ color: c.studyMuted, fontSize: 14 }}>
-              {studyMode === 'en-zh' ? '英→中' : '中→英'}
+              {studyMode === 'en-zh' ? t('studyModeEnZh') : t('studyModeZhEn')}
             </Text>
           </Pressable>
         </View>

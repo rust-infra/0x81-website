@@ -41,6 +41,10 @@ pub fn routes() -> Router<AppState> {
             get(admin::get_llm_settings).put(admin::update_llm_settings),
         )
         .route(
+            "/settings/coach",
+            get(admin::get_coach_settings).put(admin::update_coach_settings),
+        )
+        .route(
             "/settings/podcast",
             get(admin::get_podcast_config).put(admin::update_podcast_config),
         )

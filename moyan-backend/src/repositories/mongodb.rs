@@ -22,7 +22,7 @@ use crate::models::{
     UserIdentity, UserSettings, UserStats, DailyTrendPoint, SYSTEM_OWNER_ID,
 };
 use crate::repositories::{
-    HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
+    CoachRepository, HealthRepository, LearningRepository, RepositoryError, SettingsRepository, SyncCounts,
     TypeRepository, UserRepository, VocabularyRepository,
 };
 
@@ -620,6 +620,110 @@ impl LearningRepository for MongoRepositories {
         Err(RepositoryError::Configuration(
             "study daily trend requires sqlite backend".into(),
         ))
+    }
+}
+
+#[async_trait]
+impl CoachRepository for MongoRepositories {
+    async fn coach_usage_get(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        #[derive(Debug, Deserialize)]
+        struct UsageDoc {
+            #[serde(default)]
+            turns_used: i64,
+        }
+        let doc = self
+            .database
+            .collection::<UsageDoc>("coach_usage")
+            .find_one(doc! { "user_id": user_id, "day": day })
+            .await?;
+        Ok(doc.map(|d| d.turns_used.max(0) as u32).unwrap_or(0))
+    }
+
+    async fn coach_usage_try_consume(
+        &self,
+        user_id: &str,
+        day: &str,
+        limit: u32,
+    ) -> Result<Option<u32>, RepositoryError> {
+        if limit == 0 {
+            return self
+                .coach_usage_increment(user_id, day)
+                .await
+                .map(Some);
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct UsageDoc {
+            user_id: String,
+            day: String,
+            turns_used: i64,
+            updated_at: DateTime<Utc>,
+        }
+
+        let collection = self.database.collection::<UsageDoc>("coach_usage");
+        for _ in 0..3 {
+            let updated = collection
+                .update_one(
+                    doc! {
+                        "user_id": user_id,
+                        "day": day,
+                        "turns_used": { "$lt": limit as i64 },
+                    },
+                    doc! {
+                        "$inc": { "turns_used": 1_i64 },
+                        "$set": { "updated_at": Utc::now() },
+                    },
+                )
+                .await?;
+            if updated.matched_count == 1 {
+                let used = self.coach_usage_get(user_id, day).await?;
+                return Ok(Some(used));
+            }
+
+            if self.coach_usage_get(user_id, day).await? >= limit {
+                return Ok(None);
+            }
+
+            match collection
+                .insert_one(UsageDoc {
+                    user_id: user_id.to_string(),
+                    day: day.to_string(),
+                    turns_used: 1,
+                    updated_at: Utc::now(),
+                })
+                .await
+            {
+                Ok(_) => return Ok(Some(1)),
+                Err(err) if err.to_string().contains("E11000") => continue,
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(None)
+    }
+
+    async fn coach_usage_increment(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError> {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct UsageDoc {
+            user_id: String,
+            day: String,
+            turns_used: i64,
+            updated_at: DateTime<Utc>,
+        }
+        let updated = self
+            .database
+            .collection::<UsageDoc>("coach_usage")
+            .find_one_and_update(
+                doc! { "user_id": user_id, "day": day },
+                doc! {
+                    "$inc": { "turns_used": 1_i64 },
+                    "$set": { "updated_at": Utc::now() },
+                    "$setOnInsert": { "user_id": user_id, "day": day },
+                },
+            )
+            .upsert(true)
+            .return_document(ReturnDocument::After)
+            .await?;
+        Ok(updated.map(|d| d.turns_used.max(0) as u32).unwrap_or(0))
     }
 }
 

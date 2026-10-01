@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -8,10 +9,11 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Group, SectionLabel } from '../../components/Group';
+import Segmented from '../../components/Segmented';
 import { fetchUserSettings, saveUserSettings } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
@@ -22,6 +24,7 @@ import {
   saveSpeechSettings,
   speak,
   type SpeechSettings,
+  type SttProvider,
 } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
@@ -32,14 +35,37 @@ import {
   type VoiceOption,
 } from '../../lib/voices';
 
-const PROVIDERS = [
-  { key: 'webspeech', labelKey: 'providerWebspeech' },
-  { key: 'google', labelKey: 'providerGoogle' },
-  { key: 'elevenlabs', labelKey: 'providerElevenlabs' },
-  { key: 'aliyun', labelKey: 'providerAliyun' },
+const THEME_TEXT: Record<string, { label: string; description: string }> = {
+  xuanzhi: { label: 'themeXuanzhi', description: 'themeXuanzhiDesc' },
+  shenyemo: { label: 'themeShenyemo', description: 'themeShenyemoDesc' },
+  dailan: { label: 'themeDailan', description: 'themeDailanDesc' },
+  fense: { label: 'themeFense', description: 'themeFenseDesc' },
+};
+
+// 分段控件用短标签：完整名（"ElevenLabs AI Voice"）在半宽按钮里放不下。
+const TTS_SEGMENTS = [
+  { key: 'webspeech', labelKey: 'segSystem' },
+  { key: 'google', labelKey: 'segGoogle' },
+  { key: 'elevenlabs', labelKey: 'segElevenLabs' },
+  { key: 'aliyun', labelKey: 'segAliyun' },
 ] as const;
 
+const STT_SEGMENTS = [
+  { key: 'system', labelKey: 'segSystem' },
+  { key: 'google-cloud', labelKey: 'segGoogle' },
+  { key: 'gemini', labelKey: 'segGemini' },
+] as const;
+
+const LANGUAGES = [
+  { key: 'zh-CN', labelKey: 'languageChinese' },
+  { key: 'en', labelKey: 'languageEnglish' },
+] as const;
+
+type TtsProvider = (typeof TTS_SEGMENTS)[number]['key'];
+type LangKey = (typeof LANGUAGES)[number]['key'];
+
 export default function SettingsScreen() {
+  const router = useRouter();
   const { theme, themeName, setTheme, themes } = useTheme();
   const { user, signOut } = useAuth();
   const { lang, setLang, t } = useI18n();
@@ -49,6 +75,7 @@ export default function SettingsScreen() {
   const [voicePicker, setVoicePicker] = useState<'en' | 'zh' | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [systemVoices, setSystemVoices] = useState<VoiceOption[]>([]);
+  const skippedFirstFocus = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem('settings_last_sync')
@@ -63,6 +90,17 @@ export default function SettingsScreen() {
       void getWebspeechVoices().then(setSystemVoices);
     }
   }, [speech?.provider]);
+
+  // 密钥与模型在二级页编辑，回到本页时要重新读一次本地设置，否则摘要行是旧的。
+  useFocusEffect(
+    useCallback(() => {
+      if (!skippedFirstFocus.current) {
+        skippedFirstFocus.current = true;
+        return;
+      }
+      void getSpeechSettings().then(setSpeech);
+    }, [])
+  );
 
   const currentVoiceValue = (zh: boolean): string => {
     switch (speech?.provider) {
@@ -90,6 +128,14 @@ export default function SettingsScreen() {
     return found ? found.name : id;
   };
 
+  const updateSpeech = (patch: Partial<SpeechSettings>) => {
+    setSpeech((prev) => {
+      const next = { ...(prev || {}), ...patch };
+      void saveSpeechSettings(next);
+      return next;
+    });
+  };
+
   const pickVoice = (option: VoiceOption) => {
     if (!speech) return;
     if (speech.provider === 'google') {
@@ -106,6 +152,13 @@ export default function SettingsScreen() {
       );
     }
     setVoicePicker(null);
+  };
+
+  const openVoicePicker = (zh: boolean) => {
+    if (speech?.provider === 'webspeech' && systemVoices.length === 0) {
+      void getWebspeechVoices().then(setSystemVoices);
+    }
+    setVoicePicker(zh ? 'zh' : 'en');
   };
 
   const handleClearCache = async () => {
@@ -127,28 +180,12 @@ export default function SettingsScreen() {
     toast(t('saved'));
   };
 
-  const missingKey =
-    speech?.provider === 'google'
-      ? !speech.googleKey
-      : speech?.provider === 'elevenlabs'
-        ? !speech.elevenLabsKey
-        : speech?.provider === 'aliyun'
-          ? !speech.aliyunKey
-          : false;
-
-  const openVoicePicker = (zh: boolean) => {
-    if (speech?.provider === 'webspeech' && systemVoices.length === 0) {
-      void getWebspeechVoices().then(setSystemVoices);
-    }
-    setVoicePicker(zh ? 'zh' : 'en');
-  };
-
   const loadSettings = useCallback(async () => {
     const local = await getSpeechSettings();
     setSpeech(local);
     try {
       const remote = await fetchUserSettings();
-      if (remote.language) setLang(remote.language as 'zh-CN' | 'en');
+      if (remote.language) setLang(remote.language as LangKey);
       // 仅当本机从未设置过主题/语音时才套用云端，避免覆盖用户刚点的选择
       const [themeStored, speechStored] = await Promise.all([
         AsyncStorage.getItem('app_theme'),
@@ -179,14 +216,6 @@ export default function SettingsScreen() {
     void loadSettings();
   }, [loadSettings]);
 
-  const updateSpeech = (patch: Partial<SpeechSettings>) => {
-    setSpeech((prev) => {
-      const next = { ...(prev || {}), ...patch };
-      void saveSpeechSettings(next);
-      return next;
-    });
-  };
-
   const syncToBackend = async () => {
     try {
       const s = speech || (await getSpeechSettings());
@@ -212,7 +241,7 @@ export default function SettingsScreen() {
   const downloadSettings = async () => {
     try {
       const remote = await fetchUserSettings();
-      if (remote.language) setLang(remote.language as 'zh-CN' | 'en');
+      if (remote.language) setLang(remote.language as LangKey);
       if (remote.theme && themes.some((t) => t.name === remote.theme)) {
         setTheme(remote.theme as typeof themes[number]['name']);
       }
@@ -235,7 +264,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const changeLanguage = async (next: 'zh-CN' | 'en') => {
+  const changeLanguage = async (next: LangKey) => {
     setLang(next);
     try {
       await saveUserSettings({ language: next });
@@ -246,6 +275,32 @@ export default function SettingsScreen() {
   };
 
   const speed = speech?.speech_speed ?? 0.9;
+  const sttProvider: SttProvider = speech?.sttProvider ?? 'system';
+  const ttsProvider: TtsProvider = (speech?.provider ?? 'webspeech') as TtsProvider;
+
+  // 凭据入口按「识别 / 发音」拆开，各自紧跟对应的 provider 选择器；
+  // 用系统识别或系统发音时不需要密钥，那两条就不渲染。
+  const sttNeedsKey = sttProvider !== 'system';
+  const sttKeyMissing =
+    sttProvider === 'google-cloud'
+      ? !speech?.googleCloudServiceAccountJson?.trim()
+      : sttProvider === 'gemini'
+        ? !speech?.geminiApiKey?.trim()
+        : false;
+
+  const ttsNeedsKey = ttsProvider !== 'webspeech';
+  const ttsKeyMissing =
+    ttsProvider === 'google'
+      ? !speech?.googleKey
+      : ttsProvider === 'elevenlabs'
+        ? !speech?.elevenLabsKey
+        : ttsProvider === 'aliyun'
+          ? !speech?.aliyunKey
+          : false;
+
+  const showsEnVoice =
+    ttsProvider === 'google' || ttsProvider === 'elevenlabs' || ttsProvider === 'webspeech';
+  const showsZhVoice = showsEnVoice || ttsProvider === 'aliyun';
 
   return (
     <SafeAreaView style={[screen.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -256,129 +311,126 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[screen.body, styles.body]}>
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('theme')}</Text>
-        <View style={[styles.card, { backgroundColor: c.card }]}>
-          {themes.map((th) => {
-            const active = th.name === themeName;
-            return (
-              <Pressable
-                key={th.name}
-                style={[styles.row, active && { backgroundColor: c.tagBg }]}
-                onPress={() => setTheme(th.name)}
-              >
-                <View style={[styles.themeDot, { backgroundColor: th.preview }]} />
-                <View style={styles.rowBody}>
-                  <Text style={[styles.rowTitle, { color: c.ink }]}>{th.label}</Text>
-                  <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{th.description}</Text>
-                </View>
-                <Text style={[styles.check, active ? { color: c.accent } : { color: 'transparent' }]}>✓</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('language')}</Text>
-        <View style={[styles.card, { backgroundColor: c.card }]}>
-          <View style={styles.langRow}>
-            {(['zh-CN', 'en'] as const).map((lg) => (
-              <Pressable
-                key={lg}
-                style={[
-                  styles.langBtn,
-                  { borderColor: c.border },
-                  lang === lg && { backgroundColor: c.accent, borderColor: c.accent },
-                ]}
-                onPress={() => changeLanguage(lg)}
-              >
-                <Text style={{ color: lang === lg ? '#fff' : c.ink }}>
-                  {lg === 'zh-CN' ? '中文' : 'English'}
-                </Text>
-              </Pressable>
-            ))}
+        <SectionLabel>{t('appearance')}</SectionLabel>
+        <Group>
+          <View style={styles.block}>
+            <Text style={[styles.blockTitle, { color: c.ink }]}>{t('theme')}</Text>
+            <View style={styles.swatchRow}>
+              {themes.map((th) => {
+                const active = th.name === themeName;
+                return (
+                  <Pressable
+                    key={th.name}
+                    style={styles.swatchItem}
+                    onPress={() => setTheme(th.name)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <View
+                      style={[
+                        styles.swatch,
+                        {
+                          backgroundColor: th.preview,
+                          borderColor: active ? c.accent : c.border,
+                          borderWidth: active ? 2 : 1,
+                        },
+                      ]}
+                    >
+                      {active ? (
+                        <Text style={[styles.swatchCheck, { color: c.accent }]}>✓</Text>
+                      ) : null}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.swatchName,
+                        { color: active ? c.accent : c.inkMuted },
+                      ]}
+                    >
+                      {t(THEME_TEXT[th.name]?.label ?? '')}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-        </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('voice')}</Text>
-        <View style={[styles.card, { backgroundColor: c.card }]}>
-          {PROVIDERS.map((p) => (
-            <Pressable
-              key={p.key}
-              style={[styles.row, speech?.provider === p.key && { backgroundColor: c.tagBg }]}
-              onPress={() => updateSpeech({ provider: p.key })}
-            >
-              <Text style={[styles.rowTitle, { color: c.ink }]}>{t(p.labelKey)}</Text>
-              <Text
-                style={[styles.check, speech?.provider === p.key ? { color: c.accent } : { color: 'transparent' }]}
-              >
-                ✓
+          <View style={styles.inlineRow}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('language')}</Text>
+            <Segmented
+              style={styles.inlineControl}
+              options={LANGUAGES.map((l) => ({ key: l.key, label: t(l.labelKey) }))}
+              value={lang}
+              onChange={(key) => void changeLanguage(key)}
+            />
+          </View>
+        </Group>
+
+        <SectionLabel>{t('speechSection')}</SectionLabel>
+        <Group>
+          <View style={styles.inlineRow}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('sttLabel')}</Text>
+            <Segmented
+              style={styles.inlineControl}
+              options={STT_SEGMENTS.map((s) => ({ key: s.key, label: t(s.labelKey) }))}
+              value={sttProvider}
+              onChange={(key) => updateSpeech({ sttProvider: key })}
+            />
+          </View>
+
+          {sttNeedsKey ? (
+            <Pressable style={styles.row} onPress={() => router.push('/speech-settings?scope=stt')}>
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('sttKeys')}</Text>
+                {sttKeyMissing ? (
+                  <Text style={[styles.rowDesc, { color: c.accent }]}>{t('notConfigured')}</Text>
+                ) : null}
+              </View>
+              <Text style={{ color: c.accent }}>›</Text>
+            </Pressable>
+          ) : null}
+
+          <View style={styles.inlineRow}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('ttsLabel')}</Text>
+            <Segmented
+              style={styles.inlineControl}
+              options={TTS_SEGMENTS.map((s) => ({ key: s.key, label: t(s.labelKey) }))}
+              value={ttsProvider}
+              onChange={(key) => updateSpeech({ provider: key })}
+            />
+          </View>
+
+          {ttsNeedsKey ? (
+            <Pressable style={styles.row} onPress={() => router.push('/speech-settings?scope=tts')}>
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('ttsKeys')}</Text>
+                {ttsKeyMissing ? (
+                  <Text style={[styles.rowDesc, { color: c.accent }]}>{t('notConfigured')}</Text>
+                ) : null}
+              </View>
+              <Text style={{ color: c.accent }}>›</Text>
+            </Pressable>
+          ) : null}
+
+          {showsEnVoice ? (
+            <Pressable style={styles.row} onPress={() => openVoicePicker(false)}>
+              <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceEn')}</Text>
+              <Text style={[styles.rowValue, { color: c.inkMuted }]} numberOfLines={1}>
+                {currentVoiceName(false)}
               </Text>
             </Pressable>
-          ))}
+          ) : null}
 
-          {speech?.provider !== 'webspeech' && (
-            <TextInput
-              style={[styles.input, { backgroundColor: c.inputBg, color: c.ink, borderColor: c.border }]}
-              placeholder={speech?.provider === 'google' ? 'Google API Key' : speech?.provider === 'elevenlabs' ? 'ElevenLabs API Key' : '阿里云 API Key'}
-              placeholderTextColor={c.inkMuted}
-              secureTextEntry
-              value={
-                speech?.provider === 'google'
-                  ? speech.googleKey || ''
-                  : speech?.provider === 'elevenlabs'
-                    ? speech.elevenLabsKey || ''
-                    : speech?.aliyunKey || ''
-              }
-              onChangeText={(v) =>
-                updateSpeech(
-                  speech?.provider === 'google'
-                    ? { googleKey: v }
-                    : speech?.provider === 'elevenlabs'
-                      ? { elevenLabsKey: v }
-                      : { aliyunKey: v }
-                )
-              }
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          )}
-
-          {(speech?.provider === 'google' ||
-            speech?.provider === 'elevenlabs' ||
-            speech?.provider === 'webspeech') && (
-            <>
-              <Pressable
-                style={styles.row}
-                onPress={() => openVoicePicker(false)}
-              >
-                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceEn')}</Text>
-                <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
-                  {currentVoiceName(false)}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.row} onPress={() => openVoicePicker(true)}>
-                <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
-                <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
-                  {currentVoiceName(true)}
-                </Text>
-              </Pressable>
-            </>
-          )}
-          {speech?.provider === 'aliyun' && (
+          {showsZhVoice ? (
             <Pressable style={styles.row} onPress={() => openVoicePicker(true)}>
               <Text style={[styles.rowTitle, { color: c.ink }]}>{t('voiceZh')}</Text>
-              <Text style={{ color: c.inkMuted, fontSize: 13 }} numberOfLines={1}>
+              <Text style={[styles.rowValue, { color: c.inkMuted }]} numberOfLines={1}>
                 {currentVoiceName(true)}
               </Text>
             </Pressable>
-          )}
+          ) : null}
 
-          {missingKey && (
-            <Text style={[styles.keyHint, { color: c.inkMuted }]}>
-              未配置 API Key，测试将使用系统语音
-            </Text>
-          )}
-
-          <View style={[styles.row, { paddingVertical: 14 }]}>
+          <View style={styles.row}>
             <Text style={[styles.rowTitle, { color: c.ink }]}>{t('speechSpeed')}</Text>
             <View style={styles.speedCtrl}>
               <Pressable
@@ -397,7 +449,7 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <View style={[styles.row, { paddingVertical: 14 }]}>
+          <View style={[styles.row, styles.switchRow]}>
             <Text style={[styles.rowTitle, { color: c.ink }]}>{t('autoSpeak')}</Text>
             <Switch
               value={!!speech?.auto_play}
@@ -406,7 +458,7 @@ export default function SettingsScreen() {
             />
           </View>
 
-          <View style={[styles.row, { paddingVertical: 14 }]}>
+          <View style={[styles.row, styles.switchRow]}>
             <Text style={[styles.rowTitle, { color: c.ink }]}>{t('audioCache')}</Text>
             <Switch
               value={speech?.cacheEnabled !== false}
@@ -414,35 +466,38 @@ export default function SettingsScreen() {
               trackColor={{ true: c.accent, false: c.divider }}
             />
           </View>
-          <Pressable style={styles.row} onPress={handleClearCache}>
-            <Text style={{ color: c.accent, fontSize: 14 }}>{t('clearCache')}</Text>
-          </Pressable>
-          <Pressable style={styles.row} onPress={handleTestVoice}>
-            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoiceEn')}</Text>
-          </Pressable>
-          <Pressable style={styles.row} onPress={handleTestVoiceZh}>
-            <Text style={{ color: c.ink, fontSize: 14, fontWeight: '500' }}>{t('testVoiceZh')}</Text>
-          </Pressable>
-          <Pressable style={styles.row} onPress={handleReset}>
-            <Text style={{ color: c.inkMuted, fontSize: 14 }}>{t('resetDefaults')}</Text>
-          </Pressable>
-        </View>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('sync')}</Text>
-        <View style={[styles.card, { backgroundColor: c.card }]}>
-          <Text style={[styles.rowDesc, { color: c.inkMuted, paddingHorizontal: 12, paddingTop: 8 }]}>
-            {t('lastSync')}: {lastSync ? lastSync.toLocaleString() : t('never')}
-          </Text>
-          <Pressable style={[styles.syncBtn, { backgroundColor: c.buttonBg }]} onPress={syncToBackend}>
-            <Text style={{ color: c.buttonText }}>{t('uploadSettings')}</Text>
-          </Pressable>
-          <Pressable style={[styles.syncBtn, { backgroundColor: `${c.accent}18` }]} onPress={downloadSettings}>
-            <Text style={{ color: c.accent }}>{t('downloadSettings')}</Text>
-          </Pressable>
-        </View>
+          <View style={styles.testRow}>
+            <Pressable style={[styles.testBtn, { borderColor: c.border }]} onPress={handleTestVoice}>
+              <Text numberOfLines={1} style={{ color: c.ink, fontSize: 13 }}>
+                {t('voiceTestEn')}
+              </Text>
+            </Pressable>
+            <Pressable style={[styles.testBtn, { borderColor: c.border }]} onPress={handleTestVoiceZh}>
+              <Text numberOfLines={1} style={{ color: c.ink, fontSize: 13 }}>
+                {t('voiceTestZh')}
+              </Text>
+            </Pressable>
+          </View>
+        </Group>
 
-        <Text style={[styles.sectionTitle, { color: c.inkLight }]}>{t('account')}</Text>
-        <View style={[styles.card, { backgroundColor: c.card }]}>
+        <SectionLabel>{t('coachSettingsTitle')}</SectionLabel>
+        <Group>
+          <Pressable style={styles.row} onPress={() => router.push('/coach/settings')}>
+            <Text style={[styles.rowTitle, { color: c.ink }]}>{t('coachSettingsTitle')}</Text>
+            <Text style={{ color: c.accent }}>›</Text>
+          </Pressable>
+          <Pressable style={styles.row} onPress={() => router.push('/coach/history')}>
+            <View style={styles.rowBody}>
+              <Text style={[styles.rowTitle, { color: c.ink }]}>{t('coachHistoryTitle')}</Text>
+              <Text style={[styles.rowDesc, { color: c.inkMuted }]}>{t('coachHistoryDesc')}</Text>
+            </View>
+            <Text style={{ color: c.accent }}>›</Text>
+          </Pressable>
+        </Group>
+
+        <SectionLabel>{t('account')}</SectionLabel>
+        <Group>
           {user ? (
             <View style={styles.accountRow}>
               {user.avatar ? (
@@ -456,7 +511,7 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               )}
-              <View style={styles.accountBody}>
+              <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
                   {user.name || 'User'}
                 </Text>
@@ -468,8 +523,40 @@ export default function SettingsScreen() {
               </View>
             </View>
           ) : null}
-          <Pressable style={[styles.logout, { backgroundColor: `${c.accent}18` }]} onPress={signOut}>
-            <Text style={{ color: c.accent }}>{t('logout')}</Text>
+          <Pressable style={styles.row} onPress={signOut}>
+            <Text style={{ color: c.accent, fontSize: 15 }}>{t('logout')}</Text>
+          </Pressable>
+        </Group>
+
+        <SectionLabel>{t('actionsLabel')}</SectionLabel>
+        <View style={styles.footerRow}>
+          <Pressable
+            style={[styles.footerBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBg }]}
+            onPress={syncToBackend}
+          >
+            <Text numberOfLines={1} style={{ color: c.buttonText, fontSize: 13 }}>
+              {t('uploadSettings')}
+            </Text>
+          </Pressable>
+          <Pressable style={[styles.footerBtn, { borderColor: c.border }]} onPress={downloadSettings}>
+            <Text numberOfLines={1} style={{ color: c.accent, fontSize: 13 }}>
+              {t('downloadSettings')}
+            </Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.footerCaption, { color: c.inkMuted }]}>
+          {t('lastSync')}: {lastSync ? lastSync.toLocaleString() : t('never')}
+        </Text>
+        <View style={styles.footerRow}>
+          <Pressable style={styles.footerTextBtn} onPress={handleClearCache}>
+            <Text numberOfLines={1} style={{ color: c.accent, fontSize: 13 }}>
+              {t('clearCache')}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.footerTextBtn} onPress={handleReset}>
+            <Text numberOfLines={1} style={{ color: c.inkMuted, fontSize: 13 }}>
+              {t('resetDefaults')}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -497,16 +584,24 @@ export default function SettingsScreen() {
               }
               keyExtractor={(item) => item.id}
               ListEmptyComponent={
-                <Text style={[styles.keyHint, { color: c.inkMuted }]}>
-                  无可用{voicePicker === 'zh' ? '中文' : '英文'}系统语音
+                <Text style={[styles.sheetHint, { color: c.inkMuted }]}>
+                  {t('noSystemVoices', {
+                    language:
+                      voicePicker === 'zh' ? t('languageChinese') : t('voiceEn'),
+                  })}
                 </Text>
               }
               renderItem={({ item }) => (
                 <Pressable
-                  style={[styles.row, currentVoiceValue(voicePicker === 'zh') === item.id && { backgroundColor: c.tagBg }]}
+                  style={[
+                    styles.sheetRow,
+                    currentVoiceValue(voicePicker === 'zh') === item.id && {
+                      backgroundColor: c.tagBg,
+                    },
+                  ]}
                   onPress={() => pickVoice(item)}
                 >
-                  <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>
+                  <Text style={[styles.rowTitle, { color: c.ink, flex: 1 }]} numberOfLines={1}>
                     {item.name}
                   </Text>
                   <Text style={{ color: c.inkMuted, fontSize: 12 }}>{item.language}</Text>
@@ -521,39 +616,49 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { paddingBottom: 120 },
-  sectionTitle: { fontSize: 13, fontWeight: '500', marginTop: 8, marginBottom: 10 },
-  card: { borderRadius: 16, padding: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  body: { paddingBottom: 48 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  themeDot: { width: 30, height: 30, borderRadius: 15, marginRight: 14 },
+  switchRow: { paddingVertical: 12 },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  inlineControl: { flex: 1 },
+  testRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 6 },
+  testBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowBody: { flex: 1 },
   rowTitle: { fontSize: 15, fontWeight: '500' },
   rowDesc: { fontSize: 12, marginTop: 2 },
-  check: { fontSize: 16, fontWeight: '700' },
-  langRow: { flexDirection: 'row', gap: 10, padding: 8 },
-  langBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  input: {
-    borderWidth: 1,
+  rowValue: { fontSize: 13, flexShrink: 1 },
+  block: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
+  blockTitle: { fontSize: 15, fontWeight: '500' },
+  swatchRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  swatchItem: { flex: 1, alignItems: 'center', gap: 5 },
+  swatch: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 13,
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  swatchCheck: { fontSize: 18, fontWeight: '700' },
+  swatchName: { fontSize: 11 },
   speedCtrl: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   speedBtn: {
     width: 30,
@@ -564,23 +669,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   speedVal: { fontSize: 15, minWidth: 32, textAlign: 'center' },
-  syncBtn: {
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  logout: {
-    marginTop: 12,
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   avatar: {
     width: 40,
@@ -588,10 +682,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   avatarText: { fontSize: 16, fontWeight: '600' },
-  accountBody: { flex: 1 },
+  footerRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  footerBtn: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerTextBtn: { flex: 1, paddingVertical: 8, alignItems: 'center' },
+  footerCaption: { fontSize: 12, marginTop: 12 },
   mask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 24,
@@ -601,5 +704,13 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
   },
   sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
-  keyHint: { fontSize: 12, paddingHorizontal: 12, paddingBottom: 4 },
+  sheetHint: { fontSize: 12, paddingBottom: 4 },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
 });

@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod coach;
 pub mod auth;
 pub mod health;
 pub mod podcast;

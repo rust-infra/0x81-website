@@ -15,3 +15,6 @@ bin/
 # Python
 __pycache__/
 *.py[cod]
+
+# 本地开发运行态（moyan-dev.sh 的日志/PID）
+.dev/

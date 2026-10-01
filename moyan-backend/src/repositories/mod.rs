@@ -122,6 +122,21 @@ pub trait LearningRepository: Send + Sync {
 }
 
 #[async_trait]
+pub trait CoachRepository: Send + Sync {
+    /// 当日已用轮次；无记录返回 0。
+    async fn coach_usage_get(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError>;
+    /// 原子自增并返回自增后的值。
+    async fn coach_usage_increment(&self, user_id: &str, day: &str) -> Result<u32, RepositoryError>;
+    /// 仅当当日用量小于 `limit` 时原子消费一次；返回消费后的值。
+    async fn coach_usage_try_consume(
+        &self,
+        user_id: &str,
+        day: &str,
+        limit: u32,
+    ) -> Result<Option<u32>, RepositoryError>;
+}
+
+#[async_trait]
 pub trait SettingsRepository: Send + Sync {
     async fn get_settings(&self, user_id: &str) -> Result<UserSettings, RepositoryError>;
     async fn save_settings(
@@ -338,6 +353,7 @@ pub trait HealthRepository: Send + Sync {
 pub trait Repository:
     UserRepository
     + LearningRepository
+    + CoachRepository
     + SettingsRepository
     + VocabularyRepository
     + TypeRepository
@@ -348,6 +364,7 @@ pub trait Repository:
 impl<T> Repository for T where
     T: UserRepository
         + LearningRepository
+        + CoachRepository
         + SettingsRepository
         + VocabularyRepository
         + TypeRepository
