@@ -441,8 +441,51 @@ async fn run_ytdlp_subs(
     outtmpl: &PathBuf,
     proxy: Option<&str>,
 ) -> Result<(), AppError> {
-    // Prefer the android player client path that works reliably with proxies.
-    run_ytdlp_subs_plain(bin, url, outtmpl, proxy).await
+    // For videos whose original language is English, YouTube exposes the
+    // auto-generated transcript as the `en-orig` track while the plain `en`
+    // track is the auto-*translated* one. The translated track is frequently
+    // answered with HTTP 429 (reproduced on 6hp-Se8xOmo, SX_ViT4Ra7k, ...),
+    // which used to fail the whole collect job even though `en-orig` downloads
+    // fine. Try `en-orig` first, then fall back to `en` for non-English videos
+    // that only offer a translated English track.
+    let mut last_err: Option<AppError> = None;
+    for sub_langs in ["en-orig", "en"] {
+        match run_ytdlp_subs_plain(bin, url, outtmpl, proxy, sub_langs).await {
+            Ok(()) => {
+                if caption_files_present(outtmpl).await {
+                    return Ok(());
+                }
+                // yt-dlp exits 0 with "There are no subtitles for the requested
+                // languages" when a track is absent — try the next candidate.
+            }
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        AppError::BadRequest("No English captions found for this video".into())
+    }))
+}
+
+/// Whether yt-dlp already wrote at least one caption file into the temp dir.
+/// A zero exit status is not proof of success: when a requested language is
+/// absent yt-dlp exits 0, logs "There are no subtitles for the requested
+/// languages" and writes nothing, so the run loop must check for a file to
+/// decide whether to fall back to the next language candidate.
+async fn caption_files_present(outtmpl: &PathBuf) -> bool {
+    let Some(dir) = outtmpl.parent() else {
+        return false;
+    };
+    let Ok(mut entries) = fs::read_dir(dir).await else {
+        return false;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        if let Some(name) = entry.file_name().to_str() {
+            if name.ends_with(".vtt") || name.ends_with(".srt") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 async fn run_ytdlp_subs_plain(
@@ -450,13 +493,14 @@ async fn run_ytdlp_subs_plain(
     url: &str,
     outtmpl: &PathBuf,
     proxy: Option<&str>,
+    sub_langs: &str,
 ) -> Result<(), AppError> {
     let mut cmd = Command::new(bin);
     cmd.args([
         "--skip-download",
         "--write-auto-sub",
         "--sub-langs",
-        "en",
+        sub_langs,
         "--sub-format",
         "vtt/best",
         "--extractor-args",
@@ -601,6 +645,29 @@ from YouTube
         assert_eq!(cues[1].start_ms, 2500);
         assert_eq!(cues[1].end_ms, 4000);
         assert_eq!(cues[1].text, "from YouTube");
+    }
+
+    #[test]
+    fn prefers_original_english_track_label() {
+        // `preference_rank` still decides which file wins if several exist; the
+        // `en-orig` suffix must be treated as English, not as some other language.
+        assert!(preference_rank("en") < preference_rank("en-orig"));
+        assert!(preference_rank("en-orig") < preference_rank("ja"));
+    }
+
+    #[tokio::test]
+    async fn detects_caption_files_in_dir() {
+        let dir = std::env::temp_dir().join(format!(
+            "moyan-yt-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&dir).await.unwrap();
+        let outtmpl = dir.join("%(id)s.%(ext)s");
+        // Empty dir: yt-dlp exited 0 but wrote nothing (missing track).
+        assert!(!caption_files_present(&outtmpl).await);
+        fs::write(dir.join("abc.en-orig.vtt"), "WEBVTT\n").await.unwrap();
+        assert!(caption_files_present(&outtmpl).await);
+        let _ = fs::remove_dir_all(&dir).await;
     }
 
     #[test]
