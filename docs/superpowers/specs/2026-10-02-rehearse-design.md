@@ -226,7 +226,7 @@ coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` �
 ├── moyan-admin/       # 墨言管理后台（加「职演」区块）
 ├── moyan-app/         # 墨言 App（删 coach）
 ├── moyan-backend/     # 墨言 API（Rust，删 coach）
-├── rehearse-backend/  # ★ 新增：职演 API（Go）
+├── rehearse-backend/  # ★ 新增：职演 API（Go，内部结构见 §7.9）
 ├── rehearse-app/      # ★ 新增：职演 App（唯一客户端）
 └── docker-compose.yml
 ```
@@ -307,7 +307,7 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 | iOS bundle id | `uk.0x81.rehearse` | |
 | Android package | `uk.0x81.rehearse` | |
 | 域名 | `rehearse.0x81.uk` | API 入口 |
-| 后端目录 | `rehearse-backend/` | Go module `github.com/0x81/rehearse-backend`（待定） |
+| 后端目录 | `rehearse-backend/` | Go module `github.com/0x81/rehearse-backend`（**2026-10-02 定稿**，目录结构见 §7.9） |
 | 后端端口 | `4324` | 与 `moyan-backend` 的 4323 并列 |
 | **顺手修正** | `moyan-app` 的 `com.anonymous.moyanapp` → `uk.0x81.moyan` | 现在是 Expo 占位符，**上架前必须改**，趁这次一起做 |
 
@@ -319,14 +319,17 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 
 | | `moyan-backend`（Rust） | `rehearse-backend`（Go） |
 |---|---|---|
-| CI 构建 | `docker build` 走 `rust:latest` builder 段，`[profile.release]` 是 `lto=true` + `codegen-units=1`（最贵的组合），编完再 `docker cp` 提取 ELF | `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath` **直接出静态二进制，不需要 Docker builder** |
+| CI 构建 | `docker build` 走 `rust:latest` builder 段，`[profile.release]` 是 `lto=true` + `codegen-units=1`（最贵的组合），编完再 `docker cp` 提取 ELF | **`docker build` 一条命令出成品镜像**。Dockerfile 是普通多阶段（`golang:alpine` 构建 → `scratch`/distroless），**不需要提取二进制、不需要 release 资产、不需要 fetch 脚本** |
 | 交叉编译 | 靠 Docker 保证工具链与 glibc 一致 | 原生支持，一条命令 |
 | 运行镜像 | 必须 `debian:trixie-slim`（二进制要求 GLIBC ≥ 2.39，bookworm 只有 2.36） | `scratch` 或 `gcr.io/distroless/static`——**静态二进制，无 libc 依赖** |
 | 运行时依赖 | ffmpeg + python3 + yt-dlp + libsqlite3-0（播客采集用） | **一个都不需要**（材料解析全在纯 Go 里做） |
+| 部署 | `image:` + `pull_policy: build` + `scripts/fetch-rust.sh` 拉二进制到 `./bin/` + 卷挂载进 runtime 容器，compose 里二十多行注释在解释为什么这么绕 | **`build: ./rehearse-backend`，一行**，与 `website` / `0xindex` / `moyan-web` / `moyan-admin` 同一种写法 |
 
-这四条加起来，Rehearse 后端的镜像和构建时间与墨言后端**不在一个量级**。而且 Go 侧不需要 `lto`/`codegen-units` 这类以编译时间换运行时的调参——Go 的编译速度本来就是它的核心优势。
+这几条加起来，Rehearse 后端的镜像体积、构建时间和**部署链路**与墨言后端不在一个量级。而且 Go 侧不需要 `lto` / `codegen-units` 这类以编译时间换运行时的调参——**Go 的编译速度本来就是它的核心优势，所以编译这一步可以直接放在镜像构建里做。**
 
-> ⚠️ 具体数字要实测，本稿不写。但机制是确定的：**不需要 Docker builder 层**这一条就省掉整个 CI 阶段。
+> ⚠️ 具体数字要实测，本稿不写。但机制是确定的：墨言那套「CI 出二进制 → release 资产 → 服务器 fetch → 挂载进 runtime 容器」的绕法，**根源是 Rust release 编译贵、且服务器明确不编译**（`docker-compose.yml` 里那段注释就是这么写的）。Go 没有这个约束——**编译便宜到可以每次 `docker build` 现场做**，整条链路就塌缩成一条命令。
+>
+> 代价要认：部署时会拉 `golang:alpine` 基础镜像并现场编译（几十秒），而不是 pull 一个预建镜像。**单机 compose 部署下可以忽略**；将来若要多机部署、或想做到「服务器上不需要源码」，再引入 registry 并把镜像 push 上去。**v1 不引入。**
 
 ### 7.2 技术选型
 
@@ -343,7 +346,7 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 | 日志 | 标准库 `log/slog` | 结构化日志 |
 | 配置 | 标准库 `os.Getenv` | 与现有 compose 注入方式一致 |
 
-**约束：任何引入 cgo 的依赖都要否决。** 一旦 `CGO_ENABLED=1`，静态二进制、`scratch` 镜像、免 Docker 构建这三条收益全部消失——那就失去了换 Go 的意义。
+**约束：任何引入 cgo 的依赖都要否决。** 一旦 `CGO_ENABLED=1`，静态二进制、`scratch` 镜像、以及「一条 `docker build` 就出成品」这三条收益全部消失（cgo 要 C 工具链、要 libc，构建段和运行段都会变重）——那就失去了换 Go 的意义。
 
 ### 7.3 存储：Rehearse 用自己的托管 Postgres
 
@@ -401,7 +404,7 @@ Rehearse 的表**全部归 Rehearse 独占**：
 
   这个决定是安全的，因为 Rehearse 侧的数据本来就都是**可重建的**：`rehearse_usage` 丢了最坏结果是当天配额重置（低频产品的损失可忽略），`rehearse_settings` 丢了有 env 兜底顶着（`REHEARSE_LLM_*`）。**没有任何不可重建的数据存在 Rehearse 的 PG 里**——这是「不自己备份」成立的前提，将来若往这张库加不可重建的东西，这条要重新评估。
 
-**约束：任何引入 cgo 的依赖都要否决。** `pgx` 是纯 Go，所以 `CGO_ENABLED=0` 仍然成立——静态二进制、`scratch` 镜像、免 Docker 构建这三条收益都保住了。
+**约束：任何引入 cgo 的依赖都要否决。** `pgx` 是纯 Go，所以 `CGO_ENABLED=0` 仍然成立——静态二进制、`scratch` 镜像、以及「一条 `docker build` 出成品」这三条收益都保住了。
 
 #### 7.3.3 迁移所有权
 
@@ -563,7 +566,103 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 
 **移植的验收门槛是「行为对齐」，不是「能跑」**：同一组输入（场景、历史、用户发言），Rust 与 Go 两版产出的**护栏判定与响应结构**必须一致。prompt 文本本身可以有细微差异（模型输出本来就非确定），但长度上限、轮数上限、枚举校验、配额计数、错误码这些**可判定的部分必须逐条对齐**。
 
-**这条很重要**：换语言重写最大的风险不是写不出来，是**悄悄丢掉了原来那些护栏**——那些护栏是踩过坑才加上的（比如「超长 user_text 在调 LLM 之前就拒绝」）。移植时必须有一份对照清单，逐条确认。
+**这条很重要**：换语言重写最大的风险不是写不出来，是**悄悄丢掉了原来那些护栏**——那些护栏是踩过坑才加上的（比如「超长 user_text 在调 LLM 之前就拒绝」）。移植时必须有一份对照清单，逐条确认。**§7.9 的对照表就是那份清单。**
+
+### 7.9 项目目录结构
+
+Go module：**`github.com/0x81/rehearse-backend`**（2026-10-02 定稿；仓库是 private、不需要 `go get`，路径不影响构建，但将来若开源或拆仓不用改 import）。
+
+```
+rehearse-backend/
+├── go.mod                        # module github.com/0x81/rehearse-backend
+├── go.sum
+├── Dockerfile                    # 多阶段：golang:alpine 构建 → scratch/distroless 运行
+├── .dockerignore
+├── README.md                     # 起服务 / 跑测试 / 跑迁移
+├── Makefile                      # build · test · lint · migrate（CI 复用同一组命令）
+├── cmd/
+│   ├── rehearse/main.go          # 服务入口：读 config → 连 PG → 注册路由 → 起 HTTP
+│   └── migrate/main.go           # 迁移 runner（与 server 分开，运行时不带 DDL 权限）
+├── internal/
+│   ├── config/config.go          # env 集中读取与校验（§7.7）；缺关键项直接报错退出
+│   ├── httpapi/                  # HTTP 层
+│   │   ├── router.go             # ServeMux 注册（Go 1.22+ 的 "POST /api/..." 模式串）
+│   │   ├── health.go             # GET /health
+│   │   ├── coach.go              # /scenarios /turn /summary /scenario/draft /quota
+│   │   ├── material.go           # /material/text /material/profile
+│   │   └── admin.go              # /api/admin/settings/rehearse
+│   ├── middleware/
+│   │   ├── auth.go               # JWT 验签 + status 检查（§7.4.1，约 40 行）
+│   │   ├── adminauth.go          # X-Admin-Token
+│   │   └── errors.go             # 错误信封 → 状态码映射（§7.6）
+│   ├── coach/                    # 业务核心
+│   │   ├── turn.go               # 一轮对话
+│   │   ├── summary.go            # 复盘
+│   │   ├── draft.go              # 场景草稿
+│   │   ├── quota.go              # 每日配额（UTC+8 日切、原子消费）
+│   │   ├── settings.go           # rehearse_settings 读写
+│   │   ├── prompts.go            # prompt 构造：中英两套模板（§4.4）
+│   │   └── guards.go             # ★ 护栏集中在这一个文件
+│   ├── scenarios/
+│   │   ├── scenarios.go          # 查表（逻辑只剩这个，§7.8）
+│   │   ├── category.go           # 新 category 枚举（§5.1）
+│   │   └── data/                 # go:embed 的场景数据（文案 + 教学点）
+│   ├── material/
+│   │   ├── text.go               # PDF / DOCX 抽文本
+│   │   ├── vision.go             # 视觉模型调用
+│   │   └── profile.go            # 紧凑档案生成
+│   ├── llm/client.go             # 通用 chat（OpenAI 兼容，不用 SDK）
+│   ├── store/
+│   │   ├── store.go              # 接口：只有 Rehearse 自己的两张表
+│   │   ├── postgres.go           # pgx 实现
+│   │   ├── usage.go              # rehearse_usage：原子递增 + 当日唯一键
+│   │   └── settings.go           # rehearse_settings
+│   └── model/                    # 请求 / 响应类型
+│       ├── coach.go
+│       ├── material.go
+│       └── settings.go
+└── migrations/
+    ├── 0001_init.up.sql          # rehearse_usage + rehearse_settings
+    └── 0001_init.down.sql
+```
+
+#### 几个刻意的决定
+
+- **按领域分包，不镜像 Rust 的 `services/` `models/` `controllers/`。** 这是 Go 的惯例，但**代价是 §7.8 那份对照清单不再自动成立**——所以下面那张表是**必需交付物**，不是可选的文档
+- **`internal/coach/guards.go` 单独存在**。§7.8 说换语言重写最大的风险是悄悄丢掉护栏，那就把护栏**集中到一个文件**：code review 时只需盯这一处，`guards_test.go` 也只需要一个
+- **`scenarios/data/` + `go:embed`**。§7.8 的判断是「主体是数据」——14 个场景的文案与教学点从 Rust 常量搬成 JSON，逻辑代码只剩查表
+- **两个二进制**（`cmd/rehearse` + `cmd/migrate`）。迁移与 server 分开，**server 运行时不带 DDL 权限**，也避免「启动时无条件迁移」这种在多副本下会打架的行为
+- **`internal/` 而不是 `pkg/`**。这是服务不是库，没有对外 API；`internal/` 让「不对外」由编译器保证
+- **`model` 用单数**。Go 的包名惯例是单数（`net/url` 而非 `net/urls`）
+- **测试不设 `tests/` 目录**。Go 用同包同目录的 `_test.go`——`guards_test.go` 就挨着 `guards.go`
+- **CI 新增 `.github/workflows/go-checks.yml`**，与现有的 `rust-checks.yml` 并列（§15 #6 定门禁内容）
+
+#### Rust → Go 对照表（§7.8 要求的「对照清单」）
+
+| Rust 源（`moyan-backend/`） | 行数 | Go 目标 |
+|---|---:|---|
+| `services/coach.rs` | 941 | `internal/coach/turn.go` + `summary.go` + `draft.go` + `prompts.go` |
+| `services/coach_scenarios.rs` | 669 | `internal/scenarios/scenarios.go` + `internal/scenarios/data/*.json`（go:embed） |
+| `models/coach.rs` | 433 | `internal/model/coach.go` |
+| `services/llm_client.rs` | 894 | `internal/llm/client.go`（**只取通用 chat 那约 1/3**） |
+| `services/interview_ocr.rs` | 198 | `internal/material/vision.go` |
+| `services/interview_docs.rs` | 166 | `internal/material/text.go` |
+| `services/interview_profile.rs` | 152 | `internal/material/profile.go` |
+| `services/coach_quota.rs` | 174 | `internal/coach/quota.go` |
+| `services/coach_settings.rs` | 65 | `internal/coach/settings.go` |
+| `controllers/coach.rs` | 162 | `internal/httpapi/coach.go` + `material.go` |
+| `middleware/error.rs` | 145 | `internal/middleware/errors.go` |
+| `middleware/auth.rs` | 147 | `internal/middleware/auth.go`（**只取 JWT 部分**，去掉 legacy 兜底分支） |
+| `middleware/admin_auth.rs` | 67 | `internal/middleware/adminauth.go` |
+| `routes/coach.rs` | 29 | `internal/httpapi/router.go` |
+| `main.rs` 的组装部分 | — | `cmd/rehearse/main.go` |
+| — | — | `internal/store/*`（**新增**，对应 `repositories/` 的裁剪版） |
+| — | — | `internal/config/config.go`（**新增**） |
+| — | — | `cmd/migrate/main.go`（**新增**） |
+
+⚠️ **`repositories/`（3 文件 6,597 行）不移植。** Rehearse 只碰自己那两张表，写一个薄薄的 `internal/store/` 就够——这也正是 §7.3 那个「独立库」决定带来的简化。
+
+⚠️ 这张表是**单向的检查清单**：每搬一个 Rust 模块就在 PR 里勾掉一行，`guards.go` 的每一条护栏都要能指回 Rust 侧的具体代码位置。**没有这份对照，`services/` 那种按功能切分的 Rust 目录很容易在按领域分包时被切碎，护栏就散了。**
 
 ## 8. App 端
 
@@ -715,9 +814,9 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 
 | 阶段 | 内容 | 影响面 |
 |------|------|--------|
-| **0** | 本 spec 定稿；名字、bundle id、域名、Go module 路径、env 键名、Supabase 项目与凭据归属定稿 | 无代码 |
+| **0** | 本 spec 定稿；名字、bundle id、域名、env 键名、Supabase 项目与凭据归属定稿（**Go module 路径与目录结构已定**，§7.9） | 无代码 |
 | **1** | **Rehearse 的 Postgres 就位**：在 Supabase 建项目、拿到 pooler 连接串（`6543` + `sslmode=require`）、跑 Rehearse 自己的迁移建 `rehearse_usage` 与 `rehearse_settings`、空库起全量验证。**完全不动墨言的 SQLite 库** | 新增后端（**无墨言改动**） |
-| **2** | **Go 服务骨架**：`rehearse-backend/` 起服务、连自己的 PG、**JWT 验签中间件（约 40 行，含 `status` 检查）**、错误信封、`/health`、Dockerfile（`scratch`/distroless）+ CI 构建（无 Docker builder） | 新增后端 |
+| **2** | **Go 服务骨架**：按 §7.9 的目录结构落地——`rehearse-backend/` 起服务、连自己的 PG、**JWT 验签中间件（约 40 行，含 `status` 检查）**、错误信封、`/health`、Dockerfile（多阶段：`golang:alpine` → `scratch`/distroless）、compose 里加 `build: ./rehearse-backend`、`go-checks.yml` 门禁 | 新增后端 + `docker-compose.yml` |
 | **3** | **业务移植**：14 个场景目录、`/turn`、`/summary`、`/scenario/draft`、配额、管理设置（含 LLM 配置）、材料解析三条路径；**行为对齐测试**（§7.8） | 新增后端 + `moyan-admin` Caddy 分流 |
 | **4** | **App 搬家 + 双向切换**：新建 `rehearse-app/`（搬 45 文件 + 4 依赖，`API_URL=https://rehearse.0x81.uk`、`AUTH_URL=https://auth.0x81.uk`）；墨言删 coach（App 侧 + Rust 侧）、撤销 Tab 改动、首页加导流卡；网关加 `rehearse.0x81.uk` 的 Host 分支；**`moyan-backend` 的 `jwt_middleware` 加 `status` 检查**（§7.4.3） | App ×2 + 后端 ×2 + 网关 |
 | **5** | **材料确认页适配小屏**：剪贴板优先 + 分段校对 + 聚焦疑似错误（§10.2） | App |
@@ -779,6 +878,9 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - 材料解析：DOCX 解压取文、文字版 PDF 抽取、文本量低于阈值置 `likely_scanned`；视觉请求 content parts 组装正确；上游报「不支持图片」映射为 422 `vision_not_supported`
 - 隐私：`/material/text` 与 `/material/profile` 的日志中不含材料样本身份串
 - 构建：`CGO_ENABLED=0` 下能编出静态二进制（`file` 显示 statically linked）；镜像能在 `scratch` 下起来
+- 部署链路：**`docker compose build rehearse-backend` 一条命令出成品镜像**，不需要 `scripts/fetch-*`、不需要 `./bin/` 挂载、不需要 release 资产；`docker-compose.yml` 里这一项是 `build: ./rehearse-backend`（与 `website` / `0xindex` 同一种写法），**不是** `moyan-backend` 那套 `image:` + 卷挂载
+- 门禁（`.github/workflows/go-checks.yml`）：`go build ./...` / `go vet ./...` / `go test ./...` 全绿；`golangci-lint` 按定下的规则集通过（§15 #6）
+- **对照表逐行勾完**：§7.9 的 Rust → Go 对照表每一行都有对应实现或明确标注「不移植」；`internal/coach/guards.go` 的每条护栏都能指回 Rust 侧的具体代码位置
 
 **App**
 - `rehearse-app` 搬迁后 14 个测试文件全绿
@@ -808,9 +910,10 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | 仓库 | 同仓新增 `rehearse-app/` 与 `rehearse-backend/` |
 | 后端 | **独立服务，Go 重写**（`net/http` + `pgx`，无 cgo） |
 | 后端端口 | `4324` |
+| Go module 与包结构 | `github.com/0x81/rehearse-backend`；**按领域分包**（`internal/coach` / `scenarios` / `material` / `llm` / `store`…），不镜像 Rust 目录。场景数据走 `go:embed`，护栏集中在 `coach/guards.go`（§7.9） |
 | App 域名 | 业务 `https://rehearse.0x81.uk`；登录 `https://auth.0x81.uk` |
 | 运行镜像 | `scratch` / `distroless/static`（静态二进制，无运行时依赖） |
-| CI 构建 | `CGO_ENABLED=0 go build` 直出，**不进 Docker builder** |
+| 构建与部署 | **`docker build` 一条命令出成品镜像**（多阶段：`golang:alpine` → `scratch`）；compose 里 `build: ./rehearse-backend`。**不用 release 资产、不用 `fetch-*` 脚本、不挂载 `./bin/`** |
 | 数据库 | **Rehearse 用独立的托管 Postgres（Supabase，只当 PG 用）**；墨言继续用它的 SQLite 文件。**不共享任何表** |
 | 表归属 | **无共享表**：`rehearse_usage` / `rehearse_settings` 全归 Rehearse 独占 |
 | 迁移所有权 | 各管各的：墨言管它的 SQLite 迁移，Rehearse 管自己的 PG 迁移，**无跨服务顺序依赖** |
@@ -841,13 +944,12 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 3. **墨言 Tab 是否真的让词库回归**——§8.3 给了推荐，但这是产品判断，可以否
 4. **是否现在就改 env 键名**——§7.7 建议改且不做回落，但要动服务器上的手工部署件
 5. **`moyan-app/design/coach/` 旧稿的归属**——Rehearse 的独立设计稿已经做出来了（`rehearse-app/design/index.html`，18 屏，见下方留档），所以「要不要重做」已经不是问题；剩的是那份 25 屏的旧 coach 稿搬迁后跟着走还是留在墨言目录下
-6. **Go module 路径**——`github.com/0x81/rehearse-backend`？仓库是 private，module 路径不影响构建（不需要 `go get`），但要定一个
-7. **`rehearse-backend` 是否需要 `go.mod` 的依赖审计**——现有 CI 只做 Rust 的 fmt/clippy/test 门禁，Go 侧要补什么门禁（`go vet` / `golangci-lint` / `go test ./...`）需要定
-8. **Supabase 项目与凭据归属**——谁建项目、连接串放哪（服务器 `.env` 是手工部署件）、密码轮换策略、以及 dev / 生产是否共用同一个项目（建议**不共用**，dev 用本地 PG 容器或独立项目）
-9. **现有 `coach_usage` 的历史数据是否搬进 Rehearse 的 PG**——不搬则用户配额计数归零（低频产品里可能无所谓）；搬则要写一次性迁移脚本。建议**不搬**，除非有付费用户
-10. **是否需要即时吊销**——`status` 进 claims 后受 token TTL 约束（§7.4.3）。如果将来真出现需要「封号立刻生效」的场景，再加 deny-list（§11 阶段 6）
-11. **LLM 配置双写的一致性**——配置存两份（§7.3.2），管理端 UI 是否要同时展示两处、轮换 key 是否要加校验提示，需要定
-12. **⚠️ §5.2 的场景清单与代码对不上（已核实，未修）**——§5.2 写「从**现有 8 个**场景映射」并列了 8 个，但 `moyan-backend/src/services/coach_scenarios.rs` 实际有 **11** 个：多出的三个是 `interview_screening` / `interview_behavioral` / `interview_technical`（都在 `HighStakes` 族下），随 `4aecb07`（PR #12）一起进来，**写稿时就已经存在**。连带三处对不上：① §5.2 把 `interview_behavioral` / `interview_technical` 列进「新增 6 个」是错的，真新增只有 4 个；② 命名对不上——稿子写 `interview_hr`，代码里叫 `interview_screening`，稿子没提这个名字；③ §5.1 的分族表（interview 4 / pitch 3 / hard_talk 3 / daily 4）从 §5.2 的清单推不出来（§5.2 没写 `salary_negotiation` / `promotion_defense` / `bad_news` 归哪一族，按最自然的归法得 4 / 2 / 4 / 4）。**影响 §7.6 的 `category` 枚举重定义与 §7.8 的「14 个预置场景」移植**，定稿前要修
+6. **Go 侧 CI 门禁的具体内容**——文件已定（`.github/workflows/go-checks.yml`，与 `rust-checks.yml` 并列），但规则集要定：`go vet` / `go test ./...` 是基础，`golangci-lint` 开哪些 linter、是否要求覆盖率阈值，需要定
+7. **Supabase 项目与凭据归属**——谁建项目、连接串放哪（服务器 `.env` 是手工部署件）、密码轮换策略、以及 dev / 生产是否共用同一个项目（建议**不共用**，dev 用本地 PG 容器或独立项目）
+8. **现有 `coach_usage` 的历史数据是否搬进 Rehearse 的 PG**——不搬则用户配额计数归零（低频产品里可能无所谓）；搬则要写一次性迁移脚本。建议**不搬**，除非有付费用户
+9. **是否需要即时吊销**——`status` 进 claims 后受 token TTL 约束（§7.4.3）。如果将来真出现需要「封号立刻生效」的场景，再加 deny-list（§11 阶段 6）
+10. **LLM 配置双写的一致性**——配置存两份（§7.3.2），管理端 UI 是否要同时展示两处、轮换 key 是否要加校验提示，需要定
+11. **⚠️ §5.2 的场景清单与代码对不上（已核实，未修）**——§5.2 写「从**现有 8 个**场景映射」并列了 8 个，但 `moyan-backend/src/services/coach_scenarios.rs` 实际有 **11** 个：多出的三个是 `interview_screening` / `interview_behavioral` / `interview_technical`（都在 `HighStakes` 族下），随 `4aecb07`（PR #12）一起进来，**写稿时就已经存在**。连带三处对不上：① §5.2 把 `interview_behavioral` / `interview_technical` 列进「新增 6 个」是错的，真新增只有 4 个；② 命名对不上——稿子写 `interview_hr`，代码里叫 `interview_screening`，稿子没提这个名字；③ §5.1 的分族表（interview 4 / pitch 3 / hard_talk 3 / daily 4）从 §5.2 的清单推不出来（§5.2 没写 `salary_negotiation` / `promotion_defense` / `bad_news` 归哪一族，按最自然的归法得 4 / 2 / 4 / 4）。**影响 §7.6 的 `category` 枚举重定义、§7.8 的「14 个预置场景」移植、以及 §7.9 的 `scenarios/data/` 到底该有几个 JSON**，定稿前要修
 
 已在核对中解决的问题（留档）：
 
@@ -866,3 +968,7 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - ✅ 容器侧 env 键名不带前缀，compose 侧带 `MOYAN_` 前缀（`docker-compose.yml:41-46`）
 - ✅ App 的 base URL 来自 `app.config.js` 的 `API_URL` → `extra.apiUrl` → `getApiBase()`，Rehearse 照抄即可
 - ✅ 本机 Go 版本 `go1.23.9`（够用，`ServeMux` 的 method+path 模式需要 ≥ 1.22）
+- ✅ **Go module 路径与项目目录结构定稿**（2026-10-02）：module `github.com/0x81/rehearse-backend`，**按 Go 惯例按领域分包**（不镜像 Rust 的 `services/` `models/` `controllers/`），完整目录树与 Rust → Go 对照表见 §7.9。因为选了「按领域分包」，§7.8 要求的对照清单**改由 §7.9 那张表承担**——这是该选择的必需配套，不是可选文档
+- ✅ **`moyan-backend/src/repositories/`（3 文件 6,597 行）不移植**：Rehearse 只碰自己那两张表（§7.3.2），写一个薄的 `internal/store/` 即可。这是「独立库」决定带来的简化
+- ✅ **CI 在 `.github/workflows/`**：现有 `rust-checks.yml` / `docker-build.yml` / `release-rust-binaries.yml`，Go 门禁新增 `go-checks.yml` 与它们并列（§7.9、§15 #6）
+- ✅ **Go 不沿用「CI 出二进制 + release 资产 + `fetch-*` 脚本」那套**（2026-10-02 定）：Rust 那么绕是因为 release 编译贵、且服务器明确不编译；Go 编译便宜到可以每次 `docker build` 现场做。所以 `rehearse-backend` 走 `build: ./rehearse-backend`，与 `website` / `0xindex` / `moyan-web` / `moyan-admin` 同一种写法。**不新增 `release-go-binaries.yml`、不新增 `scripts/fetch-go.sh`、不需要 `./bin/` 挂载**（§7.1）
