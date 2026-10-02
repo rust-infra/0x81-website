@@ -1,0 +1,72 @@
+name: Go Checks
+
+# `rehearse-backend` 的门禁：gofmt → vet → golangci-lint → test → build。
+#
+# **为什么 linter 是这么选的**（详见 rehearse-backend/.golangci.yml 的注释）：
+# 选法服务于「换语言重写悄悄丢掉护栏」这个风险，而不是照抄默认集。
+# 默认集之外加了 `exhaustive`（switch 漏枚举 case——Go 里是静默 fall through）、
+# `bodyclose`、`sqlclosecheck`。**刻意不上风格类 linter**：隔壁
+# rust-checks.yml 里写着 moyan-backend 至今未纳入门禁，就因为那 23 个问题
+# 全是卫生问题、没有正确性 bug；风格噪音会淹掉真正的护栏问题。
+#
+# ⚠️ 与 rust-checks.yml 一样做了路径过滤。如果将来把本 workflow 设成
+# required status check，路径过滤会让不匹配的 PR 永远停在
+# "Expected — waiting"，那时要把 paths 去掉。
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "rehearse-backend/**"
+      - ".github/workflows/go-checks.yml"
+  pull_request:
+    paths:
+      - "rehearse-backend/**"
+      - ".github/workflows/go-checks.yml"
+  workflow_dispatch:
+
+jobs:
+  rehearse-backend:
+    name: rehearse-backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rehearse-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # go-version-file 直接读 go.mod 里的 go 指令，避免两处写版本号。
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: rehearse-backend/go.mod
+          cache-dependency-path: rehearse-backend/go.sum
+
+      # 有输出即失败。对应 rust-checks.yml 的 `cargo fmt --all -- --check`。
+      - name: Format
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "以下文件未格式化："
+            echo "$out"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      # 版本与开发机上的 golangci-lint 对齐（v1.64.8），免得本地绿、CI 红。
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: rehearse-backend
+
+      # race detector 需要 cgo，所以这一步不设 CGO_ENABLED=0。
+      - name: Test
+        run: go test -race ./...
+
+      # 覆盖「静态二进制能不能编出来」——scratch 镜像依赖这一点（§7.1）。
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...

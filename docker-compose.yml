@@ -112,6 +112,48 @@ services:
       - moyan-backend
     restart: unless-stopped
 
+  rehearse-backend:
+    # 职演 API。与 moyan-backend 不同：**直接 docker build 出成品镜像**（§7.1）。
+    # Go 编译便宜，不需要「CI 出二进制 → release 资产 → fetch-rust.sh → 挂载进
+    # runtime 容器」那一套绕法，所以这里就是普通的多阶段构建，没有 image:、
+    # 没有 pull_policy、没有 ./bin 挂载。
+    #
+    # 设计：docs/superpowers/specs/2026-10-02-rehearse-design.md
+    build:
+      context: ./rehearse-backend
+    ports:
+      - "4324:4324"
+    environment:
+      - PORT=4324
+      # ⚠️ 下面三个键用 `${VAR:?}` 而不是 `${VAR:-默认}`——**这是刻意的**。
+      #
+      # `${VAR:-x}` 是「取默认值」，漏改服务器 .env 的后果是服务**带着假密钥
+      # 正常启动**、所有 token 验不过（原来的 JWT_SECRET 写的就是
+      # `:-change-me-in-production`），比启动失败难查得多。
+      # `${VAR:?}` 让 `docker compose up -d` 在变量缺失时直接报错退出。
+      # 见 §7.7 与 2026-10-02 的决定。
+      - DATABASE_URL=${REHEARSE_DATABASE_URL:?REHEARSE_DATABASE_URL is required (Supabase pooler DSN, §7.3.2)}
+      - JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
+      - ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
+      # Rehearse 没有 Web 客户端（§7.5），但管理端接口是被 moyan-admin 调的，
+      # 那些 Origin 必须在列表里，否则后台的「职演」区块会被 CORS 拦掉。
+      - ALLOWED_ORIGINS=${REHEARSE_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk,https://rehearse.0x81.uk}
+      # LLM 配置的 env 兜底（§7.3.2）。权威来源是 DB 里的 rehearse_settings；
+      # 这三个只保证「DB 还没配 / 不可达」时服务仍能起来。
+      - REHEARSE_LLM_BASE_URL=${REHEARSE_LLM_BASE_URL:-}
+      - REHEARSE_LLM_API_KEY=${REHEARSE_LLM_API_KEY:-}
+      - REHEARSE_LLM_MODEL=${REHEARSE_LLM_MODEL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    restart: unless-stopped
+    healthcheck:
+      # 镜像是 scratch——**里面没有 shell、没有 wget、没有 curl**，
+      # 所以不能用 moyan-backend 那种 `wget --spider`，只能让二进制自探。
+      test: ["CMD", "/rehearse", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   website-rs:
     # 同上：runtime stage 只装 ca-certificates/curl，二进制由 fetch-rust.sh 拉取后挂载。
     image: 0x81/website-rs-runtime:local

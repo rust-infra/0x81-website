@@ -1,0 +1,42 @@
+# golangci-lint 配置（§7.9 的「防忘事类 linter」）。
+#
+# 选法的依据是 §7.8 那个风险——「换语言重写悄悄丢掉护栏」——而不是照抄默认集。
+# 默认集（errcheck / gosimple / govet / ineffassign / staticcheck / unused）保持开启，
+# 另外加三个专门抓「忘记做某件事」的检查。
+
+run:
+  timeout: 5m
+  # 测试文件也要过检查：护栏测试本身写错了同样是问题。
+  tests: true
+
+linters:
+  enable:
+    # switch 漏枚举 case。Go 里漏 case 是**静默 fall through**，而本次移植
+    # 重定义了四个枚举（category / language / mode / kind），漏一个就是一条
+    # 静默的行为缺口。go vet 和默认集都抓不到它。
+    - exhaustive
+    # HTTP response body 未关。
+    - bodyclose
+    # sql.Rows / sql.Stmt 未关。
+    - sqlclosecheck
+
+linters-settings:
+  exhaustive:
+    # false = 有 default 分支**也不算**穷举。
+    #
+    # 这是刻意的严格：一个 `default:` 正是「悄悄跳过某个枚举值」最常见的形式。
+    # 需要兜底行为时应该显式列出全部取值，而不是靠 default 蒙过去。
+    default-signifies-exhaustive: false
+
+issues:
+  # 不限制同类问题的条数——门禁要么全绿要么红，截断输出只会掩盖问题。
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+# ⚠️ 明确不上风格类 linter（gocritic / revive / wsl / lll / godot 等）。
+#
+# 反面教材就在隔壁：`.github/workflows/rust-checks.yml` 里写着 moyan-backend
+# 至今未纳入 Rust 门禁，就因为那 23 个问题**全是卫生问题、没有正确性 bug**。
+# 风格噪音会把真正的护栏问题淹掉——那是比「少检查几条」更糟的结果。
+#
+# 要加风格类 linter 的话，先确认它抓的是正确性问题，不是排版偏好。

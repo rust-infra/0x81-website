@@ -1,0 +1,9 @@
+# 构建上下文里不需要的东西。镜像最终只有两个静态二进制 + CA 证书，
+# 但 build 阶段的上下文越小越快。
+.git
+.gitignore
+bin/
+*.md
+!README.md
+.golangci.yml
+Makefile
