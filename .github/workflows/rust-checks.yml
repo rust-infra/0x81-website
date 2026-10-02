@@ -1,0 +1,80 @@
+name: Rust Checks
+
+# `website-rs` 的门禁：fmt → clippy -D warnings → test → release build。
+#
+# **为什么需要它**：这个 crate 此前**没有任何 CI 门禁**——`docker-build.yml` 只验证
+# 镜像能否构建（编得过就行，不看告警），`release-rust-binaries.yml` 只发布二进制资产。
+# 于是 fmt 漂移、clippy 告警、测试挂掉这三类问题只会在部署时（或永远不）暴露。
+# 而 `website-rs` 是**全部流量的入口**，它的 `resolve_upstream` 出错不会报错、
+# 只会静默把请求丢到占位路由——这种代码最需要门禁。
+#
+# 顺序与 tact 上的本地推送门禁一致：fmt → clippy → build → test。
+#
+# ⚠️ **`moyan-backend` 暂未纳入**：它现在过不了这道门禁——
+#      · `cargo fmt --check` 报 **213 处**差异（整个 crate 没跑过 rustfmt）
+#      · `cargo clippy -- -D warnings` 报 **23 个**错误（16 个在 bin target）
+#    这 23 个全是卫生问题，没有正确性 bug：`&PathBuf` 该用 `&Path`(3)、
+#    多余 `return`(2)、无谓 `clone`(2)、`items_after_test_module`(2)、
+#    死字段（`locale` / `username` / `language_code` / `sort` / `order` / `kind`）(6)、
+#    未用变量(2)、`manual_char_comparison`(1)、`too_many_arguments`(2)、
+#    冗余闭包(1)、未用的 `is_terminal`(1)、`len_zero`(1)、`sort_by_key`(1)。
+#    清理是独立的一块活（先 `cargo fmt`，再逐个改 lint），做完把它加进下面的 matrix。
+#    在那之前，往本 workflow 里加 moyan-backend 只会让它一直是红的。
+on:
+  push:
+    branches: [main, develop]
+    # 路径过滤：改前端不该触发 Rust 编译（Rust 编译很贵）。
+    # ⚠️ 如果将来把本 workflow 设成 required status check，路径过滤会让
+    # 不匹配的 PR 永远停在 "Expected — waiting"；那时要把 paths 去掉。
+    paths:
+      - "website-rs/**"
+      - ".github/workflows/rust-checks.yml"
+  pull_request:
+    paths:
+      - "website-rs/**"
+      - ".github/workflows/rust-checks.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  website-rs:
+    name: website-rs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website-rs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # edition 2024 需要 Rust ≥ 1.85。
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: website-rs
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      # `--all-targets` 让测试代码也过 clippy，否则测试里的告警会漏掉。
+      # `-D warnings` 是关键：不加的话告警只打印不失败，门禁形同虚设。
+      - name: Clippy
+        run: cargo clippy --all-targets -- --deny warnings
+
+      # 当前 6 个测试：路由表、未知 Host、auth 与 moyan 不共用上游、
+      # Host 头剥端口、IPv6 字面量、h2 走 URI authority。
+      - name: Test
+        run: cargo test --all-targets
+
+      # 这一步覆盖「release 能不能编出来」——此前没有任何地方验过它。
+      # 产物不发布，发布在 release-rust-binaries.yml。
+      - name: Build (release)
+        run: cargo build --release

@@ -2,7 +2,7 @@
 // localStorage 换成 AsyncStorage；不包含打字相关接口）
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequestWithDeps } from './api-client';
-import { getApiBase } from './config';
+import { getApiBase, getAuthBase } from './config';
 import { translate } from './i18n';
 import type {
   CardProgress,
@@ -26,6 +26,13 @@ import type {
 } from './types';
 
 const API_BASE = getApiBase();
+/**
+ * 登录走**能力域名**（`auth.0x81.uk`），业务走**产品域名**（`moyan.0x81.uk`）。
+ * 两者现在指向同一个后端，但分开之后 auth 抽成独立服务时客户端不用发版。
+ * 未配置 `AUTH_URL` 时 `getAuthBase()` 回落到 `API_BASE`，所以开发环境行为不变。
+ * 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
+ */
+const AUTH_BASE = getAuthBase();
 export const TOKEN_KEY = 'moyan_token';
 
 async function getToken(): Promise<string | null> {
@@ -204,7 +211,7 @@ export interface KimiDeviceInfo {
 }
 
 export async function kimiDevice(deviceId: string): Promise<KimiDeviceInfo> {
-  const res = await fetch(`${API_BASE}/api/auth/kimi/device`, {
+  const res = await fetch(`${AUTH_BASE}/api/auth/kimi/device`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_id: deviceId }),
@@ -227,7 +234,7 @@ export async function kimiTokenPoll(
 ): Promise<
   { status: 'ok'; token: string; user: User } | { status: 'pending' }
 > {
-  const res = await fetch(`${API_BASE}/api/auth/kimi/token`, {
+  const res = await fetch(`${AUTH_BASE}/api/auth/kimi/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_code: deviceCode, device_id: deviceId }),
@@ -250,7 +257,7 @@ export async function kimiTokenPoll(
 export async function googleMobileLogin(
   code: string
 ): Promise<{ token: string; user: User }> {
-  const res = await fetch(`${API_BASE}/api/auth/google/mobile`, {
+  const res = await fetch(`${AUTH_BASE}/api/auth/google/mobile`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
