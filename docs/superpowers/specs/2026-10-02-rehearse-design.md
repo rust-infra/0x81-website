@@ -15,9 +15,9 @@
 | 定位 | 独立产品：职场演练，中英双语对等 |
 | 平台 | **只做 App**（iOS + Android），不做 Web。材料校对的手机端摩擦在 App 内解决（§10） |
 | 后端 | **独立服务 `rehearse-backend`，用 Go 重写**（2026-10-02 决定）。进程、语言、镜像都与墨言后端分开 |
-| 数据库 | **共享同一个 SQLite 文件**，表按归属划分（§7.3） |
+| 数据库 | **Rehearse 用独立的托管 Postgres（Supabase，只当 PG 用）**，**与墨言不共享任何表**；墨言继续用它的 SQLite 文件（§7.3） |
 | 认证 | **Rehearse 只验 token，不签发**：登录入口统一为 `auth.0x81.uk`（§7.4，详见 `2026-10-02-gateway-auth-design.md`） |
-| 账号 | 共享 0x81 账号体系：同一 `users` 表；建号逻辑只有认证服务一份（§9.1） |
+| 账号 | 共享 0x81 账号体系，但**共享载体是 JWT 契约而非数据库**：`sub` 即 user id，建号逻辑只有认证服务一份（§9.1） |
 | 仓库 | 同仓新增 `rehearse-app/` 与 `rehearse-backend/` |
 | 墨言侧 | 删净 coach 代码（App 侧 + Rust 侧）与四个原生依赖；**撤销**上游稿 §6.1 的「词库移出 Tab」改动 |
 
@@ -43,7 +43,7 @@
 
 ### 2.3 后端耦合极浅
 
-coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` 的 `llm` 键、JWT 中间件。与词库 / 打字 / 错题本**零交集**。真正的共享面只有 LLM 配置和用户体系——这两样恰好也是 Rehearse 独立后必须自带的东西。
+coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` 的 `llm` 键、JWT 中间件。与词库 / 打字 / 错题本**零交集**。真正的共享面只有 LLM 配置和用户体系——而这两样**都不需要共享存储**：LLM 配置由 Rehearse 自己存（§7.3.2），用户身份从 JWT 的 `sub` 来（§7.4.4）。**所以「共享数据库」从来不是拆分的必要条件**（§7.3）。
 
 ### 2.4 名字本身就是定位
 
@@ -231,7 +231,7 @@ coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` �
 └── docker-compose.yml
 ```
 
-理由：网关、compose、CI、证书、备份、共享数据库的挂载全在这。独立仓库要重复一整套部署管线，而 Rehearse 能不能活还不知道。`moyan-app` 已经在仓库里，先例在。**等它独立赚钱了再拆仓。**
+理由：网关、compose、CI、证书、备份全在这。独立仓库要重复一整套部署管线，而 Rehearse 能不能活还不知道。`moyan-app` 已经在仓库里，先例在。**等它独立赚钱了再拆仓。**
 
 ### 6.2 服务拓扑
 
@@ -248,11 +248,13 @@ moyan-web admin-moyan  auth.0x81  moyan-backend  rehearse-backend
                                   ├ 签发 JWT      └ 只验 JWT
                                   └ 验 JWT
                                         │              │
-                                        └──────┬───────┘
-                                               ▼
-                                   /data/moyan-data/moyan.db
-                                   ★ 同一个 SQLite 文件，两个进程都连
+                                        ▼              ▼
+                          /data/moyan-data/moyan.db    Supabase Postgres
+                          （宿主机上的 SQLite 文件）    （外部托管，TCP 连接）
+                          ★ 只有 moyan-backend 连它     ★ 只有 rehearse-backend 连它
 ```
+
+⚠️ **两个后端各连各的库，没有任何共享表**（§7.3）。第一版让两个容器挂载同一个宿主机目录、连同一个 `moyan.db`，已废弃——那是文件级耦合，代价远大于收益。
 
 网关环境变量：`PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend`、`PROXY_UPSTREAM_AUTH=moyan-backend`。**网关只多两条 Host 分支，路由结构不变**（仍是 Host-only，不做 Host+Path）。
 
@@ -291,7 +293,7 @@ handle /api/admin/settings/rehearse* { reverse_proxy rehearse-backend:4324 }
 handle /api/*                        { reverse_proxy moyan-backend:4323 }
 ```
 
-**为什么不把这个接口留在 `moyan-backend`**：表虽然是共享的，但配置的读写语义属于 Rehearse。留在墨言侧会让 `moyan-backend` 需要理解 Rehearse 的配置 schema，是把已经拆开的耦合重新缝回去。Caddy 加两行更便宜。
+**为什么不把这个接口留在 `moyan-backend`**：配置的读写语义属于 Rehearse，而且现在**连存储都不共享了**（§7.3）——`rehearse-backend` 管自己的 Postgres，`moyan-backend` 根本读不到。留在墨言侧会让它需要理解 Rehearse 的配置 schema，是把已经拆开的耦合重新缝回去。Caddy 加两行更便宜。
 
 两个服务共用同一个 `ADMIN_TOKEN`（§7.7）。
 
@@ -331,8 +333,8 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 | 关注点 | 选型 | 理由 |
 |---|---|---|
 | HTTP | 标准库 `net/http` + `ServeMux`（Go 1.22+ 支持 `POST /api/rehearse/turn` 模式串） | 零第三方路由依赖 |
-| SQLite 驱动 | **`modernc.org/sqlite`（纯 Go，无 cgo）** | 关键选型——只有它能让 `CGO_ENABLED=0` 成立，静态二进制与 `scratch` 镜像都依赖这一点 |
-| 数据访问 | 标准库 `database/sql`，手写 SQL | Rehearse 只碰 1 张自己的表 + 读 2 张共享表，不需要 ORM 或 sqlc 代码生成 |
+| Postgres 驱动 | **`github.com/jackc/pgx/v5`**（`pgxpool`） | 纯 Go，无 cgo——`CGO_ENABLED=0` 仍然成立，静态二进制与 `scratch` 镜像都依赖这一点（§7.3.2） |
+| 数据访问 | `database/sql` + `pgx` 的 `stdlib` 适配，手写 SQL | Rehearse 只碰自己的表（§7.3.3），不需要 ORM 或 sqlc 代码生成 |
 | JWT 验签 | `github.com/golang-jwt/jwt/v5` | HS256，claims 与 Rust 侧逐字段一致（§7.4）。**只验签，不签发** |
 | Google OAuth / ID token | **不需要** | 登录是 `auth.0x81.uk` 的事，Rehearse 不碰 |
 | PDF 抽文本 | `github.com/ledongthuc/pdf` | 纯 Go。Rust 侧用的是 `pdf-extract`（底层 `lopdf`，也是纯 Rust），所以能力对齐没有架构障碍 |
@@ -343,65 +345,81 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 
 **约束：任何引入 cgo 的依赖都要否决。** 一旦 `CGO_ENABLED=1`，静态二进制、`scratch` 镜像、免 Docker 构建这三条收益全部消失——那就失去了换 Go 的意义。
 
-### 7.3 共享数据库（本设计最需要想清楚的一块）
+### 7.3 存储：Rehearse 用自己的托管 Postgres
 
-#### 7.3.1 共享同一个 SQLite 文件
+> **这一节在 2026-10-02 重写过。** 第一版让两个后端共享同一个 SQLite 文件（切 WAL + `busy_timeout`，迁移所有权归 `moyan-backend`）。**已废弃**——服务跑在不同容器里，跨容器共享 SQLite 文件是文件级耦合，代价远大于收益。现方案：`rehearse-backend` 用独立的托管 Postgres，**与墨言不共享任何表**。
 
-两个服务连**同一个文件**（生产 `/data/moyan-data/moyan.db`，即 compose 里 `MOYAN_DATA_DIR` 挂到容器 `/data` 的那个目录）。
+#### 7.3.1 为什么放弃共享 SQLite 文件
 
-已核对现状：`SqliteRepositories::connect` 只做了 `create_if_missing(true)` + `max_connections(5)`，**没有设 journal_mode，也没有显式 busy_timeout**（sqlx 默认 5 秒）。默认 journal mode 是 rollback journal。
+第一版的方案是：两个容器挂载同一个宿主机目录（`${MOYAN_DATA_DIR}:/data`），连同一个 `moyan.db`，切 WAL + `busy_timeout=5000`。它在**同一台 Linux 主机的本地盘 bind mount 上**技术上能跑，但代价是：
 
-**单进程时没问题，两个进程写同一个文件时会互相阻塞。** 所以这次必须改：
+- **切 WAL 会改变已存在生产库的文件格式**——切之前必须手动跑一次 `moyan-db-backup --force`
+- **迁移所有权要归 `moyan-backend`**：Rehearse 建表得写进墨言的迁移目录，启动时只做 schema 断言、缺失就报错退出
+- **启动顺序被隐式耦合**：`rehearse-backend` 在墨言的迁移跑完前会 fail-fast 退出，配上 `restart: unless-stopped` 就是 crash loop
+- **共享表的 schema 变更要两个服务同时改代码**
+- 一个文件坏了两边一起死，备份/恢复粒度绑死
+- **平台脆弱**：本地盘上能用，换成 Docker Desktop（**本机开发就是 macOS，走 virtiofs**）/ 网络卷 / 拆 host / 多副本就会坏，而且是**静默**坏
 
-| 改动 | 值 | 说明 |
+而它换来的东西，按源码核对，只有**一个只读的 LLM 配置**：
+
+| 第一版认为要共享的 | 实际需要 | 结论 |
 |---|---|---|
-| `journal_mode` | **WAL** | 读写不互相阻塞；这是多进程共享 SQLite 的前提。它持久化在文件头，设一次就够，但两个服务都应在连接时设置以保证幂等 |
-| `busy_timeout` | **5000 ms** | 写锁被占用时等待而非立刻 `SQLITE_BUSY`。显式设，不依赖驱动默认值 |
+| `rehearse_usage`（原 `coach_usage`） | 只经 `Repository::coach_usage_*` 访问（`sqlite.rs:777-830`） | **Rehearse 独占表**，不需要共享 |
+| `admin_settings` 键 `rehearse`（原 `coach`） | `coach_settings.rs:29/42` 只读写自己那个键 | **独占键**，不需要共享 |
+| `admin_settings` 键 `llm` | `coach.rs:57/224/333`、`interview_ocr.rs:40`、`interview_profile.rs:49` 读它 | 唯一真共享项，**且只读** |
+| `users` | coach 相关代码里**零引用** | **完全不碰** |
 
-Rust 侧改 `SqliteConnectOptions`，Go 侧在 DSN 里带 `?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)`。
+即：为了一个只读的 JSON 配置，付出一整套文件级耦合。**不划算。**
 
-⚠️ **WAL 切换要在阶段 1 单独做一次并观察**，因为它改变的是已存在生产库的文件格式。README 里有每日热备（`moyan-db-backup`），切换前先手动跑一次 `moyan-db-backup --force`。
+#### 7.3.2 方案：独立托管 Postgres（Supabase，只当 PG 用）
 
-#### 7.3.2 表归属
+`rehearse-backend` 连一个**外部托管的 Postgres**（用 Supabase 提供，但**只用它的 Postgres**）：
 
-| 表 | 归属 | 谁能写 |
+- **不用 Supabase Auth**——身份仍然走 `auth.0x81.uk`（§7.4），JWT 仍是 `moyan-backend` 用 HS256 签发的。用 Supabase Auth 会引入第二套身份系统，直接威胁「共享账号」（§9.1）
+- **不用 Supabase Storage**——材料仍然不落盘（§10），隐私设计不变
+- 两个服务**通过 TCP 连各自的库**，谁也不挂载谁的数据目录。**这正是它消除文件级耦合的原因**——第一版那些代价（WAL、迁移所有权、启动顺序、平台脆弱）全部随之消失
+
+Rehearse 的表**全部归 Rehearse 独占**：
+
+| 表 | 内容 | 归属 |
 |---|---|---|
-| `users` | **共享契约表** | 两个服务都能写（注册、`find_or_create`、`touch_last_login`） |
-| `admin_settings` | **共享契约表** | 各写各的键：`llm`（墨言写、两边读）、`rehearse`（Rehearse 写） |
-| 墨言自己的表（`user_decks` / `user_cards` / `review_logs` / `type_*` / `collect_jobs` …） | 墨言独占 | 只有 `moyan-backend` |
-| `rehearse_usage` | Rehearse 独占 | 只有 `rehearse-backend` |
+| `rehearse_usage` | 每日额度计数（原 `coach_usage`） | Rehearse 独占 |
+| `rehearse_settings` | LLM 配置等管理端可改的设置（原 `admin_settings` 的 `coach` 键） | Rehearse 独占 |
 
-**规则：独占表可以随便改；共享契约表的 schema 变更需要两边同时改代码。** 共享表只有 2 张，且都是很稳定的结构（`users` 自 001 迁移以来没动过主键），所以这个约束在实践中几乎不触发。
+**没有任何共享表。** 所以第一版那条「独占表可以随便改、共享表要两边同时改代码」的规则**不再存在**——Rehearse 改自己的 schema 不需要通知任何人。
 
-**不做跨服务的数据库外键。** `rehearse_usage` 不加 `REFERENCES users(id)`——SQLite 的外键约束在跨服务写入下没有意义，反而让迁移顺序变复杂。
+**LLM 配置**：Rehearse 存在自己的 `rehearse_settings` 里，由管理端经 §6.4 已有的 Caddy 路径分流写入（`moyan-admin` → `rehearse-backend`，不经过 `moyan-backend`）。**保留 env 兜底**：照搬 `fill_from_env_if_empty` 的模式（`REHEARSE_LLM_BASE_URL` / `_API_KEY` / `_MODEL`），让冷启动和灾难恢复不依赖 DB。
+
+⚠️ **代价要认**：LLM 配置现在存两份（墨言的 `admin_settings.llm` 与 Rehearse 的 `rehearse_settings`）。轮换 API key 时**必须两边都改**。这条要写进 §8.4 的「必须同步」清单。
+
+**连接串要点**（Supabase 特有的坑，写下来免得踩）：
+
+- 容器内连要**用 pooler 端口**（`6543`，transaction 模式）而不是直连端口（`5432`）——直连在 serverless/容器场景下连接数很容易打满
+- 必须带 `sslmode=require`（Supabase 强制 TLS）
+- 连接串里有密码，**只走环境变量**，不进仓库、不进日志（§13 有对应验收项）
+- **备份不用自己管**：Supabase 自带定期备份（更高套餐还有 PITR），所以**不给 Rehearse 的 PG 写备份脚本**，也不往 `scripts/` 里加东西。`scripts/backup-moyan-db.py` 继续只管墨言的 SQLite，两边不互相牵连
+
+  这个决定是安全的，因为 Rehearse 侧的数据本来就都是**可重建的**：`rehearse_usage` 丢了最坏结果是当天配额重置（低频产品的损失可忽略），`rehearse_settings` 丢了有 env 兜底顶着（`REHEARSE_LLM_*`）。**没有任何不可重建的数据存在 Rehearse 的 PG 里**——这是「不自己备份」成立的前提，将来若往这张库加不可重建的东西，这条要重新评估。
+
+**约束：任何引入 cgo 的依赖都要否决。** `pgx` 是纯 Go，所以 `CGO_ENABLED=0` 仍然成立——静态二进制、`scratch` 镜像、免 Docker 构建这三条收益都保住了。
 
 #### 7.3.3 迁移所有权
 
-**v1：`moyan-backend` 是唯一的迁移所有者。**
+**各管各的。**
 
-- 它现在就在启动时跑 `sqlx::migrate!("./migrations")`（`repositories/sqlite.rs:432`），这个行为不变
-- 新增的 `rehearse_usage` 建表放在 `moyan-backend/migrations/012_*.sql`
-- **`rehearse-backend` 不跑任何迁移**，启动时只做 **schema 断言**：检查自己需要的表和列存在，缺失就**报错退出**（fail fast，而不是自己去建）
+- `moyan-backend` 继续在启动时跑 `sqlx::migrate!("./migrations")` 管它的 SQLite（`repositories/sqlite.rs:432`），**行为不变**
+- `rehearse-backend` 跑**自己的** Postgres 迁移（`rehearse-backend/migrations/`，用 `golang-migrate` 或手写 runner）
+- 两边**没有任何跨服务的迁移依赖，也没有启动顺序要求**——单独起 `rehearse-backend` 不需要墨言先跑过任何东西
 
-> **为什么接受「Rehearse 的表由墨言的迁移目录管」这个别扭**：Rehearse v1 需要的新表**只有 1 张**（`rehearse_usage`），其余全是共享表。为一个表引入独立的迁移基础设施（共享 `db/migrations/` 目录 + 一次性迁移容器 + 兼容现有 `_sqlx_migrations` 表的 runner）是明显的过度设计。
+第一版那条「升级触发条件」（第 3 次 schema 变更 / 出现第三个后端 / `moyan-backend` 要多副本）**随之作废**——它描述的问题已经不存在了。
 
-**升级触发条件（满足任一就把 migrations 提为共享资源 + 独立迁移步骤）：**
+#### 7.3.4 不用 MongoDB
 
-1. Rehearse 需要第 3 次 schema 变更（第 1 次是建 `rehearse_usage`）
-2. 出现第三个后端服务
-3. `moyan-backend` 需要多副本部署（现在的启动迁移在多副本下会打架）
+仓库里其实**已经有 MongoDB 实现**（`DATABASE_BACKEND=mongodb` 可切），但生产跑的是 SQLite。Rehearse 也不选它：
 
-#### 7.3.4 升级路径：SQLite → Postgres
-
-共享 SQLite 在个人学习类产品的量级下完全够用，但要留好退路。触发条件（满足任一）：
-
-- `SQLITE_BUSY` 在日志里持续出现，或 P99 延迟因写锁劣化
-- 需要把数据库放到独立机器
-- 服务数量增加到 3 个以上
-
-届时的路径：`moyan-backend` 的 repository trait 已经抽象了存储（`sqlite.rs` / `mongodb.rs` 两个实现），加一个 Postgres 实现是**已有模式内的扩展**，不是重构。Go 侧用 `pgx`。
-
-> 注：仓库里其实**已经有 MongoDB 实现**（`DATABASE_BACKEND=mongodb` 可切），但生产跑的是 SQLite。本稿不把 MongoDB 作为共享方案——两套存储后端同时活跃会让「谁是权威」变得含糊。
+- 配额计数需要**原子递增 + 当日唯一键**，Postgres 的 `INSERT ... ON CONFLICT ... WHERE` 直接表达（Rust 版就是这么写的，`sqlite.rs:802`），Mongo 要做同样的事得自己设计
+- 托管 PG 的运维面（备份、监控、连接池）比自建 Mongo 小
+- 再引一套存储后端会让「谁是权威」变得含糊
 
 ### 7.4 认证：只验签，不签发
 
@@ -418,10 +436,11 @@ Rust 侧改 `SqliteConnectOptions`，Go 侧在 DSN 里带 `?_pragma=journal_mode
 
 1. 从 `Authorization: Bearer <token>` 取 token
 2. 用共享密钥做 HS256 验签
-3. 把 `sub` 放进请求上下文
-4. 失败 → 401
+3. 检查 claims 里的 `status`，只有 `active` 放行（§7.4.3）
+4. 把 `sub` 放进请求上下文
+5. 失败 → 401
 
-没有 OAuth、没有签发、没有建号、没有对 `users` 表的写操作。
+没有 OAuth、没有签发、没有建号、没有对 `users` 表的读写。
 
 #### 7.4.2 不做的东西
 
@@ -433,21 +452,35 @@ Rust 侧改 `SqliteConnectOptions`，Go 侧在 DSN 里带 `?_pragma=journal_mode
 | 复制 `find_or_create` / `find_by_provider` 逻辑 | **不需要**——建号归认证服务 |
 | 复刻那个 `ALLOW_LEGACY_TOKEN_AUTH` 兜底后门 | **代码里不存在**。少一个后门就少一类事故 |
 
-#### 7.4.3 跨语言契约：三个必须对齐的点
+#### 7.4.3 跨语言契约：四个必须对齐的点
 
 两个后端一个 Rust 一个 Go，验签逻辑各写一份。**这份契约是它们之间唯一的耦合面**（`gateway-auth-design.md` §5）：
 
-1. **claims 结构**——`{ sub, email, name, exp, iat }`，HS256（`moyan-backend/src/middleware/auth.rs:11`）
+1. **claims 结构**——`{ sub, email, name, status, exp, iat }`，HS256（现在 `moyan-backend/src/middleware/auth.rs:11` 只有 `sub` / `email` / `name` + `exp` / `iat`，**要新增 `status`**，理由见下）
 2. **密钥**——同一个 `JWT_SECRET`，**必须 ASCII**（仓库里踩过 `X-Admin-Token` 含非 ASCII 恒 401 的坑）
 3. **401 响应形状**——`{ success: false, error: { code: "unauthorized", message } }`，否则客户端要写两套错误处理
+4. **`status` 的判定语义**——只有 `active` 放行，其余（`disabled` 等）一律 401；两个后端用同一套判定
 
 ⚠️ **`exp` / `iat` 必须是整数秒**。Go 的 `jwt/v5` 默认用 `NumericDate`，序列化出来同样是整数，但要确认不是浮点——否则 Rust 侧 `decode::<Claims>` 会因为类型不匹配失败。
 
 **互通必须有双向测试**：固定密钥 + 固定 payload，断言 Rust 签的 token Go 能验、Go 签的 Rust 能验。
 
+##### 为什么必须把 `status` 放进 claims
+
+`users.status`（`active` / `disabled`，默认 `active`，由 `migrations/003_vocabulary_server.sql` 加入）**现在不在 claims 里**。后果是：
+
+- Rehearse 是 verify-only，**看不到用户被禁用**
+- **但 `moyan-backend` 今天有同样的洞**：`jwt_middleware`（`auth.rs:44-71`）只验签名，**不读库、不查 status**。全仓库搜下来，`status` 只出现在三处——管理端用户列表的筛选条件（`sqlite.rs:406 ADMIN_USER_FILTER` 里的 `AND (? IS NULL OR u.status = ?)`）、取值校验（`admin.rs:448` 只允许 `active` / `disabled`）、以及测试断言
+
+也就是说 **`status` 目前是「管理端可见可改、但对鉴权完全无效」的死字段**——被禁用的用户照样能调墨言的全部 API。把 `status` 放进 claims 一次修掉两边：Rehearse 保持零 DB 依赖（它本来就读不到 `users`，§7.3.2），墨言那个既有洞也一起补上。
+
+⚠️ **代价要认**：禁用只在 token 续期时生效，**受 TTL 约束，做不到即时吊销**。若要即时吊销，需要一条小的共享通道（deny-list / 状态缓存），**而不是共享数据库**——那是将来独立的一小步，v1 不做（§15）。
+
 #### 7.4.4 账号仍然是共享的
 
-`users` 表有 `UNIQUE INDEX idx_users_provider ON users(provider, provider_id)`，建号逻辑只有认证服务一份。所以**同一个 Google 账号在墨言注册过，在 Rehearse 首次登录会命中同一条记录**——这正是共享数据库 + 统一认证换来的效果，Rehearse 侧不需要任何账号打通代码。
+`users` 表有 `UNIQUE INDEX idx_users_provider ON users(provider, provider_id)`，建号逻辑只有认证服务一份。所以**同一个 Google 账号在墨言注册过，在 Rehearse 首次登录会命中同一条记录**——Rehearse 侧不需要任何账号打通代码。
+
+⚠️ 但**这个效果的载体是 JWT，不是数据库**。Rehearse 不连 `users` 表（§7.3.2），它拿到的是 `sub`——而 `sub` 就是认证服务在**共享的** `users` 表里查/建出来的同一个 user id。所以「账号是共享的」成立，但共享发生在**认证服务那一侧**，Rehearse 只是消费一个已经确定的身份。需要头像/名字这类资料时，打 `auth.0x81.uk/api/auth/me`（§7.4.2），不读库。
 
 ### 7.5 路由与 API
 
@@ -462,7 +495,7 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 | `POST /api/coach/summary` | `POST /api/rehearse/summary` |
 | `POST /api/coach/interview/text` | `POST /api/rehearse/material/text` |
 | `POST /api/coach/interview/profile` | `POST /api/rehearse/material/profile` |
-| `GET|PUT /api/admin/settings/coach` | `GET|PUT /api/admin/settings/rehearse`（走 §6.4 的 Caddy 分流） |
+| `GET\|PUT /api/admin/settings/coach` | `GET\|PUT /api/admin/settings/rehearse`（走 §6.4 的 Caddy 分流）；**LLM 配置也归这个接口**，Rehearse 存自己的 `rehearse_settings`（§7.3.2） |
 | — | `GET /health` |
 
 ⚠️ **没有 `/api/auth/*`。** 登录入口是 `auth.0x81.uk`，由认证服务（`moyan-backend`）提供；Rehearse 后端不认识任何 auth 路径，它只验签（§7.4）。
@@ -492,12 +525,15 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 
 | 容器侧 | compose 侧（现在 → 改为） | 注入给谁 | 说明 |
 |---|---|---|---|
-| `DATABASE_URL` | `MOYAN_DATABASE_URL` → **保持不变** | 两个后端 | 指向**同一个文件**：`sqlite:/data/moyan.db` |
+| `DATABASE_URL` | `MOYAN_DATABASE_URL` 保持不变；**新增 `REHEARSE_DATABASE_URL`** | 各管各的 | 墨言：`sqlite:/data/moyan.db`（本地文件）。Rehearse：Supabase 的 Postgres 连接串，**要用 pooler 端口 + `sslmode=require`**（§7.3.2） |
 | `JWT_SECRET` | `MOYAN_JWT_SECRET` → 改名**可选** | 两个后端 | 两个后端各自验签用，必须是同一个值。**必须 ASCII** |
 | `ADMIN_TOKEN` | `MOYAN_ADMIN_TOKEN` → 改名**可选** | 两个后端 | 管理端 `X-Admin-Token` |
 | `ALLOWED_ORIGINS` | `MOYAN_ALLOWED_ORIGINS` | 两个后端 | Rehearse 侧加上 `https://rehearse.0x81.uk`（没有 Web 客户端时其实用不上，RN 的 fetch 不带 `Origin`，加上只是留口子） |
 | `GOOGLE_CLIENT_ID` | `MOYAN_GOOGLE_CLIENT_ID` | **只有认证服务** | Rehearse **不需要**——它不碰 OAuth（§7.4.2） |
+| `REHEARSE_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | **新增** | Rehearse | LLM 配置的 **env 兜底**（§7.3.2）。DB 的 `rehearse_settings` 里有值就优先用 DB |
 | `PORT` | — | Rehearse | 固定 `4324` |
+
+⚠️ **`REHEARSE_DATABASE_URL` 含 Postgres 密码**，所以：只走环境变量、不进仓库、不进日志、不进错误响应。§13 有对应的验收项。
 
 网关侧新增（`website-rs`）：`PROXY_UPSTREAM_HOST_REHEARSE`、`PROXY_UPSTREAM_AUTH`。**就这两个**——网关不验签、不注入身份（`gateway-auth-design.md` §4.1）。
 
@@ -607,7 +643,9 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 
 ### 9.1 共享账号
 
-Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse 直接登，零摩擦**——不需要任何账号打通逻辑，靠的是共享库 + `users(provider, provider_id)` 唯一索引（§7.4.3）。
+Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号，装 Rehearse 直接登，零摩擦**——不需要任何账号打通逻辑。
+
+⚠️ 但**共用的是身份，不是表**：Rehearse 不连 `users` 表（§7.3.2）。账号连续性的载体是 JWT 的 `sub`——`auth.0x81.uk`（即 `moyan-backend`）在**共享的** `users` 表里按 `users(provider, provider_id)` 唯一索引查到同一条记录，把它的 id 签进 token，Rehearse 验签后直接用（§7.4.4）。所以「共享」发生在认证服务那一侧，Rehearse 侧零代码。
 
 - **登录入口是 `auth.0x81.uk`**，Rehearse App 打它拿 JWT，业务请求打 `rehearse.0x81.uk`（§7.4.1）。Rehearse 后端只验签、不参与登录
 - 登录方式沿用认证服务现有的：**Google 移动端登录**（`POST /api/auth/google/mobile`），复用同一个 Google OAuth client id
@@ -677,21 +715,21 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 
 | 阶段 | 内容 | 影响面 |
 |------|------|--------|
-| **0** | 本 spec 定稿；名字、bundle id、域名、Go module 路径、env 键名定稿 | 无代码 |
-| **1** | **共享数据库就位**：SQLite 切 WAL + 显式 `busy_timeout`；迁移 012 建 `rehearse_usage`；切换前先跑一次 `moyan-db-backup --force` | `moyan-backend` |
-| **2** | **Go 服务骨架**：`rehearse-backend/` 起服务、连同一个库、**JWT 验签中间件（约 40 行）**、错误信封、`/health`、Dockerfile（`scratch`/distroless）+ CI 构建（无 Docker builder） | 新增后端 |
-| **3** | **业务移植**：14 个场景目录、`/turn`、`/summary`、`/scenario/draft`、配额、管理设置、材料解析三条路径；**行为对齐测试**（§7.8） | 新增后端 + `moyan-admin` Caddy 分流 |
-| **4** | **App 搬家 + 双向切换**：新建 `rehearse-app/`（搬 45 文件 + 4 依赖，`API_URL=https://rehearse.0x81.uk`、`AUTH_URL=https://auth.0x81.uk`）；墨言删 coach（App 侧 + Rust 侧）、撤销 Tab 改动、首页加导流卡；网关加 `rehearse.0x81.uk` 的 Host 分支 | App ×2 + 后端 ×2 + 网关 |
+| **0** | 本 spec 定稿；名字、bundle id、域名、Go module 路径、env 键名、Supabase 项目与凭据归属定稿 | 无代码 |
+| **1** | **Rehearse 的 Postgres 就位**：在 Supabase 建项目、拿到 pooler 连接串（`6543` + `sslmode=require`）、跑 Rehearse 自己的迁移建 `rehearse_usage` 与 `rehearse_settings`、空库起全量验证。**完全不动墨言的 SQLite 库** | 新增后端（**无墨言改动**） |
+| **2** | **Go 服务骨架**：`rehearse-backend/` 起服务、连自己的 PG、**JWT 验签中间件（约 40 行，含 `status` 检查）**、错误信封、`/health`、Dockerfile（`scratch`/distroless）+ CI 构建（无 Docker builder） | 新增后端 |
+| **3** | **业务移植**：14 个场景目录、`/turn`、`/summary`、`/scenario/draft`、配额、管理设置（含 LLM 配置）、材料解析三条路径；**行为对齐测试**（§7.8） | 新增后端 + `moyan-admin` Caddy 分流 |
+| **4** | **App 搬家 + 双向切换**：新建 `rehearse-app/`（搬 45 文件 + 4 依赖，`API_URL=https://rehearse.0x81.uk`、`AUTH_URL=https://auth.0x81.uk`）；墨言删 coach（App 侧 + Rust 侧）、撤销 Tab 改动、首页加导流卡；网关加 `rehearse.0x81.uk` 的 Host 分支；**`moyan-backend` 的 `jwt_middleware` 加 `status` 检查**（§7.4.3） | App ×2 + 后端 ×2 + 网关 |
 | **5** | **材料确认页适配小屏**：剪贴板优先 + 分段校对 + 聚焦疑似错误（§10.2） | App |
-| **6** | （可选）独立迁移步骤 / 转 Postgres（触发条件见 §7.3.3、§7.3.4） | 后端 |
+| **6** | （可选）**即时吊销通道**：deny-list / 状态缓存，补上 `status` 进 claims 后仍受 TTL 约束的那段窗口（§7.4.3、§15） | 后端 ×2 |
 
-**阶段 1 必须先做**，因为它是唯一动到**已存在的生产库**的一步。WAL 切换改变文件格式，且两个服务都要用它——这一步没验证通过，后面全白搭。
+**阶段 1 不再有生产风险。** 第一版里它是最危险的一步——切 WAL 会改变**已存在生产库**的文件格式，切之前得先手动备份。现在它只碰一个**新建的** Supabase 库，**墨言那套已经在跑的 SQLite 一行都不动**。这是换掉共享 SQLite 方案最直接的收益。
 
 **阶段 4 是唯一的原子切换点。** 在那之前，墨言 App 一直打 `/api/coach/*`（`moyan-backend` 照旧服务）；阶段 4 一次性完成「Rehearse App 上线 → 网关切路由 → 墨言删 coach」。**不要提前删 `moyan-backend` 的 coach 代码**——删早了墨言 App 立刻 404。
 
 阶段 4 内部顺序：先起 `rehearse-backend` 并确认网关路由通 → 再发 Rehearse App → 最后删墨言侧 coach。因为墨言 App 未上架，中间态不是线上事故，但要按一个批次推进，不要停在中间。
 
-**阶段 2 的冒烟验证**：Go 服务只实现 `/health` 和一个返回当前用户 id 的调试端点，用 curl 验证三件事——① 用 `moyan-backend` 签发的 token 能通过 Go 侧验签（跨语言互通，最容易出错）；② 无 token / 过期 token 被拒；③ 共享库能读写。
+**阶段 2 的冒烟验证**：Go 服务只实现 `/health` 和一个返回当前用户 id 的调试端点，用 curl 验证四件事——① 用 `moyan-backend` 签发的 token 能通过 Go 侧验签（跨语言互通，最容易出错）；② 无 token / 过期 token 被拒；③ `status=disabled` 的 token 被拒（§7.4.3）；④ 自己的 Postgres 能读写，且配额计数是原子递增。
 
 ## 12. 风险
 
@@ -700,14 +738,14 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 | **冷启动失败**（最大） | 高 | 墨言首页导流 + 共享账号（§9.2） |
 | **材料确认页在手机上流失** | 高 | 剪贴板优先 + 分段校对 + 聚焦疑似错误；材料定位为可选增强（§10.2）。真机实测后若仍流失，收窄为「只粘贴文本」（§10.3） |
 | **Go 重写悄悄丢掉护栏** | 高 | 移植验收门槛是**行为对齐**而非「能跑」：护栏判定与响应结构逐条对照（§7.8）。这是换语言重写最大的风险——不是写不出来，是漏掉那些踩坑才加上的限制 |
-| **共享 SQLite 写竞争** | 中 | WAL + `busy_timeout=5000`；日志里监控 `SQLITE_BUSY`；触发条件转 Postgres（§7.3.4）。阶段 1 单独验证 |
-| **WAL 切换动到生产库** | 中 | 切换前先跑 `moyan-db-backup --force`；切换后验证 `PRAGMA journal_mode` 与两服务读写 |
-| **两套后端的认证基线漂移** | 中 | 契约只有三件事：claims、密钥、401 响应形状（§7.4.3）。Rehearse 侧**代码里不存在** legacy 兜底分支；双向验签测试是硬门槛 |
+| **托管 PG 不可用 / 网络抖动** | 中 | Supabase 是**外部依赖**，断连时 Rehearse 整体不可用——**但墨言不受影响**（这是换独立库的直接收益）。缓解：用 pooler 连接、设连接超时与重试、`/health` 反映 DB 可达性 |
+| **LLM 配置两份漂移** | 中 | 配置存在两处（墨言 `admin_settings.llm` 与 Rehearse `rehearse_settings`）。轮换 key **必须两边都改**，写进 §8.4 的「必须同步」清单；env 兜底保证 DB 缺失时仍能起（§7.3.2） |
+| **两套后端的认证基线漂移** | 中 | 契约是四件事：claims（**含 `status`**）、密钥、401 响应形状、`status` 判定语义（§7.4.3）。Rehearse 侧**代码里不存在** legacy 兜底分支；双向验签测试是硬门槛 |
 | JWT 跨语言互通失败 | 中 | `exp`/`iat` 必须整数秒而非浮点（否则 Rust 侧 `decode::<Claims>` 失败）；固定密钥 + 固定 payload 做双向测试 |
 | 依赖 `auth.0x81.uk` 先就位 | 低 | 前置是 `gateway-auth-design.md` 阶段 1–2（加 DNS + 一条网关分支），零风险且不阻塞后端开发——`rehearse-backend` 可以先用 `moyan-backend` 签发的 token 做测试 |
-| 迁移所有权耦合 | 低 | v1 只需 1 张新表；触发条件明确（§7.3.3） |
+| 用户被禁用后仍可用（受 TTL 约束） | 低 | `status` 进 claims 后仍受 token TTL 限制，**做不到即时吊销**。v1 接受；需要时加 deny-list（§7.4.3、§11 阶段 6、§15） |
 | 定位膨胀成大杂烩 | 中 | v1 锁死 4 族 14 场景，不加族；新族走评审 |
-| 双份维护漂移 | 中 | 「必须同步」清单 + `SYNC.md` + PR 检查项（§8.4）。现在多了一层：Rust 与 Go 之间的**契约**（JWT claims、错误信封、DB schema）也需要同步清单 |
+| 双份维护漂移 | 中 | 「必须同步」清单 + `SYNC.md` + PR 检查项（§8.4）。现在多了一层：Rust 与 Go 之间的**契约**（JWT claims、错误信封、**LLM 配置**）也需要同步清单。DB schema 已不在其中——两边不再共享任何表（§7.3.2） |
 | 中文演练的 prompt 质量 | 中 | 中文「纠错」是另一套维度（表达策略 vs 语言正确性），需要单独设计 prompt 与评测集，不能复用英文模板（§4.4） |
 | 搬迁回归 | 中 | 14 个测试文件全绿是硬门槛（§8.1） |
 | env 键改名漏改服务器 `.env` | 低 | **故意不做回落**（§7.7）——漏改就让它启动失败，比静默吞掉好查 |
@@ -715,16 +753,19 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 
 ## 13. 测试与验收
 
-**共享数据库**
-- WAL 生效：`PRAGMA journal_mode` 返回 `wal`；两个服务同时连时都能读到对方的写入
-- 写竞争：并发压测（两个进程同时写 `users` 与各自的表）下无 `SQLITE_BUSY` 泄漏到响应
-- 迁移 012：`coach_usage` 数据完整搬到 `rehearse_usage`（行数与内容逐条比对）；`admin_settings` 的 `coach` 键改为 `rehearse`；`coach` 键不存在时迁移不报错
-- schema 断言：故意删掉 `rehearse_usage` 表后启动 `rehearse-backend`，必须**报错退出**而不是自动建表
-- 独占边界：`rehearse-backend` 的代码里不出现对墨言独占表（`user_decks` / `user_cards` / `type_*` / `collect_jobs` …）的任何 SQL
+**存储（Rehearse 自己的 Postgres）**
+- **连接**：Supabase 连接串可用（pooler 端口 + `sslmode=require`）；容器内能连通；连接池在并发下不泄漏
+- **隔离（现在是架构性的）**：`rehearse-backend` 的代码里**不出现任何 SQLite DSN，也不出现墨言的任何表名**（`users` / `user_decks` / `user_cards` / `type_*` / `collect_jobs` / `admin_settings` …）。第一版这条要靠人工审计，现在**连库都没有，写不出来**
+- **迁移**：`rehearse-backend/migrations/` 能空库起全量、能重复执行（幂等）；与 `moyan-backend` 的迁移**无任何顺序依赖**——单独起 Rehearse 不需要墨言先跑过任何东西
+- **配额原子性**：并发压测下 `rehearse_usage` 的当日计数不超限（对照 Rust 版 `coach_usage_try_consume_caps_concurrent_increments` 的行为，`sqlite.rs:4438`）
+- **凭据不泄漏**：连接串/密码不出现在日志、错误响应、`/health` 输出里
+- **降级**：Postgres 不可达时 `/health` 明确报错、业务接口返回可判定的错误码，而不是超时挂住
+- **数据搬迁**（若做）：现有 `coach_usage` 的行数与内容逐条比对；`coach_usage` 为空/表不存在时不报错
 
 **认证（Rehearse 侧）**
 - **跨语言互通（硬门槛）**：固定密钥 + 固定 payload，`moyan-backend` 签发的 token `rehearse-backend` 能验，反之亦然
 - `exp` / `iat` 序列化为**整数秒**（不是浮点）
+- **`status` 判定**：`status=active` 放行；`status=disabled` → 401，且**两个后端的判定结果一致**（§7.4.3）
 - 无 token / 过期 token / 签名错误 → 401，且**响应体形状与 `moyan-backend` 一致**（`{success:false, error:{code:"unauthorized"}}`）
 - 有效 token → 请求上下文里拿到正确的 user id
 - **代码审计**：`rehearse-backend` 里不出现任何 OAuth / JWT 签发 / `find_or_create` / 兜底认证逻辑（§7.4.2）
@@ -765,24 +806,25 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 | 材料上下文 | 任意场景可挂；v1 `kind` 仍只有 `resume` / `job` |
 | 材料导入 | 可选增强，非必经路径；v1 走完整三条路径（粘贴 / 文档 / 图片）+ 剪贴板优先 + 分段校对；真机实测后再决定是否收窄（§10.3） |
 | 仓库 | 同仓新增 `rehearse-app/` 与 `rehearse-backend/` |
-| 后端 | **独立服务，Go 重写**（`net/http` + `modernc.org/sqlite`，无 cgo） |
+| 后端 | **独立服务，Go 重写**（`net/http` + `pgx`，无 cgo） |
 | 后端端口 | `4324` |
 | App 域名 | 业务 `https://rehearse.0x81.uk`；登录 `https://auth.0x81.uk` |
 | 运行镜像 | `scratch` / `distroless/static`（静态二进制，无运行时依赖） |
 | CI 构建 | `CGO_ENABLED=0 go build` 直出，**不进 Docker builder** |
-| 数据库 | **共享同一个 SQLite 文件**；切 WAL + `busy_timeout=5000` |
-| 表归属 | `users` / `admin_settings` 共享契约；墨言表墨言独占；`rehearse_usage` Rehearse 独占 |
-| 迁移所有权 | v1 由 `moyan-backend` 独占（012 建 `rehearse_usage`）；`rehearse-backend` 只断言 schema |
+| 数据库 | **Rehearse 用独立的托管 Postgres（Supabase，只当 PG 用）**；墨言继续用它的 SQLite 文件。**不共享任何表** |
+| 表归属 | **无共享表**：`rehearse_usage` / `rehearse_settings` 全归 Rehearse 独占 |
+| 迁移所有权 | 各管各的：墨言管它的 SQLite 迁移，Rehearse 管自己的 PG 迁移，**无跨服务顺序依赖** |
 | **认证方案** | **A：统一登录入口 + 各服务自己验 token**（网关不做认证，`gateway-auth-design.md` §2.3 记录了为什么不选网关方案） |
-| **Rehearse 的 auth 面** | 一个约 40 行的 **JWT 验签中间件**。不写 OAuth、不签发、不建号、不需要 `idtoken` |
+| **Rehearse 的 auth 面** | 一个约 40 行的 **JWT 验签中间件**（含 `status` 检查）。不写 OAuth、不签发、不建号、不需要 `idtoken` |
 | **登录入口** | `auth.0x81.uk`；`moyan-app` 同批切换，`moyan-web` **不切**（同源相对路径，切了只会引入跨域） |
-| 账号 | 共享 `users` 表；建号逻辑只有认证服务一份 |
-| 跨语言契约 | claims + 密钥 + 401 响应形状；双向验签测试是硬门槛 |
+| 账号 | 共享身份但**不共享表**：`sub` 从 JWT 来；建号逻辑只有认证服务一份 |
+| 跨语言契约 | claims（**含 `status`**）+ 密钥 + 401 响应形状 + `status` 判定语义；双向验签测试是硬门槛 |
 | JWT 密钥 | 两个后端读同一个 `JWT_SECRET`，**必须 ASCII**；compose 侧改名可选，不做也能跑 |
 | 管理后台 | 复用 `moyan-admin`，Caddy 按路径分流 `/api/admin/settings/rehearse*` |
+| LLM 配置 | Rehearse 存自己的 `rehearse_settings`，管理端经 Caddy 分流写；保留 env 兜底。**存两份，轮换 key 要两边都改** |
 | bundle id | `uk.0x81.rehearse`；顺手把墨言改成 `uk.0x81.moyan` |
 | `/api/coach/*` 别名 | 不保留（无已发布客户端） |
-| 数据库改名 | 直接重命名 `coach_usage` → `rehearse_usage`，不双写 |
+| 数据库改名 | `coach_usage` → `rehearse_usage`，但**换了库**（SQLite → Postgres），不是重命名；是否搬历史数据见 §11 阶段 3 |
 | 墨言 Tab | 词库回归第 2 位，撤销「全屏页」改动；导流卡放首页 |
 | 共享代码 | 纯复制 + 「必须同步」清单；不抽 workspaces 共享包 |
 | 系统分享入口 | v2（iOS Share Extension 成本高，§10.2） |
@@ -798,10 +840,14 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 2. **材料导入是否收窄为「只粘贴文本」**——§10.3 给了判据（真机实测确认页流失率），但不预先决定，实测后定
 3. **墨言 Tab 是否真的让词库回归**——§8.3 给了推荐，但这是产品判断，可以否
 4. **是否现在就改 env 键名**——§7.7 建议改且不做回落，但要动服务器上的手工部署件
-5. **Rehearse 是否需要独立的设计稿**——上游稿的 `moyan-app/design/coach/index.html`（25 屏）能否直接改名复用，还是场景族扩张后需要重做
-6. **`moyan-app/design/coach/` 与 `docs/superpowers/verification/2026-09-27-moyan-ai-coach-app.md` 的归属**——前者是 coach 的设计稿，搬迁后应跟着走还是留在墨言目录下
-7. **Go module 路径**——`github.com/0x81/rehearse-backend`？仓库是 private，module 路径不影响构建（不需要 `go get`），但要定一个
-8. **`rehearse-backend` 是否需要 `go.mod` 的依赖审计**——现有 CI 只做 Rust 的 fmt/clippy/test 门禁，Go 侧要补什么门禁（`go vet` / `golangci-lint` / `go test ./...`）需要定
+5. **`moyan-app/design/coach/` 旧稿的归属**——Rehearse 的独立设计稿已经做出来了（`rehearse-app/design/index.html`，18 屏，见下方留档），所以「要不要重做」已经不是问题；剩的是那份 25 屏的旧 coach 稿搬迁后跟着走还是留在墨言目录下
+6. **Go module 路径**——`github.com/0x81/rehearse-backend`？仓库是 private，module 路径不影响构建（不需要 `go get`），但要定一个
+7. **`rehearse-backend` 是否需要 `go.mod` 的依赖审计**——现有 CI 只做 Rust 的 fmt/clippy/test 门禁，Go 侧要补什么门禁（`go vet` / `golangci-lint` / `go test ./...`）需要定
+8. **Supabase 项目与凭据归属**——谁建项目、连接串放哪（服务器 `.env` 是手工部署件）、密码轮换策略、以及 dev / 生产是否共用同一个项目（建议**不共用**，dev 用本地 PG 容器或独立项目）
+9. **现有 `coach_usage` 的历史数据是否搬进 Rehearse 的 PG**——不搬则用户配额计数归零（低频产品里可能无所谓）；搬则要写一次性迁移脚本。建议**不搬**，除非有付费用户
+10. **是否需要即时吊销**——`status` 进 claims 后受 token TTL 约束（§7.4.3）。如果将来真出现需要「封号立刻生效」的场景，再加 deny-list（§11 阶段 6）
+11. **LLM 配置双写的一致性**——配置存两份（§7.3.2），管理端 UI 是否要同时展示两处、轮换 key 是否要加校验提示，需要定
+12. **⚠️ §5.2 的场景清单与代码对不上（已核实，未修）**——§5.2 写「从**现有 8 个**场景映射」并列了 8 个，但 `moyan-backend/src/services/coach_scenarios.rs` 实际有 **11** 个：多出的三个是 `interview_screening` / `interview_behavioral` / `interview_technical`（都在 `HighStakes` 族下），随 `4aecb07`（PR #12）一起进来，**写稿时就已经存在**。连带三处对不上：① §5.2 把 `interview_behavioral` / `interview_technical` 列进「新增 6 个」是错的，真新增只有 4 个；② 命名对不上——稿子写 `interview_hr`，代码里叫 `interview_screening`，稿子没提这个名字；③ §5.1 的分族表（interview 4 / pitch 3 / hard_talk 3 / daily 4）从 §5.2 的清单推不出来（§5.2 没写 `salary_negotiation` / `promotion_defense` / `bad_news` 归哪一族，按最自然的归法得 4 / 2 / 4 / 4）。**影响 §7.6 的 `category` 枚举重定义与 §7.8 的「14 个预置场景」移植**，定稿前要修
 
 已在核对中解决的问题（留档）：
 
@@ -809,12 +855,14 @@ Rehearse 与墨言共用 `users` 表。**用户在墨言有账号，装 Rehearse
 - ✅ `expo-speech-recognition` / `expo-image-picker` / `expo-image-manipulator` / `expo-document-picker` 在墨言里只被 coach 代码引用，四个可全删（§8.1）
 - ✅ `moyan-app/src/app/decks.tsx` 全屏页确实存在、`(tabs)/decks.tsx` 已不存在，§8.3 的撤销动作有明确落点
 - ✅ 后端确实 `nest("/api/coach", ...)`（`main.rs:73`），管理端设置键确实是 `admin_settings.coach`（`COACH_SETTING_KEY`）
-- ✅ JWT claims 是 `{sub, email, name, exp, iat}`（`middleware/auth.rs:11`），HS256——**Go 侧要复刻它做验签**（§7.4.3）
-- ✅ **`argon2` 在代码里根本没被用到**（`Cargo.toml` 里注释写着「for future local auth」），所以没有密码哈希互通问题——auth 全是 OAuth
-- ✅ `moyan-admin` 用 `X-Admin-Token`，不走用户 JWT，因此不受本稿任何改动影响
-- ✅ `moyan-web` 的 `API_BASE` 是 `import.meta.env.VITE_API_URL || ""`（`backendMode.ts:22`），线上是空串走相对路径——这是「Web 不切登录入口」的依据
-- ✅ `sqlx` 的 `SqliteConnectOptions` **没设 journal_mode、没显式设 busy_timeout**（`sqlite.rs:411-432`），共享前必须补（§7.3.1）
-- ✅ `sqlx::migrate!("./migrations")` 在启动时无条件执行（`sqlite.rs:432`），这是迁移所有权的现状基础
+- ✅ JWT claims 是 `{sub, email, name, exp, iat}`（`middleware/auth.rs:11`），HS256——**Go 侧要复刻它做验签，并新增 `status`**（§7.4.3）
+- ✅ **`users.status`（`active` / `disabled`，`003_vocabulary_server.sql` 加入）存在，但从未被任何鉴权路径检查**：`jwt_middleware`（`auth.rs:44-71`）只验签名、不读库；`status` 全仓库只出现在管理端列表筛选（`sqlite.rs:406`）、取值校验（`admin.rs:448`）和测试里。即**被禁用的用户今天照样能调墨言全部 API**（§7.4.3 借这次一起修）
+- ✅ **coach 代码对 `users` 表零引用**；对 `admin_settings` 只读写自己的 `coach` 键 + 读 `llm` 键。这是「共享数据库从来不是必要条件」的直接依据（§7.3.1）
+- ✅ **LLM 配置已有 env 兜底**：`admin_collect.rs:633 fill_from_env_if_empty()` 读 `MOYAN_LLM_BASE_URL`/`OPENAI_BASE_URL`、`MOYAN_LLM_API_KEY`/`OPENAI_API_KEY`、`MOYAN_LLM_MODEL`/`OPENAI_MODEL`——Rehearse 照搬这个模式即可（§7.3.2）
+- ✅ **仓库里没有任何 Supabase / Postgres 痕迹**；`docker-compose.yml` 里没有任何数据库容器；备份脚本 `scripts/backup-moyan-db.py` 是 SQLite 专用。所以托管 PG 是**全新的一块基础设施**——但**备份不需要自己补**（Supabase 负责，§7.3.2），`scripts/` 不动
+- ✅ **Rehearse 的独立设计稿已完成**：`rehearse-app/design/index.html`（18 屏 / 6 组，light + dark 两套主题，5 张预览图，含可交互的会话演示屏）。所以「要不要重做设计稿」这个问题已经用行动回答了（§15 #5）
+- ✅ `sqlx` 的 `SqliteConnectOptions` 没设 journal_mode、没显式设 busy_timeout（`sqlite.rs:411-432`）——**这个发现随共享 SQLite 方案一起作废**（§7.3.1），留档说明当时评估过、又为什么放弃
+- ✅ `sqlx::migrate!("./migrations")` 在启动时无条件执行（`sqlite.rs:432`）——墨言的迁移行为不变（§7.3.3）
 - ✅ 容器侧 env 键名不带前缀，compose 侧带 `MOYAN_` 前缀（`docker-compose.yml:41-46`）
 - ✅ App 的 base URL 来自 `app.config.js` 的 `API_URL` → `extra.apiUrl` → `getApiBase()`，Rehearse 照抄即可
 - ✅ 本机 Go 版本 `go1.23.9`（够用，`ServeMux` 的 method+path 模式需要 ≥ 1.22）
