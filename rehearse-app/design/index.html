@@ -13,7 +13,17 @@
    两者共用同一套 token 结构（paper/card/ink/accent/border + study-* 沉浸面），
    所以代码层可以共用 theme.ts 的形状，但色值不同。
 
-   新增主题时必须四套都验，禁止在组件里硬编码色值（阴影除外）。
+   新增主题时必须三套都验，禁止在组件里硬编码色值（阴影除外）。
+
+   ⚠️ **两条 token 语义规则**（踩过才写下来的，换主题时最容易漂）：
+   1. `--button-bg` / `--tag-bg` / `--knob` 是**中性** token，任何主题下都必须是
+      中性灰阶，不能沾强调色。曾经 iOS Dark 把主按钮做成系统蓝、把 tag 底做成
+      蓝色微光，结果同一个「主按钮」在三个主题里是黑底/白底/蓝底三种东西。
+   2. **强调色只给「正在进行 / 需要注意」的东西**：麦克风、倒计时、进度、会话页的
+      口型与声波。结构性的容器（卡片、按钮、标签）一律中性。否则一个页面上会有
+      两三个强调色在抢注意力，层级就塌了。
+   填充面另有一组：`--accent-fill` / `--on-accent`（浅色主题的深蓝和深色主题的
+   浅蓝不能共用同一个填充色），以及会话页专用的 `--study-accent` 系列。
 ------------------------------------------------------------------ */
 [data-theme="yanhui"]{
   --paper:#F4F5F7; --card:#FFFFFF; --ink:#1A1D21; --ink-light:#4A5058; --ink-muted:#676E78;
@@ -49,7 +59,9 @@
   --accent-fill:#0A6ED1; --on-accent:#FFFFFF; --knob:#FFFFFF;
   --study-accent:#0A84FF; --study-on-accent:#FFFFFF;
   --study-bg:#000000; --study-card:#1C1C1E; --study-text:#FFFFFF; --study-muted:rgba(255,255,255,.6);
-  --tag-bg:rgba(10,132,255,.12); --tag-text:#EBEBF5; --button-bg:#0A84FF; --button-text:#FFFFFF;
+  /* tag 底与主按钮都是中性 token，这里不能跟着系统蓝走——否则同一个主按钮
+     在三个主题里是黑底/白底/蓝底三种东西。系统蓝只留给 --accent* 系列。 */
+  --tag-bg:rgba(255,255,255,.10); --tag-text:#EBEBF5; --button-bg:#FFFFFF; --button-text:#000000;
   --divider:#38383A; --hover:#2C2C2E; --input-bg:#1C1C1E;
   --warn:#FF9F0A; --warn-bg:#FF9F0A1A;
   --ok:#30D158; --ok-bg:#30D1581A;
@@ -176,8 +188,11 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .countdown .num small{font-size:13px;font-weight:500;margin-left:3px}
 .countdown .txt{flex:1;min-width:0}
 .countdown .txt b{display:block;font-size:14px;font-weight:600}
-.countdown .txt span{font-size:12px;opacity:.82;line-height:1.45;display:block;margin-top:3px}
-.countdown .go{font-size:12px;font-weight:600;opacity:.9;white-space:nowrap}
+/* 填充面上的副文案只能用透明度做层级，但 82% 在 iOS Dark 的浅蓝底上只有 3.92:1。
+   92% 是实测能同时满足三套主题的下限。 */
+.countdown .txt span{font-size:12px;opacity:.92;line-height:1.45;display:block;margin-top:3px}
+/* 「继续」是 CTA，靠字重区分层级，不加透明度 */
+.countdown .go{font-size:12px;font-weight:600;white-space:nowrap}
 
 /* ---------------- 分段控件（语言切换） ---------------- */
 .seg{display:flex;background:var(--tag-bg);border-radius:11px;padding:3px;gap:3px}
@@ -256,6 +271,10 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .subtitle .en{font-size:17px;line-height:1.45;color:var(--study-text);font-weight:500}
 .subtitle .zh{font-size:12px;line-height:1.5;color:var(--study-muted);margin-top:5px}
 .subtitle .tools{display:flex;gap:12px;margin-top:9px}
+/* 「上一条」态：只把英文降到 study-muted（13.6:1 → 6.0:1，明显变弱但仍可读）。
+   ⚠️ 中文对照**不能跟着降透明度**——它本身用的 --study-muted 只有 62% alpha，
+   再叠一层会掉到 3:1 以下（双层透明度的经典坑）。 */
+.subtitle.past .en{color:var(--study-muted)}
 .subtitle .tools button{
   font:inherit;font-size:11px;background:none;border:none;color:var(--study-muted);
   display:flex;align-items:center;gap:4px;cursor:pointer;padding:0;
@@ -264,7 +283,9 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 /* 用户消息 + 贴在内的反馈面板 */
 .umsg{background:var(--study-card);border-radius:16px;padding:14px;margin-bottom:12px}
 .umsg .said{font-size:14px;line-height:1.5;color:var(--study-text);opacity:.92}
-.umsg .said .interim{opacity:.5}
+/* interim 是「正在识别」的实时文本，用户盯着它长出来，必须可读。
+   .5 在砚灰上只有 4.47:1，.62 三套都过。 */
+.umsg .said .interim{opacity:.62}
 .fb{border-top:1px solid var(--study-muted);margin-top:12px;padding-top:11px}
 .fb .fbhead{
   display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
@@ -386,7 +407,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .row .d{font-size:11px;color:var(--ink-muted);margin-top:3px}
 .row .r{margin-left:auto;font-size:12px;color:var(--ink-muted);display:flex;align-items:center;gap:8px}
 .switch{width:44px;height:26px;border-radius:13px;background:var(--tag-bg);position:relative;flex:0 0 auto}
-.switch.on{background:var(--accent)}
+.switch.on{background:var(--accent-fill)}
 .switch i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:10px;background:var(--knob);
   transition:transform .18s ease}
 .switch.on i{transform:translateX(18px)}
@@ -743,9 +764,9 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
             <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
           </div>
 
-          <div class="subtitle">
-            <div class="en" style="opacity:.4">So you said you led the migration. What was the hardest call…</div>
-            <div class="zh" style="opacity:.6">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
+          <div class="subtitle past">
+            <div class="en">So you said you led the migration. What was the hardest call…</div>
+            <div class="zh">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
           </div>
 
           <div class="umsg">
@@ -1598,10 +1619,10 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
           </div>
 
           <div class="umsg">
-            <div class="said" style="opacity:.55">We had two options, um, we can do a big bang release, or we can do it, uh, slowly.</div>
+            <div class="said" style="opacity:.72">We had two options, um, we can do a big bang release, or we can do it, uh, slowly.</div>
           </div>
         </div>
-        <div class="nextlines" style="opacity:.4">
+        <div class="nextlines" style="opacity:.55">
           <div class="h">接下来可以怎么说 <span class="zh">Next lines</span></div>
           <div class="nl"><span class="spk">▸</span><div>重试后才会出现</div></div>
         </div>
