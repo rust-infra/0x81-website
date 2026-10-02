@@ -145,3 +145,108 @@ type Scenario struct {
 	Difficulty  string   `json:"difficulty"`
 	MaxTurns    uint32   `json:"max_turns"`
 }
+
+// Role 是对话里的一方。
+type Role string
+
+const (
+	RoleCoach Role = "coach"
+	RoleUser  Role = "user"
+)
+
+func (r Role) Valid() bool { return r == RoleCoach || r == RoleUser }
+
+// Turn 是一轮对话。
+type Turn struct {
+	Role    Role   `json:"role"`
+	Content string `json:"content"`
+}
+
+// Mood 是 AI 回复的情绪标记，用于客户端选头像/动效。
+type Mood string
+
+const (
+	MoodNeutral     Mood = "neutral"
+	MoodFriendly    Mood = "friendly"
+	MoodCurious     Mood = "curious"
+	MoodEncouraging Mood = "encouraging"
+	MoodConcerned   Mood = "concerned"
+)
+
+var AllMoods = []Mood{
+	MoodNeutral, MoodFriendly, MoodCurious, MoodEncouraging, MoodConcerned,
+}
+
+func (m Mood) Valid() bool {
+	for _, known := range AllMoods {
+		if m == known {
+			return true
+		}
+	}
+	return false
+}
+
+// Correction 是一条纠错。
+type Correction struct {
+	Original  string `json:"original"`
+	Corrected string `json:"corrected"`
+	// ExplanationZh 始终是中文——解释面向的学习者是中文母语者，
+	// 与演练语言无关（§7.6）。
+	ExplanationZh string `json:"explanation_zh"`
+}
+
+// BetterPhrasing 是「更地道的说法」。字段名语言中立，不需要改（§7.6）。
+type BetterPhrasing struct {
+	Original string `json:"original"`
+	Natural  string `json:"natural"`
+	NoteZh   string `json:"note_zh"`
+}
+
+// Feedback 是一轮的教学反馈。
+type Feedback struct {
+	Corrections    []Correction    `json:"corrections"`
+	BetterPhrasing *BetterPhrasing `json:"better_phrasing"`
+	Expressions    []Expression    `json:"expressions"`
+}
+
+// MaterialContext 是挂载的材料（原 `interview`，§7.6 改名）。
+type MaterialContext struct {
+	// Kind 取值 resume / job / resume_job。
+	Kind    string `json:"kind"`
+	Profile string `json:"profile"`
+}
+
+// MaterialKindResumeJob 表示简历与 JD 合并成一个档案（上游的合并标记）。
+const MaterialKindResumeJob = "resume_job"
+
+// MaterialKinds 是 kind 的合法取值。v1 不扩 `project_doc` / `perf_review`（§5.3）。
+var MaterialKinds = []string{"resume", "job", MaterialKindResumeJob}
+
+// TurnRequest 是 `POST /api/rehearse/turn` 的请求体。
+type TurnRequest struct {
+	Scenario   Scenario `json:"scenario"`
+	ScenarioID *string  `json:"scenario_id"`
+	History    []Turn   `json:"history"`
+	UserText   string   `json:"user_text"`
+	Mode       Mode     `json:"mode"`
+	// CompletedTurns 是客户端声称的已完成轮数。**不能信任**——
+	// 见 `coach.NextTurnIndex` 的防作弊处理。
+	CompletedTurns *uint32 `json:"completed_turns"`
+	// Language 覆盖场景的默认演练语言（用户可在会话中切，§5.4）。
+	Language *Language `json:"language"`
+	// Material 原为 `interview`（§7.6 改名）。
+	Material *MaterialContext `json:"material"`
+}
+
+// TurnResponse 是 `POST /api/rehearse/turn` 的响应。
+type TurnResponse struct {
+	Reply string `json:"reply"`
+	// ReplyTranslation 原为 `reply_zh`（§7.6 改名）。中文演练时为 null。
+	ReplyTranslation *string `json:"reply_translation"`
+	Mood             Mood    `json:"mood"`
+	TurnIndex        uint32  `json:"turn_index"`
+	LimitReached     bool    `json:"limit_reached"`
+	// Feedback 在 immersion 模式下为 null。
+	Feedback  *Feedback    `json:"feedback"`
+	NextLines []Expression `json:"next_lines"`
+}
