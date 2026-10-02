@@ -170,31 +170,47 @@ coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` �
 
 现有 `category` 是 `daily` / `engineering` / `high_stakes`——按「工作类型」分，对英语陪练够用，对职场演练太窄。改为按**演练目的**分族：
 
-| 族 | 说明 | v1 场景数 |
-|----|------|-----------|
-| `interview` | 面试。求职、转岗、晋升面 | 4 |
-| `pitch` | 汇报与答辩。周会、项目评审、晋升答辩 | 3 |
-| `hard_talk` | 高压对话。拒绝需求、给负面反馈、承认失误、要资源 | 3 |
-| `daily` | 日常协作。站会、code review、跨时区沟通、茶水间 | 4 |
+| 族 | 说明 | v1 场景 | 数 |
+|----|------|---------|---:|
+| `interview` | 面试。求职、转岗、晋升面 | `interview_screening` / `interview_behavioral` / `interview_technical` / `salary_negotiation` | 4 |
+| `pitch` | 汇报与答辩。项目评审、晋升答辩 | `design_discussion` / `promotion_defense` | 2 |
+| `hard_talk` | 高压对话。故障同步、排期拉扯、负面反馈、承认失误 | `incident_sync` / `scope_deadline` / `one_on_one` / `bad_news` | 4 |
+| `daily` | 日常协作。站会、code review、求助、茶水间 | `standup_update` / `code_review` / `ask_for_help` / `remote_small_talk` | 4 |
 
-共 **14 个预置场景**。
+共 **14 个预置场景**（现有 11 + 真新增 3，见 §5.2）。
 
-### 5.2 从现有 8 个场景映射
+⚠️ 这张表**逐 id 列出**，而不是只写数字。第一版只写数字，结果与 §5.2 的清单对不上：`pitch` 记 3 而清单只能凑出 2、`hard_talk` 记 3 而清单是 4，而且 `pitch` 的描述里写着「周会」——**根本没有这个场景**。改成逐 id 列出后，两节可以直接对账。**改这张表必须同步改 §5.2。**
+
+### 5.2 从现有 11 个场景映射
 
 现有场景基本都能平移，但归属要重判——`incident_sync` 和 `scope_deadline` 现在挂在 `high_stakes`，实际上它们考的是「高压下怎么说」，归 `hard_talk` 更准。
 
-| 现有 id | 新族 | 处置 |
-|---------|------|------|
-| `standup_update` | `daily` | 保留 |
-| `code_review` | `daily` | 保留 |
-| `design_discussion` | `pitch` | 改族 |
-| `incident_sync` | `hard_talk` | 改族 |
-| `scope_deadline` | `hard_talk` | 改族 |
-| `ask_for_help` | `daily` | 保留 |
-| `one_on_one` | `hard_talk` | 改族（反馈与成长诉求本质是高压对话） |
-| `remote_small_talk` | `daily` | 保留 |
+**核对基准**：`moyan-backend/src/services/coach_scenarios.rs` 实际有 **11** 个 `Preset`（`Engineering` 3 / `HighStakes` 5 / `Daily` 3）。第一版写「现有 8 个」是错的——漏了三个**已经存在**的面试场景。
 
-新增 6 个：`interview_hr`（HR 初筛）、`interview_behavioral`（行为面 STAR）、`interview_technical`（技术深挖）、`salary_negotiation`（薪资谈判）、`promotion_defense`（晋升答辩）、`bad_news`（承认失误）。
+| 现有 id | 代码里的 `category` | 新族 | 处置 |
+|---------|------|------|------|
+| `standup_update` | `Engineering` | `daily` | 保留 |
+| `code_review` | `Engineering` | `daily` | 保留 |
+| `design_discussion` | `Engineering` | `pitch` | 改族 |
+| `incident_sync` | `HighStakes` | `hard_talk` | 改族 |
+| `scope_deadline` | `HighStakes` | `hard_talk` | 改族 |
+| `ask_for_help` | `Daily` | `daily` | 保留 |
+| `one_on_one` | `Daily` | `hard_talk` | 改族（反馈与成长诉求本质是高压对话） |
+| `remote_small_talk` | `Daily` | `daily` | 保留 |
+| `interview_screening` | `HighStakes` | `interview` | 改族 |
+| `interview_behavioral` | `HighStakes` | `interview` | 改族 |
+| `interview_technical` | `HighStakes` | `interview` | 改族 |
+
+**真新增 3 个**：`salary_negotiation`（薪资谈判）→ `interview`、`promotion_defense`（晋升答辩）→ `pitch`、`bad_news`（承认失误）→ `hard_talk`。
+
+11 + 3 = **14**，与 §5.1 的 4 / 2 / 4 / 4 对得上。
+
+⚠️ **第一版的两处错（已修，留档说明为什么）**：
+
+1. **把 `interview_behavioral` / `interview_technical` 列进「新增 6 个」**——它们代码里**已经有了**，随 `4aecb07`（PR #12）一起进来。所以真新增是 3 个，不是 6 个
+2. **稿子写的 `interview_hr` 在代码里叫 `interview_screening`**（`title_zh` 都是「HR 初筛」，是同一个场景）。**沿用代码里的 id**，不改名——没有已发布客户端所以改名是免费的，但也没有改的理由
+
+新增场景的 `language` 默认值：`salary_negotiation` 默认 `zh-CN`（中文薪资谈判更常见），其余见 §5.4。
 
 ### 5.3 材料上下文泛化
 
@@ -213,7 +229,7 @@ coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` �
 
 ### 5.4 场景 × 语言是正交的
 
-每个预置场景带一个 `language` 默认值（例如 `interview_hr` 默认 `zh-CN`，`remote_small_talk` 默认 `en-US`），用户在开始前可切换。这样 14 个场景实际覆盖 14 × 5 种组合，不需要为「中文面试」「英文面试」各建一套场景。
+每个预置场景带一个 `language` 默认值（例如 `interview_screening` 默认 `zh-CN`、`remote_small_talk` 默认 `en-US`），用户在开始前可切换。这样 14 个场景实际覆盖 14 × 5 种组合，不需要为「中文面试」「英文面试」各建一套场景。
 
 ## 6. 仓库与部署拓扑
 
@@ -606,7 +622,7 @@ rehearse-backend/
 │   ├── scenarios/
 │   │   ├── scenarios.go          # 查表（逻辑只剩这个，§7.8）
 │   │   ├── category.go           # 新 category 枚举（§5.1）
-│   │   └── data/                 # go:embed 的场景数据（文案 + 教学点）
+│   │   └── data/                 # go:embed 的场景数据：14 个 JSON，一场景一文件（文案 + 教学点）
 │   ├── material/
 │   │   ├── text.go               # PDF / DOCX 抽文本
 │   │   ├── vision.go             # 视觉模型调用
@@ -630,7 +646,7 @@ rehearse-backend/
 
 - **按领域分包，不镜像 Rust 的 `services/` `models/` `controllers/`。** 这是 Go 的惯例，但**代价是 §7.8 那份对照清单不再自动成立**——所以下面那张表是**必需交付物**，不是可选的文档
 - **`internal/coach/guards.go` 单独存在**。§7.8 说换语言重写最大的风险是悄悄丢掉护栏，那就把护栏**集中到一个文件**：code review 时只需盯这一处，`guards_test.go` 也只需要一个
-- **`scenarios/data/` + `go:embed`**。§7.8 的判断是「主体是数据」——14 个场景的文案与教学点从 Rust 常量搬成 JSON，逻辑代码只剩查表
+- **`scenarios/data/` + `go:embed`**。§7.8 的判断是「主体是数据」——14 个场景的文案与教学点从 Rust 常量搬成 JSON（**一场景一文件，共 14 个**），逻辑代码只剩查表
 - **两个二进制**（`cmd/rehearse` + `cmd/migrate`）。迁移与 server 分开，**server 运行时不带 DDL 权限**，也避免「启动时无条件迁移」这种在多副本下会打架的行为
 - **`internal/` 而不是 `pkg/`**。这是服务不是库，没有对外 API；`internal/` 让「不对外」由编译器保证
 - **`model` 用单数**。Go 的包名惯例是单数（`net/url` 而非 `net/urls`）
@@ -949,7 +965,6 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 8. **现有 `coach_usage` 的历史数据是否搬进 Rehearse 的 PG**——不搬则用户配额计数归零（低频产品里可能无所谓）；搬则要写一次性迁移脚本。建议**不搬**，除非有付费用户
 9. **是否需要即时吊销**——`status` 进 claims 后受 token TTL 约束（§7.4.3）。如果将来真出现需要「封号立刻生效」的场景，再加 deny-list（§11 阶段 6）
 10. **LLM 配置双写的一致性**——配置存两份（§7.3.2），管理端 UI 是否要同时展示两处、轮换 key 是否要加校验提示，需要定
-11. **⚠️ §5.2 的场景清单与代码对不上（已核实，未修）**——§5.2 写「从**现有 8 个**场景映射」并列了 8 个，但 `moyan-backend/src/services/coach_scenarios.rs` 实际有 **11** 个：多出的三个是 `interview_screening` / `interview_behavioral` / `interview_technical`（都在 `HighStakes` 族下），随 `4aecb07`（PR #12）一起进来，**写稿时就已经存在**。连带三处对不上：① §5.2 把 `interview_behavioral` / `interview_technical` 列进「新增 6 个」是错的，真新增只有 4 个；② 命名对不上——稿子写 `interview_hr`，代码里叫 `interview_screening`，稿子没提这个名字；③ §5.1 的分族表（interview 4 / pitch 3 / hard_talk 3 / daily 4）从 §5.2 的清单推不出来（§5.2 没写 `salary_negotiation` / `promotion_defense` / `bad_news` 归哪一族，按最自然的归法得 4 / 2 / 4 / 4）。**影响 §7.6 的 `category` 枚举重定义、§7.8 的「14 个预置场景」移植、以及 §7.9 的 `scenarios/data/` 到底该有几个 JSON**，定稿前要修
 
 已在核对中解决的问题（留档）：
 
@@ -972,3 +987,4 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - ✅ **`moyan-backend/src/repositories/`（3 文件 6,597 行）不移植**：Rehearse 只碰自己那两张表（§7.3.2），写一个薄的 `internal/store/` 即可。这是「独立库」决定带来的简化
 - ✅ **CI 在 `.github/workflows/`**：现有 `rust-checks.yml` / `docker-build.yml` / `release-rust-binaries.yml`，Go 门禁新增 `go-checks.yml` 与它们并列（§7.9、§15 #6）
 - ✅ **Go 不沿用「CI 出二进制 + release 资产 + `fetch-*` 脚本」那套**（2026-10-02 定）：Rust 那么绕是因为 release 编译贵、且服务器明确不编译；Go 编译便宜到可以每次 `docker build` 现场做。所以 `rehearse-backend` 走 `build: ./rehearse-backend`，与 `website` / `0xindex` / `moyan-web` / `moyan-admin` 同一种写法。**不新增 `release-go-binaries.yml`、不新增 `scripts/fetch-go.sh`、不需要 `./bin/` 挂载**（§7.1）
+- ✅ **§5.1 / §5.2 的场景清单 drift 已修**（2026-10-02）：核对 `coach_scenarios.rs` 实际 **11** 个 `Preset`（`Engineering` 3 / `HighStakes` 5 / `Daily` 3），不是稿子写的 8 个。修正了三处——① §5.2 的映射表从 8 行补到 11 行（补上 `interview_screening` / `interview_behavioral` / `interview_technical`）；② 「新增 6 个」改为「**真新增 3 个**」（`salary_negotiation` / `promotion_defense` / `bad_news`），`interview_behavioral` / `interview_technical` 代码里早已存在；③ §5.1 的分族表从 `interview 4 / pitch 3 / hard_talk 3 / daily 4` 改为 **`4 / 2 / 4 / 4`**（原表的 `pitch` 记 3、但清单只能凑出 2，`hard_talk` 记 3、清单是 4；`pitch` 描述里的「周会」根本没有对应场景）。总数仍是 **14**（11 + 3）。另：稿子写的 `interview_hr` 沿用代码里的 id `interview_screening`，不改名。§5.1 的表改成**逐 id 列出**，两节可以直接对账
