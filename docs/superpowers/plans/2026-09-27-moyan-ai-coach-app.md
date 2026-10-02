@@ -54,7 +54,7 @@
 
 ## Screen Map
 
-设计稿：`moyan-app/design/coach/index.html`。实现时用 `?only=N&theme=...&state=...` 放大核对。
+设计稿：`rehearse-app/design/coach-v1-moyan/index.html`（2026-10-02 从 `moyan-app/design/coach/` 移来，随 coach 拆出成 Rehearse）。实现时用 `?only=N&theme=...&state=...` 放大核对。
 
 | # | 屏 | App 路由 / 组件 |
 |---|----|-----------------|

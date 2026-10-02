@@ -684,7 +684,8 @@ App 为 `orientation: portrait`，所有布局按竖屏设计，不引入屏幕�
 
 **设计稿**
 
-- 页面设计稿：`moyan-app/design/coach/index.html`——单文件、25 屏，分六组：陪练 Tab 与基础流程 / 面试模拟 / 面试成果与导入异常 / 会话状态 / 历史与设置 / 状态与降级
+- 页面设计稿：`rehearse-app/design/coach-v1-moyan/index.html`——单文件、25 屏，分六组：陪练 Tab 与基础流程 / 面试模拟 / 面试成果与导入异常 / 会话状态 / 历史与设置 / 状态与降级
+  > 原路径 `moyan-app/design/coach/index.html`。2026-10-02 coach 从墨言拆出成 Rehearse 时，这份稿子跟着功能移到了 `rehearse-app/design/coach-v1-moyan/`——它是**职演 v1 之前、coach 长在墨言里时**的设计，与职演自己的新稿（`rehearse-app/design/index.html`，18 屏、独立配色）不是新旧版本关系
 - 可切 4 套主题（宣纸白 / 神野墨 / iOS / iOS Dark）、3 种会话状态（倾听 / 思考 / 说话），以及「对比度修正 前 / 后」对照
 - 深链参数：`?theme=shenyemo&state=listening&contrast=after`；`?only=14` 只显示第 14 屏，便于放大评审单屏
 - 实现前先在设计稿上确认版式，再按同一套 token 落到 App 代码
