@@ -88,6 +88,16 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .caption{font-size:13px;font-weight:600;color:#333A42}
 .caption small{display:block;font-weight:400;font-size:11px;color:#6E757D;margin-top:3px;text-align:center;max-width:390px;line-height:1.5}
 
+/* 转场说明：只在设计稿里出现，用来回答「相邻两屏之间到底变了什么」。
+   不属于 App，所以用稿纸自己的配色，不跟主题变量。 */
+.deltas{
+  width:390px;margin-top:10px;background:#fff;border:1px solid #D9DCE1;border-radius:12px;
+  padding:11px 13px;font-size:11.5px;line-height:1.75;color:#3B3833;
+}
+.deltas b{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#6E757D;margin-bottom:6px;font-weight:600}
+.deltas em{font-style:normal;color:#2F5D8C;font-weight:600}
+.deltas .no{color:#9AA0A6;text-decoration:line-through}
+
 /* ---------------- 手机外壳 ---------------- */
 .phone{
   position:relative; width:390px; height:844px; border-radius:46px; overflow:hidden;
@@ -261,11 +271,17 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
   color:var(--study-muted);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
 }
 .fb .fbhead .zh{letter-spacing:0;text-transform:none;font-size:11px;font-weight:400}
-.fb .row{margin-top:10px}
+.fb .fix{margin-top:10px;display:block}
 .fb .wrong{font-size:13px;color:var(--study-muted);text-decoration:line-through}
 .fb .right{font-size:14px;color:var(--study-text);font-weight:500;margin-top:2px}
 .fb .why{font-size:11px;color:var(--study-muted);margin-top:4px;line-height:1.5}
 .fb .arrow{color:var(--accent);font-size:12px}
+/* 折叠态：只留标题 + 一行预览。进入「说话」状态时自动折叠，把注意力让给新回复 */
+.fb.collapsed .fbhead .chev{transform:rotate(180deg)}
+.fb.collapsed .fbhead .preview{
+  margin-left:8px;font-weight:400;letter-spacing:0;text-transform:none;
+  color:var(--study-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+}
 
 /* 接下来可以怎么说 */
 .nextlines{
@@ -420,7 +436,9 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
   <p class="hint">
     手机 390×844 竖屏。<strong>配色是职演自己的，不沿用墨言的水墨体系</strong>——墨言是文人气质，
     职演面向有 deadline 的职场对话，要冷静可信。token 结构相同（paper/card/ink/accent + study-* 沉浸面），
-    所以代码层可以共用 <code>theme.ts</code> 的形状。深链：<code>?theme=</code> · <code>?state=</code> · <code>?only=</code>
+    所以代码层可以共用 <code>theme.ts</code> 的形状。<br>
+    <strong>屏 4 / 5 / 6 是同一轮对话的三个状态</strong>（倾听 → 思考 → 说话），每屏下面标了「转场时到底变了什么」。
+    深链：<code>?theme=</code> · <code>?state=</code> · <code>?only=</code>
   </p>
 </div>
 
@@ -681,6 +699,12 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
     </div>
     <p class="caption">4 · 会话 · 倾听<small>麦克风音量环代表「在听」。字幕英文在上、中文对照在下——<strong>用户自己说的话不翻译</strong>。底部「接下来可以怎么说」在反馈模式和沉浸模式都显示，它是防流失功能</small></p>
+    <div class="deltas">
+      <b>进入倾听（本轮开始）</b>
+      用户点麦克风 → STT 启动。上一条 AI 字幕保持 <em>100%</em>，上一轮的反馈保持<em>展开</em>——
+      不回退、不闪空，想回看随时能看。<br>
+      麦克风此刻是实心的：点它表示<em>「我说完了」</em>，不等系统自己收敛。
+    </div>
   </section>
 
   <!-- 5. 会话 · 思考 -->
@@ -730,12 +754,12 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
               <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
               </div>
-              <div class="row">
+              <div class="fix">
                 <div class="wrong">we can do a big bang release</div>
                 <div class="right"><span class="arrow">→</span> we could either do a big-bang release</div>
                 <div class="why">「either … or」才能把两个选项框成一组；单说 can 听起来像在罗列，不像在比较。</div>
               </div>
-              <div class="row">
+              <div class="fix">
                 <div class="wrong">We choose slowly</div>
                 <div class="right"><span class="arrow">→</span> We went with the slower path</div>
                 <div class="why">描述过去做的决定用过去式；「slowly」修饰动作，修饰「路径」要用 slower path。</div>
@@ -762,11 +786,101 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
     </div>
     <p class="caption">5 · 会话 · 思考<small>反馈面板<strong>贴在用户那条消息内部</strong>，不是单独一块——它评价的就是这条消息。默认展开、点标题可折叠成一行预览</small></p>
+    <div class="deltas">
+      <b>倾听 → 思考</b>
+      STT 出 final：气泡从 interim 变 final 并<em>冻结</em>（不再增长）。<br>
+      AI 字幕<em>淡到 40%</em>——表示「这条已经过去了」，但<em>不清空</em>，避免整块闪一下。<br>
+      本轮的反馈面板<em>在这时出现</em>（服务端刚返回，不是用户说完就有）。<br>
+      麦克风禁用；「接下来」保持上一条不变，<em>避免布局跳动</em>。
+    </div>
   </section>
 
-  <!-- 6. 会话 · 说话（沉浸模式） -->
+  <!-- 6. 会话 · 说话（与屏 4/5 同一轮，只是状态不同） -->
   <section class="slot">
     <div class="phone state-speaking">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
+      </span></div>
+      <div class="screen session">
+        <div class="shead">
+          <div>
+            <div class="t">技术深挖 · English (US)</div>
+            <div class="sub">第 3 / 12 轮</div>
+          </div>
+          <div class="end">结束</div>
+        </div>
+        <div class="sbody">
+          <div class="avatar-tile">
+            <div class="avatar">
+              <svg viewBox="0 0 120 120">
+                <circle class="ring" cx="60" cy="52" r="40"/>
+                <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
+                <circle class="stroke" cx="60" cy="52" r="29"/>
+                <path class="stroke brow" d="M45 43h9"/>
+                <path class="stroke brow" d="M66 43h9"/>
+                <circle class="eye" cx="49.5" cy="53" r="2.3"/>
+                <circle class="eye" cx="70.5" cy="53" r="2.3"/>
+                <path class="mouth" d="M53 68q7 4 14 0"/>
+                <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
+                <path class="wave" d="M104 40q9 12 0 24"/>
+                <path class="wave" d="M16 40q-9 12 0 24"/>
+              </svg>
+            </div>
+            <div class="state-label">正在说</div>
+            <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+          </div>
+
+          <div class="subtitle">
+            <div class="en">Right — but what I want to hear is the trade-off. You took the slower path, so what did you give up?</div>
+            <div class="zh">好——但我想听的是取舍。你选了慢的那条路，那你放弃了什么？</div>
+            <div class="tools">
+              <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
+              <button style="color:var(--study-accent)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>打断</button>
+            </div>
+          </div>
+
+          <div class="umsg">
+            <div class="said">We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.</div>
+            <div class="fb collapsed">
+              <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
+                <span class="preview">we could either do a big-bang release…</span>
+                <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex:0 0 auto"><path d="M6 15l6-6 6 6"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="nextlines">
+          <div class="h">接下来可以怎么说 <span class="zh">Next lines</span></div>
+          <div class="nl">
+            <span class="spk">▸</span>
+            <div>Mainly the ability to roll back quickly. With a big bang we'd have had no safe exit.
+              <span class="zh">主要是快速回滚的能力——一次性上线就没有安全退路了。</span>
+            </div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg></div>
+          <div class="spacer"></div>
+          <div class="mic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+          <div class="spacer"></div>
+          <div class="ic on"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">6 · 会话 · 说话<small>与屏 4/5 <strong>同一轮</strong>，只是状态不同。AI 字幕换成新回复、反馈面板自动折叠成一行、麦克风此刻是「打断」。底部 Tab 里那条 <code>on</code> 是反馈模式开关</small></p>
+    <div class="deltas">
+      <b>思考 → 说话</b>
+      AI 字幕<em>换成本轮回复</em>，从 40% 淡入到 100%；旧的那条上滚。<br>
+      反馈面板<em>自动折叠成一行</em>——把注意力让给新回复，但点一下还能展开。<br>
+      「接下来可以怎么说」<em>换成新的</em>（讲的是下一句，不重复已出现的内容）。<br>
+      麦克风变为<em>「打断」</em>：点了立刻 stop TTS 并进入倾听，这是唯一一个用户能插队的转场。
+    </div>
+  </section>
+
+  <!-- 7. 会话 · 中文演练（表达策略） -->
+  <section class="slot">
+    <div class="phone">
       <div class="statusbar"><span>9:41</span><span class="icons">
         <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
         <svg width="25" height="12" viewBox="0 0 25 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x=".9" y=".9" width="19.2" height="10.2" rx="3"/><rect x="2.6" y="2.6" width="15" height="6.8" rx="1.8" fill="currentColor" stroke="none"/><path d="M22.4 4.2v3.6c1.1-.3 1.6-1 1.6-1.8s-.5-1.5-1.6-1.8z" fill="currentColor" stroke="none"/></svg>
@@ -813,12 +927,12 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
               <div class="fbhead">表达策略 <span class="zh">· 2 处</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
               </div>
-              <div class="row">
+              <div class="fix">
                 <div class="wrong">嗯……那个……然后就……</div>
                 <div class="right"><span class="arrow">→</span> 去掉填充词，先说结论</div>
                 <div class="why">HR 问「为什么走」，真正想听的是<strong>你的判断</strong>。犹豫的语气会被读成「有没说出口的原因」。</div>
               </div>
-              <div class="row">
+              <div class="fix">
                 <div class="wrong">成长空间不太够了</div>
                 <div class="right"><span class="arrow">→</span> 我想做的是 X，但当时的团队重心在 Y，两边短期内对不齐</div>
                 <div class="why">说「成长空间不够」是在评价前东家；说「我想要什么、当时为什么对不齐」是在陈述事实。<strong>不贬低、可验证</strong>。</div>
@@ -844,7 +958,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">6 · 会话 · 说话（沉浸模式）<small>中文演练的纠错是<strong>表达策略</strong>（不贬低、可验证、先说结论），不是语法。这就是为什么语言不能只当成口音——两种语言纠的是两件事</small></p>
+    <p class="caption">7 · 会话 · 中文演练（表达策略）<small>中文纠的是<strong>表达策略</strong>（不贬低、可验证、先说结论），不是语法。这就是为什么语言不能只当成口音——两种语言纠的是两件事</small></p>
   </section>
 
   <!-- 7. 总结 -->
@@ -913,7 +1027,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">7 · 总结<small>用户第一次练完<strong>唯一带走的东西</strong>就是这一页。所以「待改进」必须是具体的、可执行的（「过去式不稳定，出现了 4 次」而不是「语法要加强」）。最后一条建议换场景——防止用户在一个场景上原地打转</small></p>
+    <p class="caption">8 · 总结<small>用户第一次练完<strong>唯一带走的东西</strong>就是这一页。所以「待改进」必须是具体的、可执行的（「过去式不稳定，出现了 4 次」而不是「语法要加强」）。最后一条建议换场景——防止用户在一个场景上原地打转</small></p>
   </section>
 
   <!-- ============================================================ -->
@@ -986,7 +1100,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">8 · 材料来源<small>「粘贴文本」放在第一位并标推荐——这是设计稿 §10.2 的补偿手段之一。开发环境会检测剪贴板并给出提示，把「存文件→找文件→选文件」这条最烦的路径绕开</small></p>
+    <p class="caption">9 · 材料来源<small>「粘贴文本」放在第一位并标推荐——这是设计稿 §10.2 的补偿手段之一。开发环境会检测剪贴板并给出提示，把「存文件→找文件→选文件」这条最烦的路径绕开</small></p>
   </section>
 
   <!-- 9. 校对（关键屏） -->
@@ -1066,7 +1180,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">9 · 材料校对（关键屏）<small>这是整个产品<strong>流失风险最高</strong>的一屏。三个补偿手段都在这里：<span class="focus">分段折叠</span>（不用通读）、<span class="hits">疑似错误高亮</span>（识别最易错的日期/数字）、以及顶部的<span style="color:var(--warn)">敏感信息一键删除</span>——<strong>点了才删，不自动、不阻断</strong></small></p>
+    <p class="caption">10 · 材料校对（关键屏）<small>这是整个产品<strong>流失风险最高</strong>的一屏。三个补偿手段都在这里：<span class="focus">分段折叠</span>（不用通读）、<span class="hits">疑似错误高亮</span>（识别最易错的日期/数字）、以及顶部的<span style="color:var(--warn)">敏感信息一键删除</span>——<strong>点了才删，不自动、不阻断</strong></small></p>
   </section>
 
   <!-- 10. 档案预览 -->
@@ -1129,7 +1243,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">10 · 档案预览<small>「待追问的点」是这份档案的价值所在——它把「面试官会盯哪里」提前告诉用户。最后一条<strong>差距项</strong>把 JD 要求和本人经历对不上，这是「针对这个岗面这个人」的直接体现</small></p>
+    <p class="caption">11 · 档案预览<small>「待追问的点」是这份档案的价值所在——它把「面试官会盯哪里」提前告诉用户。最后一条<strong>差距项</strong>把 JD 要求和本人经历对不上，这是「针对这个岗面这个人」的直接体现</small></p>
   </section>
 
   <!-- ============================================================ -->
@@ -1198,7 +1312,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">11 · 场景编辑器<small>默认路径是「一句话生成草稿」而不是空表单——用户描述得出来，但填不出来。生成结果逐项可改，每一块都对应设计稿里场景数据结构的字段</small></p>
+    <p class="caption">12 · 场景编辑器<small>默认路径是「一句话生成草稿」而不是空表单——用户描述得出来，但填不出来。生成结果逐项可改，每一块都对应设计稿里场景数据结构的字段</small></p>
   </section>
 
   <!-- ============================================================ -->
@@ -1259,7 +1373,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">12 · 历史<small>列表里直接摊出「待改进」——用户回看历史不是为了看数据，是为了看<strong>上次哪里没做好</strong>。所以轮次/时长是次要信息，改进点才是主信息</small></p>
+    <p class="caption">13 · 历史<small>列表里直接摊出「待改进」——用户回看历史不是为了看数据，是为了看<strong>上次哪里没做好</strong>。所以轮次/时长是次要信息，改进点才是主信息</small></p>
   </section>
 
   <!-- 13. 设置 -->
@@ -1335,7 +1449,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">13 · 设置<small>只有三个 Tab（演练 / 历史 / 设置）——不是墨言的五个。职演没有「词库」「播客」「统计」这些东西。<strong>「面试日期」是回访机制的开关</strong>（PRD §7.2），放在这里而不是首次启动时强制填写</small></p>
+    <p class="caption">14 · 设置<small>只有三个 Tab（演练 / 历史 / 设置）——不是墨言的五个。职演没有「词库」「播客」「统计」这些东西。<strong>「面试日期」是回访机制的开关</strong>（PRD §7.2），放在这里而不是首次启动时强制填写</small></p>
   </section>
 
   <!-- ============================================================ -->
@@ -1365,7 +1479,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">14 · 空态<small>空态里主动说「不用连续打卡」——这是产品的立场，也是和墨言的分界。用户被别的 App 的连续天数绑架惯了，先把这个压力解除掉</small></p>
+    <p class="caption">15 · 空态<small>空态里主动说「不用连续打卡」——这是产品的立场，也是和墨言的分界。用户被别的 App 的连续天数绑架惯了，先把这个压力解除掉</small></p>
   </section>
 
   <!-- 15. 权限被拒 -->
@@ -1394,7 +1508,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">15 · 权限被拒<small>区分「麦克风」和「语音识别」两类拒绝并分别给引导——这是两个独立权限，只开一个会静默失败。<strong>永远给「打字模式」这条退路</strong>，不让一个权限问题堵死产品</small></p>
+    <p class="caption">16 · 权限被拒<small>区分「麦克风」和「语音识别」两类拒绝并分别给引导——这是两个独立权限，只开一个会静默失败。<strong>永远给「打字模式」这条退路</strong>，不让一个权限问题堵死产品</small></p>
   </section>
 
   <!-- 16. 额度用尽 -->
@@ -1439,7 +1553,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </div>
       <div class="homebar"></div>
     </div>
-    <p class="caption">16 · 额度用尽<small>付费墙放在<strong>「材料导入」</strong>而不是「次数」上——次数对低频产品不是稀缺资源（PRD §8.1）。文案里明说免费版保留什么，降低被背叛感</small></p>
+    <p class="caption">17 · 额度用尽<small>付费墙放在<strong>「材料导入」</strong>而不是「次数」上——次数对低频产品不是稀缺资源（PRD §8.1）。文案里明说免费版保留什么，降低被背叛感</small></p>
   </section>
 
   <!-- 17. 服务不可用 -->
@@ -1503,7 +1617,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">17 · 服务不可用<small>失败时<strong>不丢历史、不从头开始</strong>——只重试这一轮。文案要先说「你的话还在」，再解释原因：用户此刻最担心的是刚才白说了</small></p>
+    <p class="caption">18 · 服务不可用<small>失败时<strong>不丢历史、不从头开始</strong>——只重试这一轮。文案要先说「你的话还在」，再解释原因：用户此刻最担心的是刚才白说了</small></p>
   </section>
 
 </main>
