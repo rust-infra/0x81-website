@@ -26,30 +26,37 @@
       两三个强调色在抢注意力，层级就塌了。
    填充面另有一组：`--accent-fill` / `--on-accent`（浅色主题的深蓝和深色主题的
    浅蓝不能共用同一个填充色），以及会话页专用的 `--study-accent` 系列。
+
+   ⚠️ 本稿**不收 `--nav-text` / `--hover`**，虽然墨言 `theme.ts` 的 `ThemeColors`
+   里有 `navText` / `hoverBg` 两个字段。原因：这两个 token 在本稿里从未被任何
+   `var()` 引用（底部 Tab 的文字用的是 `--ink-muted` / `--accent-text`，而浅色下的
+   `--nav-text` 值就等于 `--ink-light`），留着只是两行死代码。实现时以 `theme.ts`
+   为准即可，本稿的 token 集本来就比它多（`--accent-fill` / `--on-accent` / `--knob` /
+   `--study-accent` / `--warn` / `--ok` 等）也少（`paperGradient` / `progressBar`）。
 ------------------------------------------------------------------ */
 [data-theme="light"]{
   --paper:#F4F5F7; --card:#FFFFFF; --ink:#1A1D21; --ink-light:#4A5058; --ink-muted:#676E78;
-  --accent:#2F5D8C; --accent-light:#2F5D8C14; --border:#E3E6EA; --nav-bg:#FFFFFF; --nav-text:#4A5058;
+  --accent:#2F5D8C; --accent-light:#2F5D8C14; --border:#E3E6EA; --nav-bg:#FFFFFF;
   --accent-fill:#2F5D8C; --on-accent:#FFFFFF; --knob:#FFFFFF;
   /* 会话页是深色沉浸面，浅色主题的 --accent 压上去只有 2.3:1，必须换一套。 */
   --study-accent:#6FA3D9; --study-on-accent:#10151A;
   --study-bg:#12161A; --study-card:#1C2228; --study-text:#E9EDF1; --study-muted:rgba(233,237,241,.62);
   --tag-bg:rgba(26,29,33,.06); --tag-text:#4A5058; --button-bg:#1A1D21; --button-text:#FFFFFF;
-  --divider:#E3E6EA; --hover:#EDEFF2; --input-bg:#F4F5F7;
+  --divider:#E3E6EA; --input-bg:#F4F5F7;
   --warn:#A8621A; --warn-bg:#A8621A12;
   --ok:#2E7D5B; --ok-bg:#2E7D5B12;
   --accent-text:#2F5D8C;
 }
 [data-theme="dark"]{
   --paper:#14181C; --card:#1D2228; --ink:#E9EDF1; --ink-light:#A8B1BA; --ink-muted:#8B949D;
-  --accent:#6FA3D9; --accent-light:#6FA3D920; --border:#2B3138; --nav-bg:#1D2228; --nav-text:#A8B1BA;
+  --accent:#6FA3D9; --accent-light:#6FA3D920; --border:#2B3138; --nav-bg:#1D2228;
   /* 深色下 --accent 是浅蓝，只能当文字/描边色；填充面必须用更深的 --accent-fill，
      否则白字压在上面只有 2.6:1。填充面配深色文字（--on-accent）。 */
   --accent-fill:#4A90D9; --on-accent:#0B1014; --knob:#E9EDF1;
   --study-accent:#6FA3D9; --study-on-accent:#0B1014;
   --study-bg:#0D1114; --study-card:#171C21; --study-text:#E9EDF1; --study-muted:rgba(233,237,241,.58);
   --tag-bg:rgba(233,237,241,.08); --tag-text:#A8B1BA; --button-bg:#E9EDF1; --button-text:#14181C;
-  --divider:#2B3138; --hover:#252B32; --input-bg:#1D2228;
+  --divider:#2B3138; --input-bg:#1D2228;
   --warn:#D99A5B; --warn-bg:#D99A5B1A;
   --ok:#5FB88A; --ok-bg:#5FB88A1A;
   --accent-text:#8CB8E4;
