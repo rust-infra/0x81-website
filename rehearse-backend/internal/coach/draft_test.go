@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/0x81/rehearse-backend/internal/model"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // 对齐 Rust 的 `draft_payload_is_forced_to_custom_source`（`coach.rs:812`），
@@ -24,47 +26,27 @@ func fixtureDraftRequest() model.ScenarioDraftRequest {
 func TestDraftForcesCustomSourceAndGeneratedID(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
 	out, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out.Source != model.SourceCustom {
-		t.Fatalf("source = %q，期望 custom", out.Source)
-	}
-	if !strings.HasPrefix(out.ID, "custom_") {
-		t.Fatalf("id = %q，期望 custom_ 前缀", out.ID)
-	}
+	require.NoError(t, err)
+	require.Equal(t, model.SourceCustom, out.Source, "source")
+	require.Truef(t, strings.HasPrefix(out.ID, "custom_"), "id = %q，期望 custom_ 前缀", out.ID)
 	// Rust 用 `Uuid::new_v4().simple()`：32 个十六进制字符，无连字符。
-	if len(out.ID) != len("custom_")+32 {
-		t.Fatalf("id 长度 = %d，期望 %d", len(out.ID), len("custom_")+32)
-	}
-	if strings.ContainsAny(out.ID, "-") {
-		t.Fatalf("id 不该有连字符：%q", out.ID)
-	}
-	if out.Title != "跨时区交接" || out.OpeningLineTranslation != "嘿，有时间交接一下吗？" {
-		t.Fatalf("out = %+v", out)
-	}
-	if out.Language != model.LanguageEnUS {
-		t.Fatalf("language = %q，期望缺省 en-US", out.Language)
-	}
-	if out.Persona.Accent == nil || *out.Persona.Accent != model.LanguageEnAU {
-		t.Fatalf("persona.accent = %v", out.Persona.Accent)
-	}
+	require.Len(t, out.ID, len("custom_")+32, "id 长度")
+	require.NotContains(t, out.ID, "-", "id 不该有连字符")
+	require.Equal(t, "跨时区交接", out.Title, "title")
+	require.Equal(t, "嘿，有时间交接一下吗？", out.OpeningLineTranslation, "opening_line_translation")
+	require.Equal(t, model.LanguageEnUS, out.Language, "language 期望缺省 en-US")
+	require.NotNil(t, out.Persona.Accent, "persona.accent")
+	require.Equal(t, model.LanguageEnAU, *out.Persona.Accent, "persona.accent")
 }
 
 // 每次生成的 id 都不同——否则客户端会把两个不同的自定义场景当成同一个。
 func TestDraftGeneratesUniqueIDs(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
 	first, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	second, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.ID == second.ID {
-		t.Fatalf("两次生成的 id 相同：%q", first.ID)
-	}
+	require.NoError(t, err)
+	require.NotEqual(t, first.ID, second.ID, "两次生成的 id 不该相同")
 }
 
 // 对齐 Rust 的 `draft_without_opening_translation_parses_as_empty`。
@@ -75,19 +57,12 @@ func TestDraftWithoutOpeningTranslation(t *testing.T) {
 	h := newHarness(t, payload)
 
 	out, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out.OpeningLineTranslation != "" {
-		t.Fatalf("opening_line_translation = %q，期望空串", out.OpeningLineTranslation)
-	}
+	require.NoError(t, err)
+	require.Empty(t, out.OpeningLineTranslation, "opening_line_translation 期望空串")
 	// focus_points 缺失时要序列化成 `[]`。
-	if out.OpeningNextLines == nil || len(out.OpeningNextLines) != 0 {
-		t.Fatalf("opening_next_lines = %+v，期望空数组", out.OpeningNextLines)
-	}
-	if out.FocusPoints == nil {
-		t.Fatal("focus_points 应当是 []，不是 null")
-	}
+	require.NotNil(t, out.OpeningNextLines, "opening_next_lines 期望空数组")
+	require.Empty(t, out.OpeningNextLines, "opening_next_lines 期望空数组")
+	require.NotNil(t, out.FocusPoints, "focus_points 应当是 []，不是 null")
 }
 
 // 对齐 Rust 的 `draft_keeps_opening_suggestions_and_caps_them`：
@@ -104,18 +79,11 @@ func TestDraftSanitizesOpeningSuggestions(t *testing.T) {
 	h := newHarness(t, payload)
 
 	out, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(out.OpeningNextLines) != 2 {
-		t.Fatalf("opening_next_lines = %+v，期望 2 条", out.OpeningNextLines)
-	}
-	if out.OpeningNextLines[0].Text != "Sure, let's start with the current state." {
-		t.Fatalf("第一条 = %q", out.OpeningNextLines[0].Text)
-	}
-	if out.OpeningNextLines[1].Text != "I'm mid-migration, here's where things stand." {
-		t.Fatalf("第二条 = %q（空行没被丢掉，或者上限不对）", out.OpeningNextLines[1].Text)
-	}
+	require.NoError(t, err)
+	require.Len(t, out.OpeningNextLines, 2, "opening_next_lines 期望 2 条")
+	require.Equal(t, "Sure, let's start with the current state.", out.OpeningNextLines[0].Text, "第一条")
+	require.Equal(t, "I'm mid-migration, here's where things stand.", out.OpeningNextLines[1].Text,
+		"第二条（空行没被丢掉，或者上限不对）")
 }
 
 // 对齐 Rust 的 `draft_drops_overlong_opening_suggestions`：推荐语是聊天里的
@@ -131,12 +99,9 @@ func TestDraftDropsOverlongOpeningSuggestions(t *testing.T) {
 	h := newHarness(t, payload)
 
 	out, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(out.OpeningNextLines) != 1 || out.OpeningNextLines[0].Text != "Short one." {
-		t.Fatalf("opening_next_lines = %+v", out.OpeningNextLines)
-	}
+	require.NoError(t, err)
+	require.Len(t, out.OpeningNextLines, 1, "opening_next_lines")
+	require.Equal(t, "Short one.", out.OpeningNextLines[0].Text, "opening_next_lines[0].Text")
 }
 
 // 对齐 Rust 的 `draft_rejects_overlong_title`：模型返回的草稿也要过完整校验，
@@ -161,9 +126,8 @@ func TestDraftRejectsInvalidModelOutput(t *testing.T) {
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t, payload)
-			if err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest()))); err.Status != 400 {
-				t.Fatalf("status = %d，期望 400", err.Status)
-			}
+			err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())))
+			require.Equal(t, 400, err.Status, "status")
 		})
 	}
 }
@@ -176,12 +140,8 @@ func TestDraftClampsMaxTurns(t *testing.T) {
 	h := newHarness(t, payload)
 
 	out, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out.MaxTurns != MaxTurns {
-		t.Fatalf("max_turns = %d，期望夹到 %d", out.MaxTurns, MaxTurns)
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint32(MaxTurns), out.MaxTurns, "max_turns 期望夹到上限")
 }
 
 // 描述为空 / 超长 → 400，且不调 LLM。
@@ -195,12 +155,8 @@ func TestDraftValidatesDescriptionBeforeLLM(t *testing.T) {
 			h := newHarness(t, validDraftPayload)
 			err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1",
 				model.ScenarioDraftRequest{Description: description})))
-			if err.Status != 400 {
-				t.Fatalf("status = %d", err.Status)
-			}
-			if h.calls != 0 {
-				t.Fatalf("非法描述不该调 LLM，实际 %d 次", h.calls)
-			}
+			require.Equal(t, 400, err.Status, "status")
+			require.Zero(t, h.calls, "非法描述不该调 LLM")
 		})
 	}
 }
@@ -208,12 +164,10 @@ func TestDraftValidatesDescriptionBeforeLLM(t *testing.T) {
 // 草稿要扣一次额度——它也是一次 LLM 调用（Rust `coach.rs:335`）。
 func TestDraftConsumesQuotaOnce(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
-	if _, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest()); err != nil {
-		t.Fatal(err)
-	}
-	if used := h.store.Usage("usr_1", dayKey(now())); used != 1 {
-		t.Fatalf("已用额度 = %d，期望 1", used)
-	}
+	_, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
+	require.NoError(t, err)
+	used := h.store.Usage("usr_1", dayKey(now()))
+	require.Equal(t, uint32(1), used, "已用额度")
 }
 
 // 额度用尽时草稿同样被挡，且**不调 LLM**——草稿是一次真实的 LLM 调用，
@@ -222,16 +176,11 @@ func TestDraftQuotaExceededBlocksWithoutLLMCall(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
 	h.setQuota(t, 1, true)
 
-	if _, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest()); err != nil {
-		t.Fatalf("第一次应当成功：%v", err)
-	}
-	err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())))
-	if err.Status != 429 {
-		t.Fatalf("status = %d，期望 429", err.Status)
-	}
-	if h.calls != 1 {
-		t.Fatalf("超限的那次不该调 LLM，总调用次数 = %d", h.calls)
-	}
+	_, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
+	require.NoError(t, err, "第一次应当成功")
+	apiErr := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())))
+	require.Equal(t, 429, apiErr.Status, "status")
+	require.Equal(t, 1, h.calls, "超限的那次不该调 LLM，总调用次数")
 }
 
 // enabled=false 时草稿不限量（与 /turn 的语义一致）。
@@ -240,9 +189,8 @@ func TestDraftUnlimitedWhenQuotaDisabled(t *testing.T) {
 	h.setQuota(t, 5, false)
 
 	for i := 1; i <= 3; i++ {
-		if _, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest()); err != nil {
-			t.Fatalf("第 %d 次不该失败：%v", i, err)
-		}
+		_, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
+		require.NoErrorf(t, err, "第 %d 次不该失败", i)
 	}
 }
 
@@ -251,9 +199,8 @@ func TestDraftUpstreamFailure(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
 	h.failures = 5
 	err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())))
-	if err.Status != 503 || err.Message != MsgDraftUnavailable {
-		t.Fatalf("err = %+v", err)
-	}
+	require.Equal(t, 503, err.Status, "status")
+	require.Equal(t, MsgDraftUnavailable, err.Message, "message")
 }
 
 // 中文演练在阶段 7 之前不可用，草稿也拒——生成一个练不了的自定义场景
@@ -264,12 +211,9 @@ func TestDraftRejectsChineseLanguage(t *testing.T) {
 	req := fixtureDraftRequest()
 	req.Language = &zh
 
-	if err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", req))); err.Status != 400 {
-		t.Fatalf("status = %d", err.Status)
-	}
-	if h.calls != 0 {
-		t.Fatalf("不该调 LLM，实际 %d 次", h.calls)
-	}
+	err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", req)))
+	require.Equal(t, 400, err.Status, "status")
+	require.Zero(t, h.calls, "不该调 LLM")
 }
 
 func TestDraftRejectsInvalidLanguage(t *testing.T) {
@@ -278,9 +222,8 @@ func TestDraftRejectsInvalidLanguage(t *testing.T) {
 	req := fixtureDraftRequest()
 	req.Language = &bad
 
-	if err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", req))); err.Status != 400 {
-		t.Fatalf("status = %d", err.Status)
-	}
+	err := apiError(t, mustErr(h.service.DraftScenario(ctx(), "usr_1", req)))
+	require.Equal(t, 400, err.Status, "status")
 }
 
 // 草稿的 system prompt 必须用**新契约的键名**——模板里写的键名就是模型会
@@ -288,9 +231,8 @@ func TestDraftRejectsInvalidLanguage(t *testing.T) {
 // 症状是「草稿永远是空的」。
 func TestDraftPromptUsesNewFieldNames(t *testing.T) {
 	h := newHarness(t, validDraftPayload)
-	if _, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest()); err != nil {
-		t.Fatal(err)
-	}
+	_, err := h.service.DraftScenario(ctx(), "usr_1", fixtureDraftRequest())
+	require.NoError(t, err)
 	prompt := h.systemPrompt(t, 0)
 
 	for _, want := range []string{
@@ -299,24 +241,16 @@ func TestDraftPromptUsesNewFieldNames(t *testing.T) {
 		`"opening_line_translation":"..."`,
 		`"opening_next_lines":[{"text":"...","translation":"..."}]`,
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Errorf("prompt 缺少新契约片段 %s", want)
-		}
+		assert.Containsf(t, prompt, want, "prompt 缺少新契约片段 %s", want)
 	}
 	for _, unwanted := range []string{"opening_line_zh", "persona.locale", `"en":"...","zh":"..."`, "high_stakes"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Errorf("prompt 残留旧字段名 %q", unwanted)
-		}
+		assert.NotContainsf(t, prompt, unwanted, "prompt 残留旧字段名 %q", unwanted)
 	}
 }
 
 // 草稿请求的 JSON 里 `language` 是可选的。
 func TestDraftRequestJSONShape(t *testing.T) {
 	var req model.ScenarioDraftRequest
-	if err := json.Unmarshal([]byte(`{"description":"和澳洲同事交接"}`), &req); err != nil {
-		t.Fatal(err)
-	}
-	if req.Language != nil {
-		t.Fatalf("language = %v，期望 nil", req.Language)
-	}
+	require.NoError(t, json.Unmarshal([]byte(`{"description":"和澳洲同事交接"}`), &req))
+	require.Nil(t, req.Language, "language 期望 nil")
 }

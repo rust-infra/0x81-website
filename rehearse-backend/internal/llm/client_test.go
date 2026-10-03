@@ -3,12 +3,14 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func okSettings(server *httptest.Server) Settings {
@@ -20,55 +22,35 @@ func TestChatJSON_SendsExpectedRequest(t *testing.T) {
 	var gotBody map[string]any
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/chat/completions" {
-			t.Errorf("路径 = %q, 期望 /chat/completions", r.URL.Path)
-		}
+		assert.Equal(t, "/chat/completions", r.URL.Path, "路径")
 		gotAuth = r.Header.Get("Authorization")
 		raw, _ := io.ReadAll(r.Body)
-		if err := json.Unmarshal(raw, &gotBody); err != nil {
-			t.Errorf("请求体不是合法 JSON: %v", err)
-		}
+		assert.NoError(t, json.Unmarshal(raw, &gotBody), "请求体不是合法 JSON")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"  {\"reply\":\"hi\"}  "}}]}`))
 	}))
 	defer server.Close()
 
 	got, err := New().ChatJSON(context.Background(), okSettings(server),
 		"system rules", "user text", 3000)
-	if err != nil {
-		t.Fatalf("不该报错: %v", err)
-	}
+	require.NoError(t, err, "不该报错")
 
 	// 返回值要 trim——模型经常带前后空白，不 trim 会让 JSON 解析失败。
-	if got != `{"reply":"hi"}` {
-		t.Errorf("content = %q, 期望已 trim", got)
-	}
-	if gotAuth != "Bearer sk-test" {
-		t.Errorf("Authorization = %q", gotAuth)
-	}
-	if gotBody["model"] != "test-model" {
-		t.Errorf("model = %v", gotBody["model"])
-	}
+	assert.Equal(t, `{"reply":"hi"}`, got, "content 期望已 trim")
+	assert.Equal(t, "Bearer sk-test", gotAuth, "Authorization")
+	assert.Equal(t, "test-model", gotBody["model"], "model")
 	// 要显式要求 JSON 输出，否则模型可能返回带解释的散文。
 	format, _ := gotBody["response_format"].(map[string]any)
-	if format["type"] != "json_object" {
-		t.Errorf("response_format = %v, 期望 json_object", gotBody["response_format"])
-	}
+	assert.Equal(t, "json_object", format["type"], "response_format.type")
 	messages, _ := gotBody["messages"].([]any)
-	if len(messages) != 2 {
-		t.Fatalf("messages 数量 = %d, 期望 2", len(messages))
-	}
+	require.Len(t, messages, 2, "messages 数量")
 	first, _ := messages[0].(map[string]any)
 	second, _ := messages[1].(map[string]any)
 	// system 走 system 角色、用户内容走 user 角色——这是注入防线的一部分。
-	if first["role"] != "system" || first["content"] != "system rules" {
-		t.Errorf("第一条消息不对: %v", first)
-	}
-	if second["role"] != "user" || second["content"] != "user text" {
-		t.Errorf("第二条消息不对: %v", second)
-	}
-	if gotBody["max_tokens"] != float64(3000) {
-		t.Errorf("max_tokens = %v", gotBody["max_tokens"])
-	}
+	assert.Equal(t, "system", first["role"], "第一条消息 role")
+	assert.Equal(t, "system rules", first["content"], "第一条消息 content")
+	assert.Equal(t, "user", second["role"], "第二条消息 role")
+	assert.Equal(t, "user text", second["content"], "第二条消息 content")
+	assert.Equal(t, float64(3000), gotBody["max_tokens"], "max_tokens")
 }
 
 func TestChatJSON_NotConfigured(t *testing.T) {
@@ -82,9 +64,7 @@ func TestChatJSON_NotConfigured(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := client.ChatJSON(context.Background(), settings, "s", "u", 100)
-			if !errors.Is(err, ErrNotConfigured) {
-				t.Fatalf("err = %v, 期望 ErrNotConfigured", err)
-			}
+			require.ErrorIs(t, err, ErrNotConfigured, "期望 ErrNotConfigured")
 		})
 	}
 	// 未配置时不该发任何请求——没有 server 也能过，说明确实没发。
@@ -99,16 +79,10 @@ func TestChatJSON_UpstreamNon2xx(t *testing.T) {
 
 	_, err := New().ChatJSON(context.Background(), okSettings(server), "s", "u", 100)
 	var upstream *ErrUpstream
-	if !errors.As(err, &upstream) {
-		t.Fatalf("err = %v, 期望 *ErrUpstream", err)
-	}
-	if upstream.StatusCode != http.StatusTooManyRequests {
-		t.Errorf("StatusCode = %d", upstream.StatusCode)
-	}
+	require.ErrorAs(t, err, &upstream, "期望 *ErrUpstream")
+	assert.Equal(t, http.StatusTooManyRequests, upstream.StatusCode, "StatusCode")
 	// 详情要带出来供日志排查
-	if !strings.Contains(upstream.Detail, "rate limited") {
-		t.Errorf("Detail 丢了上游信息: %q", upstream.Detail)
-	}
+	assert.Contains(t, upstream.Detail, "rate limited", "Detail 丢了上游信息")
 }
 
 // 上游返回超长内容时只截取前 300 字——完整响应体可能很大，
@@ -122,12 +96,8 @@ func TestChatJSON_TruncatesLongErrorDetail(t *testing.T) {
 
 	_, err := New().ChatJSON(context.Background(), okSettings(server), "s", "u", 100)
 	var upstream *ErrUpstream
-	if !errors.As(err, &upstream) {
-		t.Fatalf("err = %v", err)
-	}
-	if got := len([]rune(upstream.Detail)); got > maxDetailChars {
-		t.Errorf("Detail 长度 = %d, 应当截到 %d", got, maxDetailChars)
-	}
+	require.ErrorAs(t, err, &upstream, "期望 *ErrUpstream")
+	assert.LessOrEqual(t, len([]rune(upstream.Detail)), maxDetailChars, "Detail 应当截断")
 }
 
 func TestChatJSON_UnparseableResponse(t *testing.T) {
@@ -138,12 +108,8 @@ func TestChatJSON_UnparseableResponse(t *testing.T) {
 
 	_, err := New().ChatJSON(context.Background(), okSettings(server), "s", "u", 100)
 	var upstream *ErrUpstream
-	if !errors.As(err, &upstream) {
-		t.Fatalf("err = %v, 期望 *ErrUpstream", err)
-	}
-	if !strings.Contains(upstream.Detail, "parse failed") {
-		t.Errorf("Detail = %q", upstream.Detail)
-	}
+	require.ErrorAs(t, err, &upstream, "期望 *ErrUpstream")
+	assert.Contains(t, upstream.Detail, "parse failed", "Detail")
 }
 
 // choices 为空也是上游异常，不能返回空字符串让调用方以为成功了。
@@ -153,9 +119,8 @@ func TestChatJSON_NoChoices(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := New().ChatJSON(context.Background(), okSettings(server), "s", "u", 100); err == nil {
-		t.Fatal("没有 choices 应当报错")
-	}
+	_, err := New().ChatJSON(context.Background(), okSettings(server), "s", "u", 100)
+	require.Error(t, err, "没有 choices 应当报错")
 }
 
 func TestChatJSON_BaseURLTrailingSlashIsTolerated(t *testing.T) {
@@ -168,12 +133,9 @@ func TestChatJSON_BaseURLTrailingSlashIsTolerated(t *testing.T) {
 
 	settings := okSettings(server)
 	settings.BaseURL = server.URL + "/" // 常见配置写法，不能拼成 //chat/completions
-	if _, err := New().ChatJSON(context.Background(), settings, "s", "u", 100); err != nil {
-		t.Fatalf("不该报错: %v", err)
-	}
-	if gotPath != "/chat/completions" {
-		t.Errorf("路径 = %q, 期望 /chat/completions", gotPath)
-	}
+	_, err := New().ChatJSON(context.Background(), settings, "s", "u", 100)
+	require.NoError(t, err, "不该报错")
+	assert.Equal(t, "/chat/completions", gotPath, "路径")
 }
 
 func TestChatJSON_RespectsContextCancellation(t *testing.T) {
@@ -190,16 +152,11 @@ func TestChatJSON_RespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立刻取消
 
-	if _, err := New().ChatJSON(ctx, okSettings(server), "s", "u", 100); err == nil {
-		t.Fatal("已取消的 context 应当报错")
-	}
+	_, err := New().ChatJSON(ctx, okSettings(server), "s", "u", 100)
+	require.Error(t, err, "已取消的 context 应当报错")
 }
 
 func TestSettingsConfigured(t *testing.T) {
-	if (Settings{BaseURL: "a", APIKey: "b", Model: "c"}).Configured() != true {
-		t.Error("三项齐全应当算已配置")
-	}
-	if (Settings{BaseURL: "a", APIKey: "b"}).Configured() != false {
-		t.Error("缺 model 不算已配置")
-	}
+	assert.True(t, (Settings{BaseURL: "a", APIKey: "b", Model: "c"}).Configured(), "三项齐全应当算已配置")
+	assert.False(t, (Settings{BaseURL: "a", APIKey: "b"}).Configured(), "缺 model 不算已配置")
 }

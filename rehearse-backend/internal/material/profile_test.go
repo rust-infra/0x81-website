@@ -10,6 +10,7 @@ import (
 	"github.com/0x81/rehearse-backend/internal/llm"
 	"github.com/0x81/rehearse-backend/internal/middleware"
 	"github.com/0x81/rehearse-backend/internal/model"
+	"github.com/stretchr/testify/require"
 )
 
 // 本文件对齐 `interview_profile.rs` 的 #[cfg(test)] 块，并复用 vision_test.go
@@ -38,14 +39,11 @@ func TestValidateProfileRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateProfileRequest(tc.req)
 			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatalf("不该报错：%v", err)
-				}
+				require.NoError(t, err, "不该报错")
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("错误 = %v，期望含 %q", err, tc.wantErr)
-			}
+			require.Error(t, err, "应当报错")
+			require.Contains(t, err.Error(), tc.wantErr, "错误信息")
 			_ = requireAPIError(t, err, http.StatusBadRequest, "")
 		})
 	}
@@ -86,18 +84,13 @@ func TestParseProfilePayload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseProfilePayload(tc.raw)
 			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("错误 = %v，期望含 %q", err, tc.wantErr)
-				}
+				require.Error(t, err, "应当报错")
+				require.Contains(t, err.Error(), tc.wantErr, "错误信息")
 				_ = requireAPIError(t, err, http.StatusBadRequest, "")
 				return
 			}
-			if err != nil {
-				t.Fatalf("不该报错：%v", err)
-			}
-			if got != tc.want {
-				t.Fatalf("解析 = %q，期望 %q", got, tc.want)
-			}
+			require.NoError(t, err, "不该报错")
+			require.Equal(t, tc.want, got, "解析结果")
 		})
 	}
 }
@@ -109,25 +102,14 @@ func TestProfileReturnsParsedProfile(t *testing.T) {
 	service := NewProfileService(quota, &fakeSettings{settings: stub.configuredSettings()}, llm.New())
 
 	got, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "  我的简历  "))
-	if err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if got.Kind != "resume" || got.Profile != "5 年后端，主导过支付网关" {
-		t.Fatalf("响应 = %+v", got)
-	}
-	if quota.calls != 1 {
-		t.Fatalf("额度消费次数 = %d，期望 1", quota.calls)
-	}
-	if system := stub.systemPrompt(t); system != resumePrompt {
-		t.Fatalf("resume 请求用了错的 system prompt：\n%q", system)
-	}
+	require.NoError(t, err, "不该报错")
+	require.Equal(t, "resume", got.Kind, "响应 kind")
+	require.Equal(t, "5 年后端，主导过支付网关", got.Profile, "响应 profile")
+	require.Equal(t, 1, quota.calls, "额度消费次数")
+	require.Equal(t, resumePrompt, stub.systemPrompt(t), "resume 请求的 system prompt")
 	// user 消息是 trim 过的原文（Rust 传 req.text.trim()）。
-	if user := stub.userTextPart(t); user != "我的简历" {
-		t.Fatalf("user 消息 = %q，期望 trim 后的原文", user)
-	}
-	if tokens := stub.maxTokens(t); tokens != MaxProfileTokens {
-		t.Fatalf("max_tokens = %d，期望 %d", tokens, MaxProfileTokens)
-	}
+	require.Equal(t, "我的简历", stub.userTextPart(t), "user 消息 期望 trim 后的原文")
+	require.Equal(t, MaxProfileTokens, stub.maxTokens(t), "max_tokens")
 }
 
 func TestProfileUsesJobPrompt(t *testing.T) {
@@ -135,12 +117,9 @@ func TestProfileUsesJobPrompt(t *testing.T) {
 	stub.completion(`{"profile":"ok"}`)
 	service := NewProfileService(&fakeQuota{}, &fakeSettings{settings: stub.configuredSettings()}, llm.New())
 
-	if _, err := service.Profile(context.Background(), "user-1", profileRequest("job", "JD 正文")); err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if system := stub.systemPrompt(t); system != jobPrompt {
-		t.Fatalf("job 请求用了错的 system prompt：\n%q", system)
-	}
+	_, err := service.Profile(context.Background(), "user-1", profileRequest("job", "JD 正文"))
+	require.NoError(t, err, "不该报错")
+	require.Equal(t, jobPrompt, stub.systemPrompt(t), "job 请求的 system prompt")
 }
 
 // 校验失败发生在任何外部调用之前：不扣额度、不调 LLM。
@@ -161,12 +140,8 @@ func TestProfileDoesNotConsumeQuotaWhenValidationFails(t *testing.T) {
 
 			_, err := service.Profile(context.Background(), "user-1", tc.req)
 			_ = requireAPIError(t, err, http.StatusBadRequest, "")
-			if quota.calls != 0 {
-				t.Fatalf("校验失败却扣了 %d 次额度", quota.calls)
-			}
-			if stub.requestCount() != 0 {
-				t.Fatal("校验失败却调了 LLM")
-			}
+			require.Zero(t, quota.calls, "校验失败却扣了额度")
+			require.Zero(t, stub.requestCount(), "校验失败却调了 LLM")
 		})
 	}
 }
@@ -178,12 +153,8 @@ func TestProfileDoesNotConsumeQuotaWhenUnconfigured(t *testing.T) {
 
 	_, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "x"))
 	apiErr := requireAPIError(t, err, http.StatusServiceUnavailable, "")
-	if apiErr.Message != msgAINotConfigured {
-		t.Fatalf("文案 = %q，期望 %q", apiErr.Message, msgAINotConfigured)
-	}
-	if quota.calls != 0 {
-		t.Fatalf("未配置却扣了 %d 次额度", quota.calls)
-	}
+	require.Equal(t, msgAINotConfigured, apiErr.Message, "文案")
+	require.Zero(t, quota.calls, "未配置却扣了额度")
 }
 
 func TestProfileUpstreamFailureIs503AndDoesNotLeak(t *testing.T) {
@@ -194,12 +165,8 @@ func TestProfileUpstreamFailureIs503AndDoesNotLeak(t *testing.T) {
 
 	_, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "x"))
 	apiErr := requireAPIError(t, err, http.StatusServiceUnavailable, "")
-	if apiErr.Message != msgProfileUnavailable {
-		t.Fatalf("文案 = %q，期望固定文案", apiErr.Message)
-	}
-	if strings.Contains(apiErr.Message, "sk-secret") {
-		t.Fatalf("上游账号标识泄漏进了响应：%q", apiErr.Message)
-	}
+	require.Equal(t, msgProfileUnavailable, apiErr.Message, "文案 期望固定文案")
+	require.NotContains(t, apiErr.Message, "sk-secret", "上游账号标识泄漏进了响应")
 }
 
 func TestProfileQuotaErrorPropagates(t *testing.T) {
@@ -211,12 +178,8 @@ func TestProfileQuotaErrorPropagates(t *testing.T) {
 
 	_, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "x"))
 	apiErr := requireAPIError(t, err, http.StatusTooManyRequests, "rehearse_quota_exceeded")
-	if apiErr.Message != quotaErr.Message {
-		t.Fatalf("文案 = %q，期望原样透传配额错误", apiErr.Message)
-	}
-	if stub.requestCount() != 0 {
-		t.Fatal("配额超限却仍调了 LLM")
-	}
+	require.Equal(t, quotaErr.Message, apiErr.Message, "文案 期望原样透传配额错误")
+	require.Zero(t, stub.requestCount(), "配额超限却仍调了 LLM")
 }
 
 // 模型吐出的不是约定 JSON 时，返回 400（不是服务故障）。
@@ -226,9 +189,8 @@ func TestProfileInvalidPayloadIs400(t *testing.T) {
 	service := NewProfileService(&fakeQuota{}, &fakeSettings{settings: stub.configuredSettings()}, llm.New())
 
 	_, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "x"))
-	if err == nil || !strings.Contains(err.Error(), "invalid profile JSON") {
-		t.Fatalf("错误 = %v，期望 invalid profile JSON", err)
-	}
+	require.Error(t, err, "应当报错")
+	require.Contains(t, err.Error(), "invalid profile JSON", "错误信息")
 	_ = requireAPIError(t, err, http.StatusBadRequest, "")
 }
 
@@ -238,7 +200,5 @@ func TestProfileSettingsResolveErrorIsRepository(t *testing.T) {
 
 	_, err := service.Profile(context.Background(), "user-1", profileRequest("resume", "x"))
 	_ = requireAPIError(t, err, http.StatusInternalServerError, "")
-	if quota.calls != 0 {
-		t.Fatalf("配置解析失败却扣了 %d 次额度", quota.calls)
-	}
+	require.Zero(t, quota.calls, "配置解析失败却扣了额度")
 }

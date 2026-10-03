@@ -3,12 +3,12 @@ package coach
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/0x81/rehearse-backend/internal/config"
 	"github.com/0x81/rehearse-backend/internal/llm"
 	"github.com/0x81/rehearse-backend/internal/store/storetest"
+	"github.com/stretchr/testify/require"
 )
 
 // 对齐 Rust 的 `masks_api_key`（`models/admin_collect.rs:326`）。
@@ -24,14 +24,12 @@ func TestMaskAPIKey(t *testing.T) {
 	}
 	for _, tc := range cases {
 		got := maskAPIKey(tc.key)
-		switch {
-		case tc.want == nil && got != nil:
-			t.Fatalf("maskAPIKey(%q) = %q，期望 nil", tc.key, *got)
-		case tc.want != nil && got == nil:
-			t.Fatalf("maskAPIKey(%q) = nil，期望 %q", tc.key, *tc.want)
-		case tc.want != nil && *got != *tc.want:
-			t.Fatalf("maskAPIKey(%q) = %q，期望 %q", tc.key, *got, *tc.want)
+		if tc.want == nil {
+			require.Nilf(t, got, "maskAPIKey(%q) 期望 nil", tc.key)
+			continue
 		}
+		require.NotNilf(t, got, "maskAPIKey(%q) 期望 %q", tc.key, *tc.want)
+		require.Equalf(t, *tc.want, *got, "maskAPIKey(%q)", tc.key)
 	}
 }
 
@@ -39,12 +37,8 @@ func TestMaskAPIKey(t *testing.T) {
 // 照抄会在 Go 里 panic。
 func TestMaskAPIKeyDoesNotPanicOnMultibyte(t *testing.T) {
 	got := maskAPIKey("密钥密钥密钥") // 6 字符 / 18 字节
-	if got == nil {
-		t.Fatal("不该返回 nil")
-	}
-	if !strings.Contains(*got, "***") {
-		t.Fatalf("掩码 = %q", *got)
-	}
+	require.NotNil(t, got, "不该返回 nil")
+	require.Contains(t, *got, "***", "掩码")
 }
 
 func ptr(value string) *string { return &value }
@@ -52,33 +46,21 @@ func ptr(value string) *string { return &value }
 // ⚠️ 缺失的 temperature 必须补 0.3，不能被读成 0（0 是合法的贪心温度）。
 func TestDecodeStoredDefaultsTemperature(t *testing.T) {
 	stored, err := decodeLLMStored([]byte(`{"base_url":"https://example.com/v1","model":"m"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Temperature != llm.DefaultTemperature {
-		t.Fatalf("temperature = %v，期望 %v", stored.Temperature, llm.DefaultTemperature)
-	}
+	require.NoError(t, err)
+	require.Equal(t, llm.DefaultTemperature, stored.Temperature, "temperature")
 }
 
 // 显式给 0 要保留 0。
 func TestDecodeStoredKeepsExplicitZeroTemperature(t *testing.T) {
 	stored, err := decodeLLMStored([]byte(`{"temperature":0}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Temperature != 0 {
-		t.Fatalf("temperature = %v，期望 0", stored.Temperature)
-	}
+	require.NoError(t, err)
+	require.Zero(t, stored.Temperature, "temperature")
 }
 
 func TestDecodeStoredClampsTemperature(t *testing.T) {
 	stored, err := decodeLLMStored([]byte(`{"temperature":9}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Temperature != llm.MaxTemperature {
-		t.Fatalf("temperature = %v，期望 %v", stored.Temperature, llm.MaxTemperature)
-	}
+	require.NoError(t, err)
+	require.Equal(t, llm.MaxTemperature, stored.Temperature, "temperature")
 }
 
 // env 只在字段为空时补；DB 有值就以 DB 为准。
@@ -90,33 +72,27 @@ func TestFillFromEnvIfEmpty(t *testing.T) {
 	}
 
 	filled := fillFromEnvIfEmpty(llmStored{}, fallback)
-	if filled.BaseURL != fallback.BaseURL || filled.APIKey != fallback.APIKey || filled.Model != fallback.Model {
-		t.Fatalf("空配置应当全部由 env 补上，得到 %+v", filled)
-	}
+	require.Equal(t, fallback.BaseURL, filled.BaseURL, "空配置应当由 env 补上 base_url")
+	require.Equal(t, fallback.APIKey, filled.APIKey, "空配置应当由 env 补上 api_key")
+	require.Equal(t, fallback.Model, filled.Model, "空配置应当由 env 补上 model")
 
 	fromDB := fillFromEnvIfEmpty(llmStored{
 		BaseURL: "https://db.example.com/v1",
 		APIKey:  "db-key",
 		Model:   "db-model",
 	}, fallback)
-	if fromDB.BaseURL != "https://db.example.com/v1" || fromDB.APIKey != "db-key" || fromDB.Model != "db-model" {
-		t.Fatalf("DB 有值时 env 不该覆盖，得到 %+v", fromDB)
-	}
+	require.Equal(t, "https://db.example.com/v1", fromDB.BaseURL, "DB 有值时 env 不该覆盖 base_url")
+	require.Equal(t, "db-key", fromDB.APIKey, "DB 有值时 env 不该覆盖 api_key")
+	require.Equal(t, "db-model", fromDB.Model, "DB 有值时 env 不该覆盖 model")
 }
 
 // env 也没有时落到硬默认值——这是从 Rust 继承的行为，写下来免得被当成 bug 改掉。
 func TestFillFromEnvIfEmptyUsesBuiltInDefaults(t *testing.T) {
 	filled := fillFromEnvIfEmpty(llmStored{}, config.LLMFallback{})
-	if filled.BaseURL != defaultLLMBaseURL {
-		t.Fatalf("base_url = %q，期望 %q", filled.BaseURL, defaultLLMBaseURL)
-	}
-	if filled.Model != defaultLLMModel {
-		t.Fatalf("model = %q，期望 %q", filled.Model, defaultLLMModel)
-	}
+	require.Equal(t, defaultLLMBaseURL, filled.BaseURL, "base_url")
+	require.Equal(t, defaultLLMModel, filled.Model, "model")
 	// API key 没有默认值——「没配」必须仍然是 503。
-	if filled.APIKey != "" {
-		t.Fatalf("api_key = %q，期望空", filled.APIKey)
-	}
+	require.Empty(t, filled.APIKey, "api_key 期望空")
 }
 
 func TestResolveFallsBackToEnvWhenUnset(t *testing.T) {
@@ -126,30 +102,18 @@ func TestResolveFallsBackToEnvWhenUnset(t *testing.T) {
 		Model:   "env-model",
 	})
 	resolved, err := service.Resolve(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resolved.Configured() {
-		t.Fatalf("env 兜底后应当算已配置：%+v", resolved)
-	}
-	if resolved.Temperature != llm.DefaultTemperature {
-		t.Fatalf("temperature = %v", resolved.Temperature)
-	}
+	require.NoError(t, err)
+	require.True(t, resolved.Configured(), "env 兜底后应当算已配置")
+	require.Equal(t, llm.DefaultTemperature, resolved.Temperature, "temperature")
 }
 
 // 没配过时 Public 的 api_key_set 必须是 false，且掩码为 null。
 func TestPublicReportsUnsetKey(t *testing.T) {
 	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{})
 	public, err := service.Public(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if public.APIKeySet {
-		t.Fatal("没有 key 时 api_key_set 应当是 false")
-	}
-	if public.APIKeyMasked != nil {
-		t.Fatalf("api_key_masked = %q，期望 null", *public.APIKeyMasked)
-	}
+	require.NoError(t, err)
+	require.False(t, public.APIKeySet, "没有 key 时 api_key_set 应当是 false")
+	require.Nil(t, public.APIKeyMasked, "api_key_masked 期望 null")
 }
 
 // Public 的 JSON 里绝不能出现 api_key 明文（§13 的凭据不泄漏验收）。
@@ -159,34 +123,21 @@ func TestPublicJSONNeverContainsPlainKey(t *testing.T) {
 	service := NewLLMSettingsService(st, config.LLMFallback{})
 
 	public, err := service.Public(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	encoded, err := json.Marshal(public)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(encoded), "sk-supersecretvalue") {
-		t.Fatalf("响应体泄漏了明文密钥：%s", encoded)
-	}
-	if !public.APIKeySet {
-		t.Fatal("api_key_set 应当是 true")
-	}
-	if public.APIKeyMasked == nil || *public.APIKeyMasked != "sk-***alue" {
-		t.Fatalf("掩码 = %v", public.APIKeyMasked)
-	}
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "sk-supersecretvalue", "响应体泄漏了明文密钥")
+	require.True(t, public.APIKeySet, "api_key_set 应当是 true")
+	require.NotNil(t, public.APIKeyMasked, "掩码")
+	require.Equal(t, "sk-***alue", *public.APIKeyMasked, "掩码")
 }
 
 func TestUpdateTrimsBaseURLTrailingSlash(t *testing.T) {
 	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{})
 	baseURL := "https://api.example.com/v1///"
 	public, err := service.Update(context.Background(), LLMUpdateRequest{BaseURL: &baseURL})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if public.BaseURL != "https://api.example.com/v1" {
-		t.Fatalf("base_url = %q", public.BaseURL)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "https://api.example.com/v1", public.BaseURL, "base_url")
 }
 
 // 空字符串的 api_key 表示「不改」——表单每次都会回传，误判成清空会顺手抹掉密钥。
@@ -197,12 +148,8 @@ func TestUpdateEmptyAPIKeyDoesNotClear(t *testing.T) {
 
 	empty := "  "
 	public, err := service.Update(context.Background(), LLMUpdateRequest{APIKey: &empty})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !public.APIKeySet {
-		t.Fatal("空串不该清掉密钥")
-	}
+	require.NoError(t, err)
+	require.True(t, public.APIKeySet, "空串不该清掉密钥")
 }
 
 // 要清掉密钥必须显式 clear_api_key。
@@ -212,12 +159,9 @@ func TestUpdateClearAPIKeyFlag(t *testing.T) {
 	service := NewLLMSettingsService(st, config.LLMFallback{})
 
 	public, err := service.Update(context.Background(), LLMUpdateRequest{ClearAPIKey: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if public.APIKeySet || public.APIKeyMasked != nil {
-		t.Fatalf("clear_api_key 之后应当没有密钥：%+v", public)
-	}
+	require.NoError(t, err)
+	require.False(t, public.APIKeySet, "clear_api_key 之后 api_key_set 应当为 false")
+	require.Nil(t, public.APIKeyMasked, "clear_api_key 之后掩码应当为 null")
 }
 
 // 局部更新：只改 model 不能动其他字段。
@@ -228,21 +172,11 @@ func TestUpdateIsPartial(t *testing.T) {
 
 	model := "new-model"
 	public, err := service.Update(context.Background(), LLMUpdateRequest{Model: &model})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if public.Model != "new-model" {
-		t.Fatalf("model = %q", public.Model)
-	}
-	if public.BaseURL != "https://x/v1" {
-		t.Fatalf("base_url 被改动了：%q", public.BaseURL)
-	}
-	if public.Temperature != 0.7 {
-		t.Fatalf("temperature 被改动了：%v", public.Temperature)
-	}
-	if !public.APIKeySet {
-		t.Fatal("api_key 被清掉了")
-	}
+	require.NoError(t, err)
+	require.Equal(t, "new-model", public.Model, "model")
+	require.Equal(t, "https://x/v1", public.BaseURL, "base_url 被改动了")
+	require.Equal(t, float32(0.7), public.Temperature, "temperature 被改动了")
+	require.True(t, public.APIKeySet, "api_key 被清掉了")
 }
 
 // 写进去的值要能读回来（跨请求一致）。
@@ -253,20 +187,15 @@ func TestUpdateRoundTripThroughStore(t *testing.T) {
 	key := "sk-abcdefghijklmnop"
 	temperature := float32(0.5)
 
-	if _, err := service.Update(context.Background(), LLMUpdateRequest{
+	_, err := service.Update(context.Background(), LLMUpdateRequest{
 		BaseURL: &baseURL, Model: &model, APIKey: &key, Temperature: &temperature,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	resolved, err := service.Resolve(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resolved.BaseURL != baseURL || resolved.Model != model || resolved.APIKey != key {
-		t.Fatalf("读回 = %+v", resolved)
-	}
-	if resolved.Temperature != temperature {
-		t.Fatalf("temperature = %v，期望 %v", resolved.Temperature, temperature)
-	}
+	require.NoError(t, err)
+	require.Equal(t, baseURL, resolved.BaseURL, "读回 base_url")
+	require.Equal(t, model, resolved.Model, "读回 model")
+	require.Equal(t, key, resolved.APIKey, "读回 api_key")
+	require.Equal(t, temperature, resolved.Temperature, "temperature")
 }

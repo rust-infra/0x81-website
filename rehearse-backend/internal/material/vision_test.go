@@ -8,11 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/0x81/rehearse-backend/internal/llm"
 	"github.com/0x81/rehearse-backend/internal/middleware"
+	"github.com/stretchr/testify/require"
 )
 
 // 本文件对齐 `interview_ocr.rs` 的 #[cfg(test)] 块，并补上服务层的顺序护栏：
@@ -88,18 +88,14 @@ func (s *chatStub) requestCount() int { return len(s.requests) }
 
 func (s *chatStub) lastRequest(t *testing.T) map[string]any {
 	t.Helper()
-	if len(s.requests) == 0 {
-		t.Fatal("端点没有被调用")
-	}
+	require.NotEmpty(t, s.requests, "端点没有被调用")
 	return s.requests[len(s.requests)-1]
 }
 
 func (s *chatStub) systemPrompt(t *testing.T) string {
 	t.Helper()
 	messages, _ := s.lastRequest(t)["messages"].([]any)
-	if len(messages) == 0 {
-		t.Fatal("请求里没有 messages")
-	}
+	require.NotEmpty(t, messages, "请求里没有 messages")
 	first, _ := messages[0].(map[string]any)
 	content, _ := first["content"].(string)
 	return content
@@ -109,22 +105,18 @@ func (s *chatStub) systemPrompt(t *testing.T) string {
 func (s *chatStub) userTextPart(t *testing.T) string {
 	t.Helper()
 	messages, _ := s.lastRequest(t)["messages"].([]any)
-	if len(messages) < 2 {
-		t.Fatal("请求里没有 user 消息")
-	}
+	require.GreaterOrEqual(t, len(messages), 2, "请求里没有 user 消息")
 	second, _ := messages[1].(map[string]any)
 	switch content := second["content"].(type) {
 	case string:
 		return content
 	case []any:
-		if len(content) == 0 {
-			t.Fatal("user content 数组为空")
-		}
+		require.NotEmpty(t, content, "user content 数组为空")
 		first, _ := content[0].(map[string]any)
 		text, _ := first["text"].(string)
 		return text
 	default:
-		t.Fatalf("user content 类型 = %T", second["content"])
+		require.Failf(t, "user content 类型不对", "user content 类型 = %T", second["content"])
 		return ""
 	}
 }
@@ -132,9 +124,7 @@ func (s *chatStub) userTextPart(t *testing.T) string {
 func (s *chatStub) maxTokens(t *testing.T) int {
 	t.Helper()
 	value, ok := s.lastRequest(t)["max_tokens"].(float64)
-	if !ok {
-		t.Fatal("请求里没有 max_tokens")
-	}
+	require.True(t, ok, "请求里没有 max_tokens")
 	return int(value)
 }
 
@@ -151,15 +141,9 @@ func validImages(count int) []llm.ImagePart {
 func requireAPIError(t *testing.T, err error, status int, reason string) *middleware.APIError {
 	t.Helper()
 	var apiErr *middleware.APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("错误类型 = %T，期望 *middleware.APIError（err=%v）", err, err)
-	}
-	if apiErr.Status != status {
-		t.Fatalf("状态码 = %d，期望 %d（msg=%q）", apiErr.Status, status, apiErr.Message)
-	}
-	if apiErr.Reason != reason {
-		t.Fatalf("reason = %q，期望 %q", apiErr.Reason, reason)
-	}
+	require.ErrorAsf(t, err, &apiErr, "错误类型 = %T，期望 *middleware.APIError（err=%v）", err, err)
+	require.Equalf(t, status, apiErr.Status, "状态码（msg=%q）", apiErr.Message)
+	require.Equal(t, reason, apiErr.Reason, "reason")
 	return apiErr
 }
 
@@ -170,24 +154,12 @@ func TestOCRReturnsTranscribedText(t *testing.T) {
 	service := NewOCRService(quota, &fakeSettings{settings: stub.configuredSettings()}, llm.New())
 
 	got, err := service.OCR(context.Background(), "user-1", validImages(1))
-	if err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if got != "Alice Chen\nBackend Engineer" {
-		t.Fatalf("OCR = %q", got)
-	}
-	if quota.calls != 1 {
-		t.Fatalf("额度消费次数 = %d，期望 1", quota.calls)
-	}
-	if system := stub.systemPrompt(t); system != ocrSystemPrompt {
-		t.Fatalf("system prompt 与 Rust 不一致：\n%q", system)
-	}
-	if user := stub.userTextPart(t); user != "Transcribe the attached document images." {
-		t.Fatalf("user 消息 = %q", user)
-	}
-	if tokens := stub.maxTokens(t); tokens != maxOCRTokens {
-		t.Fatalf("max_tokens = %d，期望 %d", tokens, maxOCRTokens)
-	}
+	require.NoError(t, err, "不该报错")
+	require.Equal(t, "Alice Chen\nBackend Engineer", got, "OCR")
+	require.Equal(t, 1, quota.calls, "额度消费次数")
+	require.Equal(t, ocrSystemPrompt, stub.systemPrompt(t), "system prompt 与 Rust 不一致")
+	require.Equal(t, "Transcribe the attached document images.", stub.userTextPart(t), "user 消息")
+	require.Equal(t, maxOCRTokens, stub.maxTokens(t), "max_tokens")
 }
 
 // 图片校验必须发生在任何外部调用之前：非法图片不产生 LLM 请求、不扣额度。
@@ -208,12 +180,8 @@ func TestOCRValidatesImagesBeforeQuota(t *testing.T) {
 
 			_, err := service.OCR(context.Background(), "user-1", tc.images)
 			_ = requireAPIError(t, err, http.StatusBadRequest, "")
-			if quota.calls != 0 {
-				t.Fatalf("校验失败却扣了 %d 次额度", quota.calls)
-			}
-			if stub.requestCount() != 0 {
-				t.Fatal("校验失败却调了 LLM")
-			}
+			require.Zero(t, quota.calls, "校验失败却扣了额度")
+			require.Zero(t, stub.requestCount(), "校验失败却调了 LLM")
 		})
 	}
 }
@@ -227,12 +195,8 @@ func TestOCRDoesNotConsumeQuotaWhenUnconfigured(t *testing.T) {
 
 	_, err := service.OCR(context.Background(), "user-1", validImages(1))
 	apiErr := requireAPIError(t, err, http.StatusServiceUnavailable, "")
-	if apiErr.Message != msgAINotConfigured {
-		t.Fatalf("文案 = %q，期望 %q", apiErr.Message, msgAINotConfigured)
-	}
-	if quota.calls != 0 {
-		t.Fatalf("未配置却扣了 %d 次额度", quota.calls)
-	}
+	require.Equal(t, msgAINotConfigured, apiErr.Message, "文案")
+	require.Zero(t, quota.calls, "未配置却扣了额度")
 }
 
 // 对齐 Rust 的 `vision_unsupported_hint_matches_upstream_wording` 的服务层结果：
@@ -245,9 +209,7 @@ func TestOCRVisionUnsupportedIsUnprocessable(t *testing.T) {
 
 	_, err := service.OCR(context.Background(), "user-1", validImages(1))
 	apiErr := requireAPIError(t, err, http.StatusUnprocessableEntity, "vision_not_supported")
-	if apiErr.Message != msgVisionNotSupported {
-		t.Fatalf("文案 = %q", apiErr.Message)
-	}
+	require.Equal(t, msgVisionNotSupported, apiErr.Message, "文案")
 }
 
 // 其余上游失败一律 503 固定文案——**上游错误体里的账号标识不下发**。
@@ -259,12 +221,8 @@ func TestOCROtherUpstreamFailureIs503AndDoesNotLeak(t *testing.T) {
 
 	_, err := service.OCR(context.Background(), "user-1", validImages(1))
 	apiErr := requireAPIError(t, err, http.StatusServiceUnavailable, "")
-	if apiErr.Message != msgOCRUnavailable {
-		t.Fatalf("文案 = %q，期望固定文案", apiErr.Message)
-	}
-	if strings.Contains(apiErr.Message, "sk-secret") {
-		t.Fatalf("上游账号标识泄漏进了响应：%q", apiErr.Message)
-	}
+	require.Equal(t, msgOCRUnavailable, apiErr.Message, "文案 期望固定文案")
+	require.NotContains(t, apiErr.Message, "sk-secret", "上游账号标识泄漏进了响应")
 }
 
 func TestOCRQuotaErrorPropagates(t *testing.T) {
@@ -276,12 +234,8 @@ func TestOCRQuotaErrorPropagates(t *testing.T) {
 
 	_, err := service.OCR(context.Background(), "user-1", validImages(1))
 	apiErr := requireAPIError(t, err, http.StatusTooManyRequests, "rehearse_quota_exceeded")
-	if apiErr.Message != quotaErr.Message {
-		t.Fatalf("文案 = %q，期望原样透传配额错误", apiErr.Message)
-	}
-	if stub.requestCount() != 0 {
-		t.Fatal("配额超限却仍调了 LLM")
-	}
+	require.Equal(t, quotaErr.Message, apiErr.Message, "文案 期望原样透传配额错误")
+	require.Zero(t, stub.requestCount(), "配额超限却仍调了 LLM")
 }
 
 func TestOCRSettingsResolveErrorIsRepository(t *testing.T) {
@@ -290,9 +244,7 @@ func TestOCRSettingsResolveErrorIsRepository(t *testing.T) {
 
 	_, err := service.OCR(context.Background(), "user-1", validImages(1))
 	_ = requireAPIError(t, err, http.StatusInternalServerError, "")
-	if quota.calls != 0 {
-		t.Fatalf("配置解析失败却扣了 %d 次额度", quota.calls)
-	}
+	require.Zero(t, quota.calls, "配置解析失败却扣了额度")
 }
 
 // 直接钉住判别逻辑：只有「图片语义 + 拒绝语义」同时出现才是 422。
@@ -374,18 +326,13 @@ func TestParseOCRPayload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseOCRPayload(tc.raw)
 			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("错误 = %v，期望含 %q", err, tc.wantErr)
-				}
+				require.Error(t, err, "应当报错")
+				require.Contains(t, err.Error(), tc.wantErr, "错误信息")
 				_ = requireAPIError(t, err, http.StatusBadRequest, "")
 				return
 			}
-			if err != nil {
-				t.Fatalf("不该报错：%v", err)
-			}
-			if got != tc.want {
-				t.Fatalf("解析 = %q，期望 %q", got, tc.want)
-			}
+			require.NoError(t, err, "不该报错")
+			require.Equal(t, tc.want, got, "解析结果")
 		})
 	}
 }

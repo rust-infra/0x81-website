@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/config"
@@ -52,10 +55,10 @@ var testLLMBaseURL string
 
 func newTestDeps(t *testing.T, st store.Store) Deps {
 	t.Helper()
+	// 静音 gin 的启动路由表与 debug 检查，否则测试输出会被刷屏。
+	gin.SetMode(gin.TestMode)
 	catalog, err := scenarios.Load()
-	if err != nil {
-		t.Fatalf("load scenario catalog: %v", err)
-	}
+	require.NoError(t, err, "load scenario catalog")
 	client := testLLM(t)
 	fallback := config.LLMFallback{BaseURL: testLLMBaseURL, APIKey: "sk-test", Model: "test-model"}
 	quota := coach.NewQuotaService(st)
@@ -104,9 +107,7 @@ func token(t *testing.T, status string) string {
 		"sub": "usr_abc", "email": "a@b.c", "name": "测试", "status": status,
 		"exp": now.Add(time.Hour).Unix(), "iat": now.Unix(),
 	}).SignedString(testSecret)
-	if err != nil {
-		t.Fatalf("sign: %v", err)
-	}
+	require.NoError(t, err, "sign")
 	return signed
 }
 
@@ -126,12 +127,9 @@ func do(t *testing.T, handler http.Handler, method, path, authorization string) 
 func TestHealth_DoesNotRequireAuth(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/health", "")
-	if status != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", status, body)
-	}
-	if !strings.Contains(body, `"status":"ok"`) || !strings.Contains(body, `"database":"ok"`) {
-		t.Fatalf("body = %s", body)
-	}
+	require.Equal(t, http.StatusOK, status, "status（body=%s）", body)
+	require.Contains(t, body, `"status":"ok"`, "health body")
+	require.Contains(t, body, `"database":"ok"`, "health body")
 }
 
 // DB 不可用时必须明确报错。§7.3 换成独立托管 PG 之后它是唯一外部依赖，
@@ -139,43 +137,59 @@ func TestHealth_DoesNotRequireAuth(t *testing.T) {
 func TestHealth_ReportsDatabaseFailure(t *testing.T) {
 	router := newTestRouter(t, newDegradedStore())
 	status, body := do(t, router, http.MethodGet, "/health", "")
-	if status != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503; body = %s", status, body)
-	}
-	if !strings.Contains(body, `"database":"unreachable"`) {
-		t.Fatalf("body = %s", body)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, status, "status, want 503（body=%s）", body)
+	require.Contains(t, body, `"database":"unreachable"`, "health body")
 	// 底层错误（可能含连接串）不能下发。
-	if strings.Contains(body, "connection refused") {
-		t.Fatalf("泄漏了底层错误: %s", body)
-	}
+	require.NotContains(t, body, "connection refused", "泄漏了底层错误")
 }
 
 // 认证要**挂在整棵 /api/rehearse/ 子树上**，漏挂一个路由就是一个未鉴权端点。
 // 这条测保证新加路由时不会忘。
-func TestAPISubtree_RequiresAuth(t *testing.T) {
+//
+// ⚠️ 路由匹配先于中间件：gin（与 Rust/axum 原版一致）先匹配路由，未匹配的
+// 路径走 NoRoute，组上的 RequireAuth **根本不会执行**。所以「子树下任意路径
+// 都先撞鉴权」是旧 ServeMux 的行为，不再成立。这里只对**已注册**的路由要求
+// 401（真正有安全意义的部分）；未知路径无论带不带 token 都是 404——未鉴权
+// 的 404 只泄漏「该路径不存在」，不泄漏任何业务信息。
+func TestEveryUserRouteRequiresAuth(t *testing.T) {
 	router := newTestRouter(t, newStore())
-	for _, path := range []string{
-		"/api/rehearse/whoami",
-		"/api/rehearse/anything-not-implemented-yet",
-	} {
-		status, body := do(t, router, http.MethodGet, path, "")
-		if status != http.StatusUnauthorized {
-			t.Errorf("%s 未带 token 应回 401，实际 %d: %s", path, status, body)
+
+	// 直接读引擎注册的路由表，而不是手写一份路径清单：手写的那份会在
+	// 「新加了一个端点、忘了挂鉴权」时保持全绿——那正是这条测试要防的事。
+	engine, ok := router.(*gin.Engine)
+	require.True(t, ok, "NewRouter 应当返回 *gin.Engine")
+
+	checked := 0
+	for _, route := range engine.Routes() {
+		if !strings.HasPrefix(route.Path, "/api/rehearse/") {
+			continue
 		}
+		checked++
+		status, body := do(t, router, route.Method, route.Path, "")
+		require.Equal(t, http.StatusUnauthorized, status,
+			"%s %s 未带 token 应回 401（body=%s）", route.Method, route.Path, body)
+	}
+
+	// 数量对不上说明路由表变了。新端点也要走上面那条断言——
+	// 顺手把数字改掉是**有意的**动作，不是可以忽略的噪音。
+	require.Equal(t, 8, checked, "用户端点数量变了（%d），确认新端点确实在验签子树下", checked)
+
+	// ⚠️ 路由匹配先于中间件：gin（与 Rust/axum 原版一致）先匹配路由，未匹配的
+	// 路径走 NoRoute，组上的 RequireAuth **根本不会执行**。所以「子树下任意路径
+	// 都先撞鉴权」是旧 ServeMux 的行为，不再成立。未鉴权的 404 只泄漏
+	// 「该路径不存在」，不泄漏任何业务信息。
+	for _, authorization := range []string{"", "Bearer " + token(t, "active")} {
+		status, body := do(t, router, http.MethodGet, "/api/rehearse/anything-not-implemented-yet", authorization)
+		require.Equal(t, http.StatusNotFound, status, "未知路径应回 404（body=%s）", body)
 	}
 }
 
 func TestWhoami_ReturnsClaims(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/whoami", "Bearer "+token(t, "active"))
-	if status != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", status, body)
-	}
+	require.Equal(t, http.StatusOK, status, "status（body=%s）", body)
 	for _, want := range []string{`"success":true`, `"sub":"usr_abc"`, `"status":"active"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("响应缺少 %s: %s", want, body)
-		}
+		require.Contains(t, body, want, "响应缺少 %s", want)
 	}
 }
 
@@ -183,29 +197,37 @@ func TestWhoami_ReturnsClaims(t *testing.T) {
 func TestWhoami_RejectsInactiveUser(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/whoami", "Bearer "+token(t, "disabled"))
-	if status != http.StatusUnauthorized {
-		t.Fatalf("status = %d, body = %s", status, body)
-	}
+	require.Equal(t, http.StatusUnauthorized, status, "status（body=%s）", body)
 }
 
-// 未知路由不该意外套上鉴权信封（会让人以为「这个路径存在但没权限」）。
-func TestUnknownRoute_IsPlain404(t *testing.T) {
+// 未知路由回信封 404——这是对 Rust 原版的有意偏离：axum 的兜底是纯文本
+// `404 Not Found`，不在 §7.6 的信封契约里。但纯文本会让客户端的 JSON 解析
+// 直接抛语法错误，分不清「路径写错」和「服务端坏了」；统一成
+// `{success:false,error:{code:404,...}}` 后，客户端只需一套错误处理。
+func TestUnknownRouteUsesEnvelope(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/nope", "")
-	if status != http.StatusNotFound {
-		t.Fatalf("status = %d, body = %s", status, body)
+	require.Equal(t, http.StatusNotFound, status, "status")
+
+	var parsed struct {
+		Success bool `json:"success"`
+		Error   struct {
+			// code 用 int 解析：若服务端把 code 写成字符串 "404"，
+			// Unmarshal 会直接报错，从而把「数字契约」也一并验掉。
+			Code int `json:"code"`
+		} `json:"error"`
 	}
-	if strings.Contains(body, `"success"`) {
-		t.Fatalf("404 不该带业务信封: %s", body)
-	}
+	// body 必须是合法 JSON：gin 默认的纯文本 404 会让客户端解 JSON 时
+	// 报语法错误，而不是给出「路径写错了」的明确信号。
+	require.NoError(t, json.Unmarshal([]byte(body), &parsed), "404 body 应当是合法 JSON")
+	require.False(t, parsed.Success, "success 应当为 false")
+	require.Equal(t, 404, parsed.Error.Code, "error.code")
 }
 
 func TestScenarios_RequiresAuth(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, _ := do(t, router, http.MethodGet, "/api/rehearse/scenarios", "")
-	if status != http.StatusUnauthorized {
-		t.Fatalf("status = %d, 期望 401", status)
-	}
+	require.Equal(t, http.StatusUnauthorized, status, "status")
 }
 
 // 响应形状要与 moyan-backend 一致：`{success:true, data:[...]}`——
@@ -213,43 +235,26 @@ func TestScenarios_RequiresAuth(t *testing.T) {
 func TestScenarios_ShapeAndDefaults(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/scenarios", "Bearer "+token(t, "active"))
-	if status != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", status, body)
-	}
+	require.Equal(t, http.StatusOK, status, "status（body=%s）", body)
 
 	var got struct {
 		Success bool             `json:"success"`
 		Data    []map[string]any `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("响应不是预期形状: %v\nbody=%.400s", err, body)
-	}
-	if !got.Success {
-		t.Error("success 应为 true")
-	}
+	require.NoError(t, json.Unmarshal([]byte(body), &got), "响应不是预期形状, body=%.400s", body)
+	assert.True(t, got.Success, "success 应为 true")
 	// 不带参数时默认 zh-CN，所以应当是中文标题。
-	if len(got.Data) != 14 {
-		t.Fatalf("场景数 = %d, 期望 14", len(got.Data))
-	}
+	require.Len(t, got.Data, 14, "场景数")
 	first := got.Data[0]
-	if first["source"] != "preset" {
-		t.Errorf("source = %v, 期望 preset", first["source"])
-	}
+	assert.Equal(t, "preset", first["source"], "source")
 	// 顺序由 §5.1 的族顺序决定，所以第 0 个是 interview 族的第一个。
-	if first["id"] != "interview_screening" {
-		t.Errorf("第 0 个场景 = %v, 期望 interview_screening（§5.1 族顺序）", first["id"])
-	}
+	assert.Equal(t, "interview_screening", first["id"], "第 0 个场景（§5.1 族顺序）")
 	title, _ := first["title"].(string)
-	if !hasCJK(title) {
-		t.Errorf("默认语言下标题应是中文，实际 %q", title)
-	}
+	assert.True(t, hasCJK(title), "默认语言下标题应是中文，实际 %q", title)
 	// 族字段必须是新枚举，不能是旧的 engineering / high_stakes。
 	for _, item := range got.Data {
-		switch item["category"] {
-		case "interview", "pitch", "hard_talk", "daily":
-		default:
-			t.Errorf("%v 的 category = %v，不是 §5.1 的新枚举", item["id"], item["category"])
-		}
+		assert.Contains(t, []string{"interview", "pitch", "hard_talk", "daily"}, item["category"],
+			"%v 的 category 不是 §5.1 的新枚举", item["id"])
 	}
 }
 
@@ -272,15 +277,10 @@ func TestScenarios_LanguageSwitchesTitles(t *testing.T) {
 	var zh, en struct {
 		Data []map[string]any `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(zhBody), &zh); err != nil {
-		t.Fatalf("zh 响应解析失败: %v", err)
-	}
-	if err := json.Unmarshal([]byte(enBody), &en); err != nil {
-		t.Fatalf("en 响应解析失败: %v", err)
-	}
-	if zh.Data[0]["title"] == en.Data[0]["title"] {
-		t.Errorf("中英标题相同（%v），language 参数没生效", zh.Data[0]["title"])
-	}
+	require.NoError(t, json.Unmarshal([]byte(zhBody), &zh), "zh 响应解析失败")
+	require.NoError(t, json.Unmarshal([]byte(enBody), &en), "en 响应解析失败")
+	assert.NotEqual(t, zh.Data[0]["title"], en.Data[0]["title"],
+		"中英标题相同（%v），language 参数没生效", zh.Data[0]["title"])
 }
 
 // 非法的 language 要明确报错，而不是静默按英文处理——
@@ -289,12 +289,8 @@ func TestScenarios_RejectsUnknownLanguage(t *testing.T) {
 	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet,
 		"/api/rehearse/scenarios?language=klingon", "Bearer "+token(t, "active"))
-	if status != http.StatusBadRequest {
-		t.Fatalf("status = %d, 期望 400; body = %s", status, body)
-	}
-	if !strings.Contains(body, `"code":400`) {
-		t.Errorf("错误信封形状不对: %s", body)
-	}
+	require.Equal(t, http.StatusBadRequest, status, "status, 期望 400（body=%s）", body)
+	assert.Contains(t, body, `"code":400`, "错误信封形状不对")
 }
 
 // ⚠️ 线上契约层面的泄漏检查：把真实响应体全文搜一遍，确认服务端指导语
@@ -305,24 +301,28 @@ func TestScenarios_RejectsUnknownLanguage(t *testing.T) {
 // 某个 map 或加了新字段，只有这条能抓到。
 func TestScenarios_NeverLeaksGuidanceOverTheWire(t *testing.T) {
 	catalog, err := scenarios.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	require.NoError(t, err, "load catalog")
 	router := newTestRouter(t, newStore())
 	auth := "Bearer " + token(t, "active")
 
 	for _, language := range []string{"zh-CN", "en-US"} {
 		_, body := do(t, router, http.MethodGet,
 			"/api/rehearse/scenarios?language="+language, auth)
-		if strings.Contains(body, "guidance") {
-			t.Fatalf("响应里出现了 guidance 键名（language=%s）", language)
-		}
+		require.NotContains(t, body, "guidance", "响应里出现了 guidance 键名（language=%s）", language)
+		checkedGuidance := 0
 		for _, id := range catalog.IDs() {
 			guidance, _ := catalog.Guidance(id)
-			if needle := firstRunes(guidance, 12); strings.Contains(body, needle) {
-				t.Fatalf("%s 的 guidance 正文泄漏进了响应（language=%s）", id, language)
+			// ⚠️ 必须先挡掉空串：`NotContains(body, "")` 永远为假，
+			// 于是「场景的 guidance 是空的」会被误报成泄漏。空 guidance
+			// 是数据缺陷，由 scenarios 包的加载校验负责，不在这里判。
+			if guidance == "" {
+				continue
 			}
+			checkedGuidance++
+			needle := firstRunes(guidance, 12)
+			require.NotContains(t, body, needle, "%s 的 guidance 正文泄漏进了响应（language=%s）", id, language)
 		}
+		require.NotZero(t, checkedGuidance, "一个非空 guidance 都没检查到，这条测试失去意义（language=%s）", language)
 	}
 }
 

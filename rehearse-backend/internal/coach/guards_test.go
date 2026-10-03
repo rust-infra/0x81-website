@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/0x81/rehearse-backend/internal/model"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func validScenario() model.Scenario {
@@ -36,12 +38,8 @@ func TestValidateScenarioClampsMaxTurns(t *testing.T) {
 		scenario := validScenario()
 		scenario.MaxTurns = tc.in
 		got, err := ValidateScenario(scenario)
-		if err != nil {
-			t.Fatalf("max_turns=%d: 不该报错: %v", tc.in, err)
-		}
-		if got.MaxTurns != tc.want {
-			t.Errorf("max_turns=%d 夹取为 %d, 期望 %d", tc.in, got.MaxTurns, tc.want)
-		}
+		require.NoErrorf(t, err, "max_turns=%d: 不该报错", tc.in)
+		assert.Equalf(t, tc.want, got.MaxTurns, "max_turns=%d 夹取值", tc.in)
 	}
 }
 
@@ -58,9 +56,8 @@ func TestValidateScenarioRejectsBadEnums(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			scenario := validScenario()
 			mutate(&scenario)
-			if _, err := ValidateScenario(scenario); err == nil {
-				t.Error("应当报错")
-			}
+			_, err := ValidateScenario(scenario)
+			assert.Error(t, err, "应当报错")
 		})
 	}
 }
@@ -70,22 +67,19 @@ func TestValidateScenarioRejectsBadEnums(t *testing.T) {
 func TestValidateScenarioCountsRunesNotBytes(t *testing.T) {
 	scenario := validScenario()
 	scenario.Title = strings.Repeat("中", maxTitleLen) // 恰好 60 个字符 = 180 字节
-	if _, err := ValidateScenario(scenario); err != nil {
-		t.Fatalf("60 个中文字符应当通过（按字符计），却报错: %v", err)
-	}
+	_, err := ValidateScenario(scenario)
+	require.NoError(t, err, "60 个中文字符应当通过（按字符计）")
 
 	scenario.Title = strings.Repeat("中", maxTitleLen+1)
-	if _, err := ValidateScenario(scenario); err == nil {
-		t.Error("61 个字符应当被拒")
-	}
+	_, err = ValidateScenario(scenario)
+	assert.Error(t, err, "61 个字符应当被拒")
 }
 
 func TestValidateScenarioRejectsTooManyFocusPoints(t *testing.T) {
 	scenario := validScenario()
 	scenario.FocusPoints = []string{"a", "b", "c", "d", "e", "f"}
-	if _, err := ValidateScenario(scenario); err == nil {
-		t.Error("6 个 focus_points 应当被拒（上限 5）")
-	}
+	_, err := ValidateScenario(scenario)
+	assert.Error(t, err, "6 个 focus_points 应当被拒（上限 5）")
 }
 
 // 单条不超、但总数超——只看单条长度的话，40 条各 2000 字能把 prompt 撑到 8 万字。
@@ -95,22 +89,15 @@ func TestValidateHistoryEnforcesTotalLength(t *testing.T) {
 	for i := range history {
 		history[i] = model.Turn{Role: model.RoleUser, Content: strings.Repeat("x", 1000)}
 	}
-	if err := ValidateHistory(history, "hello"); err == nil {
-		t.Error("总长度超限应当被拒")
-	}
+	assert.Error(t, ValidateHistory(history, "hello"), "总长度超限应当被拒")
 }
 
 func TestValidateHistoryRejectsOversizeUserText(t *testing.T) {
 	history := []model.Turn{{Role: model.RoleCoach, Content: "hi"}}
-	if err := ValidateHistory(history, strings.Repeat("x", MaxUserTextChars+1)); err == nil {
-		t.Error("超长 user_text 应当被拒")
-	}
-	if err := ValidateHistory(history, "   "); err == nil {
-		t.Error("空白 user_text 应当被拒")
-	}
-	if err := ValidateHistory(history, "ok"); err != nil {
-		t.Errorf("合法输入不该报错: %v", err)
-	}
+	assert.Error(t, ValidateHistory(history, strings.Repeat("x", MaxUserTextChars+1)),
+		"超长 user_text 应当被拒")
+	assert.Error(t, ValidateHistory(history, "   "), "空白 user_text 应当被拒")
+	assert.NoError(t, ValidateHistory(history, "ok"), "合法输入不该报错")
 }
 
 // ⚠️ **防作弊护栏**：`completed_turns` 来自客户端，不能信任。
@@ -126,23 +113,15 @@ func TestNextTurnIndexTakesMaxOfClaimedAndInferred(t *testing.T) {
 	}
 	zero := uint32(0)
 	got, err := NextTurnIndex(history, &zero, 10)
-	if err != nil {
-		t.Fatalf("不该报错: %v", err)
-	}
+	require.NoError(t, err, "不该报错")
 	// 推断出 5 轮 → 本轮是第 6 轮。若信任客户端的 0，会得到 1。
-	if got != 6 {
-		t.Errorf("turn_index = %d, 期望 6（取 max(声称 0, 推断 5) + 1）", got)
-	}
+	assert.Equalf(t, uint32(6), got, "turn_index 期望 6（取 max(声称 0, 推断 5) + 1）")
 
 	// 反向：客户端声称 7（比推断的 5 大），应当采信更大的那个。
 	seven := uint32(7)
 	got, err = NextTurnIndex(history, &seven, 10)
-	if err != nil {
-		t.Fatalf("不该报错: %v", err)
-	}
-	if got != 8 {
-		t.Errorf("turn_index = %d, 期望 8（取 max(7, 5) + 1）", got)
-	}
+	require.NoError(t, err, "不该报错")
+	assert.Equalf(t, uint32(8), got, "turn_index 期望 8（取 max(7, 5) + 1）")
 }
 
 func TestNextTurnIndexRejectsAtLimit(t *testing.T) {
@@ -151,14 +130,12 @@ func TestNextTurnIndexRejectsAtLimit(t *testing.T) {
 		history = append(history, model.Turn{Role: model.RoleUser, Content: "u"})
 	}
 	ten := uint32(10)
-	if _, err := NextTurnIndex(history, &ten, 10); err == nil {
-		t.Error("达到上限应当报错")
-	}
+	_, err := NextTurnIndex(history, &ten, 10)
+	assert.Error(t, err, "达到上限应当报错")
 	// 上限之上也报错（不是刚好等于才算）
 	eleven := uint32(11)
-	if _, err := NextTurnIndex(history, &eleven, 10); err == nil {
-		t.Error("超过上限应当报错")
-	}
+	_, err = NextTurnIndex(history, &eleven, 10)
+	assert.Error(t, err, "超过上限应当报错")
 }
 
 // 推荐表达不能复读 AI 自己的回复——否则「你可以这样回」会变成
@@ -170,12 +147,8 @@ func TestSanitizeNextLinesBlocksEchoOfReply(t *testing.T) {
 		{Text: "Can you walk me through the design?", Translation: "能讲讲设计吗？"},
 	}
 	got := SanitizeNextLines(lines, nil, reply)
-	if len(got) != 1 {
-		t.Fatalf("应当只剩 1 条，实际 %d: %+v", len(got), got)
-	}
-	if got[0].Text != "Can you walk me through the design?" {
-		t.Errorf("留下的不是预期那条: %q", got[0].Text)
-	}
+	require.Len(t, got, 1, "应当只剩 1 条")
+	assert.Equal(t, "Can you walk me through the design?", got[0].Text, "留下的不是预期那条")
 }
 
 // 也不能复读纠错里的任何一句（原文 / 改正后 / 更地道的说法 / 推荐短语）。
@@ -198,9 +171,8 @@ func TestSanitizeNextLinesBlocksEchoOfFeedback(t *testing.T) {
 		{Text: "Let's take it offline.", Translation: "我们线下聊。"},
 	}
 	got := SanitizeNextLines(lines, feedback, "Okay.")
-	if len(got) != 1 || got[0].Text != "Let's take it offline." {
-		t.Fatalf("应当只剩最后一条，实际 %+v", got)
-	}
+	require.Len(t, got, 1, "应当只剩最后一条")
+	require.Equal(t, "Let's take it offline.", got[0].Text, "应当只剩最后一条")
 }
 
 // 比对用规范化形式：大小写与标点差异要认成同一句。
@@ -212,9 +184,8 @@ func TestSanitizeNextLinesNormalizesBeforeComparing(t *testing.T) {
 		{Text: "The API is done.", Translation: "API 完成了。"},
 	}
 	got := SanitizeNextLines(lines, nil, reply)
-	if len(got) != 1 || got[0].Text != "The API is done." {
-		t.Fatalf("规范化比对没生效，实际 %+v", got)
-	}
+	require.Len(t, got, 1, "规范化比对没生效")
+	require.Equal(t, "The API is done.", got[0].Text, "规范化比对没生效")
 }
 
 func TestSanitizeNextLinesCapsAtTwoAndDropsEmpties(t *testing.T) {
@@ -226,42 +197,30 @@ func TestSanitizeNextLinesCapsAtTwoAndDropsEmpties(t *testing.T) {
 		{Text: "four", Translation: "四"},
 	}
 	got := SanitizeNextLines(lines, nil, "reply")
-	if len(got) != MaxNextLines {
-		t.Fatalf("应当最多 %d 条，实际 %d: %+v", MaxNextLines, len(got), got)
-	}
-	if got[0].Text != "one" || got[1].Text != "three" {
-		t.Errorf("保留的应当是前两条合法的: %+v", got)
-	}
+	require.Len(t, got, MaxNextLines, "应当最多 MaxNextLines 条")
+	assert.Equal(t, "one", got[0].Text, "保留的应当是前两条合法的")
+	assert.Equal(t, "three", got[1].Text, "保留的应当是前两条合法的")
 }
 
 func TestTrimReplyCutsAtSentenceBoundary(t *testing.T) {
 	// 240 字上限，构造一段在 200 字处有句号的文本
 	long := strings.Repeat("a", 200) + ". " + strings.Repeat("b", 100)
 	got := TrimReply(long)
-	if len([]rune(got)) > MaxReplyChars {
-		t.Errorf("超过上限: %d", len([]rune(got)))
-	}
-	if !strings.HasSuffix(got, ".") {
-		t.Errorf("应当在句末标点处切，实际结尾 %q", got[len(got)-10:])
-	}
+	assert.LessOrEqual(t, len([]rune(got)), MaxReplyChars, "超过上限")
+	assert.Truef(t, strings.HasSuffix(got, "."), "应当在句末标点处切，实际结尾 %q", got[len(got)-10:])
 }
 
 // 没有句末标点时退到空格处切，不能把单词劈成两半。
 func TestTrimReplyDoesNotSplitWords(t *testing.T) {
 	long := strings.Repeat("word ", 100) // 没有句号
 	got := TrimReply(long)
-	if strings.HasSuffix(got, "wor") || strings.HasSuffix(got, "wo") {
-		t.Errorf("把单词劈开了: %q", got)
-	}
-	if len([]rune(got)) > MaxReplyChars {
-		t.Errorf("超过上限: %d", len([]rune(got)))
-	}
+	assert.Falsef(t, strings.HasSuffix(got, "wor") || strings.HasSuffix(got, "wo"),
+		"把单词劈开了: %q", got)
+	assert.LessOrEqual(t, len([]rune(got)), MaxReplyChars, "超过上限")
 }
 
 func TestTrimReplyLeavesShortTextAlone(t *testing.T) {
-	if got := TrimReply("  Hello there.  "); got != "Hello there." {
-		t.Errorf("短文本应当只做 trim，实际 %q", got)
-	}
+	assert.Equal(t, "Hello there.", TrimReply("  Hello there.  "), "短文本应当只做 trim")
 }
 
 // 模型偶尔无视「no markdown fences」的要求，解析前必须容错。
@@ -272,9 +231,7 @@ func TestStripCodeFences(t *testing.T) {
 		{"{\"a\":1}", `{"a":1}`},
 		{"  {\"a\":1}  ", `{"a":1}`},
 	} {
-		if got := StripCodeFences(tc.in); got != tc.want {
-			t.Errorf("StripCodeFences(%q) = %q, 期望 %q", tc.in, got, tc.want)
-		}
+		assert.Equalf(t, tc.want, StripCodeFences(tc.in), "StripCodeFences(%q)", tc.in)
 	}
 }
 
@@ -282,29 +239,15 @@ func TestStripCodeFences(t *testing.T) {
 // 报 500 会让用户看到错误页，而其实还能继续对话。
 func TestDegradedResponseKeepsReplyDropsFeedback(t *testing.T) {
 	got := DegradedResponse("Sure, let's dig in.", 3, true)
-	if got.Reply != "Sure, let's dig in." {
-		t.Errorf("reply = %q", got.Reply)
-	}
-	if got.Feedback != nil {
-		t.Error("降级响应不该带 feedback")
-	}
-	if !got.LimitReached {
-		t.Error("limit_reached 应当透传")
-	}
-	if got.TurnIndex != 3 {
-		t.Errorf("turn_index = %d", got.TurnIndex)
-	}
-	if got.Mood != model.MoodNeutral {
-		t.Errorf("mood = %q, 期望 neutral", got.Mood)
-	}
-	if got.ReplyTranslation != nil {
-		t.Error("降级响应不该有翻译")
-	}
+	assert.Equal(t, "Sure, let's dig in.", got.Reply, "reply")
+	assert.Nil(t, got.Feedback, "降级响应不该带 feedback")
+	assert.True(t, got.LimitReached, "limit_reached 应当透传")
+	assert.Equal(t, uint32(3), got.TurnIndex, "turn_index")
+	assert.Equal(t, model.MoodNeutral, got.Mood, "mood 期望 neutral")
+	assert.Nil(t, got.ReplyTranslation, "降级响应不该有翻译")
 
 	// 完全空的原始输出也要给一句可展示的话，而不是空字符串。
-	if empty := DegradedResponse("   ", 1, false); empty.Reply == "" {
-		t.Error("空输出时应当给兜底文案")
-	}
+	assert.NotEmpty(t, DegradedResponse("   ", 1, false).Reply, "空输出时应当给兜底文案")
 }
 
 // 对话内容放在 user 侧，规则在 system 侧——这样「忽略以上指令」在结构上
@@ -315,44 +258,28 @@ func TestBuildTranscript(t *testing.T) {
 		{Role: model.RoleUser, Content: "Hi."},
 	}
 	got := BuildTranscript(history, "I finished the API.")
-	if !strings.Contains(got, "COACH: Morning!") {
-		t.Errorf("缺少 COACH 行: %s", got)
-	}
-	if !strings.Contains(got, "USER: Hi.") {
-		t.Errorf("缺少 USER 行: %s", got)
-	}
-	if !strings.Contains(got, "USER (latest): I finished the API.") {
-		t.Errorf("缺少最新一轮: %s", got)
-	}
+	assert.Contains(t, got, "COACH: Morning!", "缺少 COACH 行")
+	assert.Contains(t, got, "USER: Hi.", "缺少 USER 行")
+	assert.Contains(t, got, "USER (latest): I finished the API.", "缺少最新一轮")
 	// 必须明确告诉模型「按指令里的 JSON 回复」，否则它会自由发挥。
-	if !strings.Contains(got, "JSON object") {
-		t.Errorf("缺少输出格式提醒: %s", got)
-	}
+	assert.Contains(t, got, "JSON object", "缺少输出格式提醒")
 }
 
 func TestValidateMaterial(t *testing.T) {
-	if err := ValidateMaterial(model.MaterialContext{Kind: "resume", Profile: "5 年后端"}); err != nil {
-		t.Errorf("合法材料不该报错: %v", err)
-	}
+	assert.NoError(t, ValidateMaterial(model.MaterialContext{Kind: "resume", Profile: "5 年后端"}),
+		"合法材料不该报错")
 	// v1 不扩 project_doc / perf_review（§5.3）
-	if err := ValidateMaterial(model.MaterialContext{Kind: "project_doc", Profile: "x"}); err == nil {
-		t.Error("project_doc 不在 v1 的 kind 白名单里")
-	}
-	if err := ValidateMaterial(model.MaterialContext{Kind: "resume", Profile: "  "}); err == nil {
-		t.Error("空 profile 应当被拒")
-	}
-	if err := ValidateMaterial(model.MaterialContext{
+	assert.Error(t, ValidateMaterial(model.MaterialContext{Kind: "project_doc", Profile: "x"}),
+		"project_doc 不在 v1 的 kind 白名单里")
+	assert.Error(t, ValidateMaterial(model.MaterialContext{Kind: "resume", Profile: "  "}),
+		"空 profile 应当被拒")
+	assert.Error(t, ValidateMaterial(model.MaterialContext{
 		Kind: "resume", Profile: strings.Repeat("x", MaxMaterialChars+1),
-	}); err == nil {
-		t.Error("超长 profile 应当被拒")
-	}
+	}), "超长 profile 应当被拒")
 }
 
 func TestValidateSummaryHistory(t *testing.T) {
-	if err := ValidateSummaryHistory(nil); err == nil {
-		t.Error("空历史应当被拒")
-	}
-	if err := ValidateSummaryHistory([]model.Turn{{Role: model.RoleUser, Content: "hi"}}); err != nil {
-		t.Errorf("合法历史不该报错: %v", err)
-	}
+	assert.Error(t, ValidateSummaryHistory(nil), "空历史应当被拒")
+	assert.NoError(t, ValidateSummaryHistory([]model.Turn{{Role: model.RoleUser, Content: "hi"}}),
+		"合法历史不该报错")
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/0x81/rehearse-backend/internal/model"
 	"github.com/0x81/rehearse-backend/internal/scenarios"
 	"github.com/0x81/rehearse-backend/internal/store/storetest"
+	"github.com/stretchr/testify/require"
 )
 
 // harness 把三件外部依赖都换成可控的假实现：LLM（httptest）、存储（内存）、
@@ -77,9 +78,7 @@ func newHarnessWithLLM(t *testing.T, override config.LLMFallback, responses ...s
 	t.Cleanup(h.server.Close)
 
 	catalog, err := scenarios.Load()
-	if err != nil {
-		t.Fatalf("load scenario catalog: %v", err)
-	}
+	require.NoError(t, err, "load scenario catalog")
 	fallback := config.LLMFallback{
 		BaseURL: h.server.URL,
 		APIKey:  "sk-test",
@@ -97,22 +96,16 @@ func newHarnessWithLLM(t *testing.T, override config.LLMFallback, responses ...s
 func (h *harness) setQuota(t *testing.T, limit uint32, enabled bool) {
 	t.Helper()
 	encoded, err := json.Marshal(QuotaSettings{DailyTurnLimit: limit, Enabled: enabled})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	h.store.SetSetting(quotaSettingKey, string(encoded))
 }
 
 // systemPrompt 返回第 index 次 LLM 调用的 system prompt。
 func (h *harness) systemPrompt(t *testing.T, index int) string {
 	t.Helper()
-	if index >= len(h.requests) {
-		t.Fatalf("只有 %d 次 LLM 调用，取不到第 %d 次", len(h.requests), index)
-	}
+	require.Lessf(t, index, len(h.requests), "只有 %d 次 LLM 调用，取不到第 %d 次", len(h.requests), index)
 	messages, _ := h.requests[index]["messages"].([]any)
-	if len(messages) == 0 {
-		t.Fatal("请求里没有 messages")
-	}
+	require.NotEmpty(t, messages, "请求里没有 messages")
 	first, _ := messages[0].(map[string]any)
 	content, _ := first["content"].(string)
 	return content
@@ -122,9 +115,7 @@ func (h *harness) systemPrompt(t *testing.T, index int) string {
 func (h *harness) userMessage(t *testing.T, index int) string {
 	t.Helper()
 	messages, _ := h.requests[index]["messages"].([]any)
-	if len(messages) < 2 {
-		t.Fatal("请求里没有 user 消息")
-	}
+	require.GreaterOrEqual(t, len(messages), 2, "请求里没有 user 消息")
 	second, _ := messages[1].(map[string]any)
 	content, _ := second["content"].(string)
 	return content

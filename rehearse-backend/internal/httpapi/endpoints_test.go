@@ -13,6 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/config"
 	"github.com/0x81/rehearse-backend/internal/llm"
@@ -33,6 +36,8 @@ func llmStub(t *testing.T, content string) *llm.Client {
 			"choices": []any{map[string]any{"message": map[string]any{"content": content}}},
 		})
 		if err != nil {
+			// 这里在 httptest 的 handler goroutine 里，不能用 require
+			// （FailNow 只能在跑测试的那个 goroutine 调）；t.Errorf 是安全的。
 			t.Errorf("marshal stub response: %v", err)
 			return
 		}
@@ -46,9 +51,7 @@ func llmStub(t *testing.T, content string) *llm.Client {
 func depsWithLLM(t *testing.T, st store.Store, content string) Deps {
 	t.Helper()
 	catalog, err := scenarios.Load()
-	if err != nil {
-		t.Fatalf("load scenario catalog: %v", err)
-	}
+	require.NoError(t, err, "load scenario catalog")
 	client := llmStub(t, content)
 	fallback := config.LLMFallback{BaseURL: testLLMBaseURL, APIKey: "sk-test", Model: "test-model"}
 	quota := coach.NewQuotaService(st)
@@ -74,6 +77,18 @@ type request struct {
 	adminToken    string
 	origin        string
 	contentType   string
+	// requestMethod 只在预检时有值，对应 `Access-Control-Request-Method`。
+	// ⚠️ 浏览器预检**一定**带这个头，而 CORS 中间件也是靠它区分
+	// 「预检」和「一个恰好是 OPTIONS 的普通请求」——不带的话测的就不是预检。
+	requestMethod string
+	// requestHeaders 对应 `Access-Control-Request-Headers`，同样只有预检才有。
+	//
+	// ⚠️ 必须**全小写**：Fetch 标准保证这些头名是小写的，所以实现方按小写做
+	// 集合匹配（`rs/cors` 的注释就写着 "the Fetch standard guarantees that
+	// CORS-unsafe request-header names are lowercase"）。写成 `X-Admin-Token`
+	// 会被判成「请求了一个不允许的头」，整个预检直接中止、连
+	// `Access-Control-Allow-Origin` 都不回——症状是「跨域全挂」，而原因只是大小写。
+	requestHeaders string
 }
 
 func send(t *testing.T, handler http.Handler, req request) *httptest.ResponseRecorder {
@@ -95,6 +110,12 @@ func send(t *testing.T, handler http.Handler, req request) *httptest.ResponseRec
 	if req.contentType != "" {
 		httpReq.Header.Set("Content-Type", req.contentType)
 	}
+	if req.requestMethod != "" {
+		httpReq.Header.Set("Access-Control-Request-Method", req.requestMethod)
+	}
+	if req.requestHeaders != "" {
+		httpReq.Header.Set("Access-Control-Request-Headers", req.requestHeaders)
+	}
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httpReq)
 	return rec
@@ -107,12 +128,8 @@ func envelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 		Success bool           `json:"success"`
 		Data    map[string]any `json:"data"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
-		t.Fatalf("响应不是合法 JSON：%v（body=%s）", err, rec.Body.String())
-	}
-	if !parsed.Success {
-		t.Fatalf("success 应当为 true：%s", rec.Body.String())
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &parsed), "响应不是合法 JSON：body=%s", rec.Body.String())
+	require.True(t, parsed.Success, "success 应当为 true：%s", rec.Body.String())
 	return parsed.Data
 }
 
@@ -123,12 +140,8 @@ func errorEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any 
 		Success bool           `json:"success"`
 		Error   map[string]any `json:"error"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
-		t.Fatalf("响应不是合法 JSON：%v（body=%s）", err, rec.Body.String())
-	}
-	if parsed.Success {
-		t.Fatalf("success 应当为 false：%s", rec.Body.String())
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &parsed), "响应不是合法 JSON：body=%s", rec.Body.String())
+	require.False(t, parsed.Success, "success 应当为 false：%s", rec.Body.String())
 	return parsed.Error
 }
 
@@ -146,18 +159,15 @@ func TestUserEndpointsRequireJWT(t *testing.T) {
 	}
 	for _, req := range paths {
 		rec := send(t, router, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("%s %s → %d，期望 401", req.method, req.path, rec.Code)
+		// 用 assert 而非 require：单个路径失败不该中断整张表的检查，
+		// 一次跑完能看到所有出问题的路径（原实现是 continue）。
+		if !assert.Equal(t, http.StatusUnauthorized, rec.Code, "%s %s → 期望 401", req.method, req.path) {
 			continue
 		}
 		inner := errorEnvelope(t, rec)
 		// ⚠️ code 是**数字**（HTTP 状态码），不是字符串枚举——规格里错过一次。
-		if inner["code"] != float64(401) {
-			t.Errorf("%s %s → code = %v，期望数字 401", req.method, req.path, inner["code"])
-		}
-		if inner["message"] != "Missing authorization token" {
-			t.Errorf("%s %s → message = %v", req.method, req.path, inner["message"])
-		}
+		assert.Equal(t, float64(401), inner["code"], "%s %s → code 期望数字 401", req.method, req.path)
+		assert.Equal(t, "Missing authorization token", inner["message"], "%s %s → message", req.method, req.path)
 	}
 }
 
@@ -170,12 +180,8 @@ func TestAdminEndpointsRejectUserJWT(t *testing.T) {
 		path:          "/api/admin/settings/rehearse",
 		authorization: "Bearer " + token(t, "active"),
 	})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d，期望 401（用户 JWT 不该能进管理端）", rec.Code)
-	}
-	if inner := errorEnvelope(t, rec); inner["message"] != "Invalid admin token" {
-		t.Fatalf("message = %v", inner["message"])
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "status 期望 401（用户 JWT 不该能进管理端）")
+	require.Equal(t, "Invalid admin token", errorEnvelope(t, rec)["message"], "message")
 }
 
 // 反过来：管理端 token 也不该能进用户接口。
@@ -186,9 +192,7 @@ func TestUserEndpointsRejectAdminToken(t *testing.T) {
 		path:       "/api/rehearse/quota",
 		adminToken: testAdminToken,
 	})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d，期望 401", rec.Code)
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "status, 期望 401")
 }
 
 // 配置里没有 ADMIN_TOKEN 时，管理端回 503 而不是放行——放行等于把管理端
@@ -199,12 +203,8 @@ func TestAdminEndpointsServiceUnavailableWithoutConfiguredToken(t *testing.T) {
 	router := NewRouter(deps)
 
 	rec := send(t, router, request{method: http.MethodGet, path: "/api/admin/settings/rehearse"})
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d，期望 503", rec.Code)
-	}
-	if inner := errorEnvelope(t, rec); inner["message"] != "ADMIN_TOKEN is not configured" {
-		t.Fatalf("message = %v", inner["message"])
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "status, 期望 503")
+	require.Equal(t, "ADMIN_TOKEN is not configured", errorEnvelope(t, rec)["message"], "message")
 }
 
 // ---------------------------------------------------------------- 用户接口
@@ -216,21 +216,13 @@ func TestQuotaReturnsSnapshotShape(t *testing.T) {
 		path:          "/api/rehearse/quota",
 		authorization: "Bearer " + token(t, "active"),
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
 	for _, key := range []string{"limit", "used", "remaining", "resets_at", "enabled", "llm_configured"} {
-		if _, ok := data[key]; !ok {
-			t.Errorf("响应缺少 %q：%v", key, data)
-		}
+		assert.Contains(t, data, key, "响应缺少 %q", key)
 	}
-	if data["limit"] != float64(coach.DefaultDailyTurnLimit) {
-		t.Errorf("limit = %v，期望默认 %d", data["limit"], coach.DefaultDailyTurnLimit)
-	}
-	if data["llm_configured"] != true {
-		t.Errorf("llm_configured = %v，期望 true（测试里配了 key）", data["llm_configured"])
-	}
+	assert.Equal(t, float64(coach.DefaultDailyTurnLimit), data["limit"], "limit 期望默认 %d", coach.DefaultDailyTurnLimit)
+	assert.Equal(t, true, data["llm_configured"], "llm_configured 期望 true（测试里配了 key）")
 }
 
 func TestTurnHappyPathAndEnvelope(t *testing.T) {
@@ -247,16 +239,10 @@ func TestTurnHappyPathAndEnvelope(t *testing.T) {
 			"setting":"meeting","opening_line":"Hi","focus_points":[],"difficulty":"core","max_turns":6},
 			"history":[],"user_text":"hello","mode":"feedback"}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["reply"] != "Nice!" {
-		t.Fatalf("reply = %v", data["reply"])
-	}
-	if data["turn_index"] != float64(1) {
-		t.Fatalf("turn_index = %v", data["turn_index"])
-	}
+	require.Equal(t, "Nice!", data["reply"], "reply")
+	require.Equal(t, float64(1), data["turn_index"], "turn_index")
 }
 
 // 请求体不是合法 JSON → 400 信封（不是 500，也不是空 body）。
@@ -269,12 +255,8 @@ func TestMalformedBodyReturnsEnvelope(t *testing.T) {
 		contentType:   "application/json",
 		body:          `{"scenario":`,
 	})
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d，期望 400", rec.Code)
-	}
-	if inner := errorEnvelope(t, rec); inner["code"] != float64(400) {
-		t.Fatalf("code = %v", inner["code"])
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code, "status, 期望 400")
+	require.Equal(t, float64(400), errorEnvelope(t, rec)["code"], "code")
 }
 
 // 超过 JSON body 上限时也要是 400 信封，而不是连接被粗暴掐断。
@@ -288,9 +270,7 @@ func TestOversizedJSONBodyRejected(t *testing.T) {
 		contentType:   "application/json",
 		body:          huge,
 	})
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d，期望 400", rec.Code)
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code, "status, 期望 400")
 }
 
 func TestSummaryHappyPath(t *testing.T) {
@@ -307,13 +287,9 @@ func TestSummaryHappyPath(t *testing.T) {
 			"setting":"meeting","opening_line":"Hi","focus_points":[],"difficulty":"core","max_turns":6},
 			"history":[{"role":"user","content":"hello"}]}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["overall_en"] != "Good" {
-		t.Fatalf("overall_en = %v", data["overall_en"])
-	}
+	require.Equal(t, "Good", data["overall_en"], "overall_en")
 }
 
 func TestDraftHappyPath(t *testing.T) {
@@ -330,16 +306,11 @@ func TestDraftHappyPath(t *testing.T) {
 		contentType:   "application/json",
 		body:          `{"description":"和澳洲同事交接任务"}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["source"] != "custom" {
-		t.Fatalf("source = %v", data["source"])
-	}
-	if id, _ := data["id"].(string); !strings.HasPrefix(id, "custom_") {
-		t.Fatalf("id = %v", data["id"])
-	}
+	require.Equal(t, "custom", data["source"], "source")
+	id, _ := data["id"].(string)
+	require.True(t, strings.HasPrefix(id, "custom_"), "id = %v", data["id"])
 }
 
 // ---------------------------------------------------------------- 材料
@@ -350,17 +321,12 @@ func docxFixture(t *testing.T) []byte {
 	var buffer bytes.Buffer
 	archive := zip.NewWriter(&buffer)
 	entry, err := archive.Create("word/document.xml")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	xml := `<w:body><w:p><w:r><w:t>Alice Chen</w:t></w:r></w:p>` +
 		`<w:p><w:r><w:t>Backend Engineer</w:t></w:r></w:p></w:body>`
-	if _, err := entry.Write([]byte(xml)); err != nil {
-		t.Fatal(err)
-	}
-	if err := archive.Close(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = entry.Write([]byte(xml))
+	require.NoError(t, err)
+	require.NoError(t, archive.Close())
 	return buffer.Bytes()
 }
 
@@ -387,16 +353,11 @@ func multipartBody(t *testing.T, fields map[string]part) (string, io.Reader) {
 			header.Set("Content-Type", field.contentType)
 		}
 		part, err := writer.CreatePart(header)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := part.Write(field.content); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		_, err = part.Write(field.content)
+		require.NoError(t, err)
 	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, writer.Close())
 	return writer.FormDataContentType(), &buffer
 }
 
@@ -412,20 +373,12 @@ func TestMaterialTextParsesDocx(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httpReq)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["text"] != "Alice Chen\nBackend Engineer" {
-		t.Fatalf("text = %q", data["text"])
-	}
-	if data["source"] != "document" {
-		t.Fatalf("source = %v", data["source"])
-	}
+	require.Equal(t, "Alice Chen\nBackend Engineer", data["text"], "text")
+	require.Equal(t, "document", data["source"], "source")
 	// 只有 28 个字符，低于 200 的阈值 → 提示可能是扫描件。
-	if data["likely_scanned"] != true {
-		t.Fatalf("likely_scanned = %v，期望 true", data["likely_scanned"])
-	}
+	require.Equal(t, true, data["likely_scanned"], "likely_scanned 期望 true")
 }
 
 func TestMaterialTextRejectsUnknownExtension(t *testing.T) {
@@ -440,9 +393,7 @@ func TestMaterialTextRejectsUnknownExtension(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httpReq)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d，期望 400", rec.Code)
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code, "status, 期望 400")
 }
 
 // 既没有 docs 也没有 images → 400，且文案与 Rust 一致。
@@ -456,12 +407,8 @@ func TestMaterialTextRequiresDocsOrImages(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httpReq)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d，期望 400", rec.Code)
-	}
-	if inner := errorEnvelope(t, rec); inner["message"] != "docs or images is required" {
-		t.Fatalf("message = %v", inner["message"])
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code, "status, 期望 400")
+	require.Equal(t, "docs or images is required", errorEnvelope(t, rec)["message"], "message")
 }
 
 // 图片走视觉路径：source=image，likely_scanned 恒为 false。
@@ -481,19 +428,11 @@ func TestMaterialTextImagePath(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httpReq)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["text"] != "Alice Chen" {
-		t.Fatalf("text = %v", data["text"])
-	}
-	if data["source"] != "image" {
-		t.Fatalf("source = %v", data["source"])
-	}
-	if data["likely_scanned"] != false {
-		t.Fatalf("图片路径的 likely_scanned 恒为 false，得到 %v", data["likely_scanned"])
-	}
+	require.Equal(t, "Alice Chen", data["text"], "text")
+	require.Equal(t, "image", data["source"], "source")
+	require.Equal(t, false, data["likely_scanned"], "图片路径的 likely_scanned 恒为 false")
 }
 
 func TestMaterialProfileHappyPath(t *testing.T) {
@@ -505,13 +444,10 @@ func TestMaterialProfileHappyPath(t *testing.T) {
 		contentType:   "application/json",
 		body:          `{"kind":"resume","text":"Alice Chen, backend engineer"}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["profile"] != "5 年后端" || data["kind"] != "resume" {
-		t.Fatalf("data = %v", data)
-	}
+	require.Equal(t, "5 年后端", data["profile"], "profile")
+	require.Equal(t, "resume", data["kind"], "kind")
 }
 
 // ---------------------------------------------------------------- 管理端
@@ -528,12 +464,8 @@ func TestAdminGetAndPartialUpdate(t *testing.T) {
 		contentType: "application/json",
 		body:        `{"daily_turn_limit":7,"enabled":true}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
-	if data := envelope(t, rec); data["daily_turn_limit"] != float64(7) {
-		t.Fatalf("daily_turn_limit = %v", data["daily_turn_limit"])
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
+	require.Equal(t, float64(7), envelope(t, rec)["daily_turn_limit"], "daily_turn_limit")
 
 	// ⚠️ 这条是本次移植最容易踩的坑：管理端的 LLM 表单会把自己的 body
 	// （不含 daily_turn_limit）也 PUT 到这个接口。如果配额是「整体替换」
@@ -545,16 +477,10 @@ func TestAdminGetAndPartialUpdate(t *testing.T) {
 		contentType: "application/json",
 		body:        `{"model":"deepseek-flash"}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d，body = %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status（body=%s）", rec.Body.String())
 	data := envelope(t, rec)
-	if data["daily_turn_limit"] != float64(7) {
-		t.Fatalf("配额被 LLM 表单重置了：daily_turn_limit = %v，期望仍是 7", data["daily_turn_limit"])
-	}
-	if data["model"] != "deepseek-flash" {
-		t.Fatalf("model = %v", data["model"])
-	}
+	require.Equal(t, float64(7), data["daily_turn_limit"], "配额被 LLM 表单重置了：期望仍是 7")
+	require.Equal(t, "deepseek-flash", data["model"], "model")
 
 	// GET 回读，形状要扁平（配额与 LLM 同层）。
 	rec = send(t, router, request{
@@ -562,22 +488,16 @@ func TestAdminGetAndPartialUpdate(t *testing.T) {
 		path:       "/api/admin/settings/rehearse",
 		adminToken: testAdminToken,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status")
 	data = envelope(t, rec)
 	for _, key := range []string{
 		"daily_turn_limit", "enabled", "base_url", "model", "temperature",
 		"api_key_set", "api_key_masked",
 	} {
-		if _, ok := data[key]; !ok {
-			t.Errorf("管理端响应缺少 %q：%v", key, data)
-		}
+		assert.Contains(t, data, key, "管理端响应缺少 %q", key)
 	}
 	// 明文密钥永远不出接口（§13）。
-	if strings.Contains(rec.Body.String(), "sk-test") {
-		t.Fatalf("响应泄漏了密钥：%s", rec.Body.String())
-	}
+	require.NotContains(t, rec.Body.String(), "sk-test", "响应泄漏了密钥")
 }
 
 // 管理端 PUT 的配额上限要被 clamp（对齐 Rust 的 clamp_settings）。
@@ -590,12 +510,9 @@ func TestAdminUpdateClampsDailyLimit(t *testing.T) {
 		contentType: "application/json",
 		body:        `{"daily_turn_limit":999999}`,
 	})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	if data := envelope(t, rec); data["daily_turn_limit"] != float64(coach.MaxDailyTurnLimit) {
-		t.Fatalf("daily_turn_limit = %v，期望被夹到 %d", data["daily_turn_limit"], coach.MaxDailyTurnLimit)
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status")
+	require.Equal(t, float64(coach.MaxDailyTurnLimit), envelope(t, rec)["daily_turn_limit"],
+		"daily_turn_limit 期望被夹到 %d", coach.MaxDailyTurnLimit)
 }
 
 // ---------------------------------------------------------------- CORS
@@ -607,29 +524,26 @@ func TestCORSPreflight(t *testing.T) {
 
 	// 白名单内：预检 204 + 允许头。
 	rec := send(t, router, request{
-		method: http.MethodOptions,
-		path:   "/api/rehearse/turn",
-		origin: "https://rehearse.0x81.uk",
+		method:         http.MethodOptions,
+		path:           "/api/rehearse/turn",
+		origin:         "https://rehearse.0x81.uk",
+		requestMethod:  http.MethodPost,
+		requestHeaders: "authorization,x-admin-token",
 	})
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("预检 status = %d，期望 204", rec.Code)
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://rehearse.0x81.uk" {
-		t.Fatalf("Allow-Origin = %q", got)
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-Admin-Token") {
-		t.Fatalf("Allow-Headers = %q，应当含 X-Admin-Token", got)
-	}
+	require.Equal(t, http.StatusNoContent, rec.Code, "预检 status, 期望 204")
+	require.Equal(t, "https://rehearse.0x81.uk", rec.Header().Get("Access-Control-Allow-Origin"), "Allow-Origin")
+	// 按需回显，且大小写按请求里的原样带回来，所以比较时统一小写。
+	require.Contains(t, strings.ToLower(rec.Header().Get("Access-Control-Allow-Headers")), "x-admin-token",
+		"Allow-Headers 应当含 X-Admin-Token（管理端跨域时要用它）")
 
 	// 白名单外：不发 CORS 头（浏览器据此拦截）。
 	rec = send(t, router, request{
-		method: http.MethodOptions,
-		path:   "/api/rehearse/turn",
-		origin: "https://evil.example.com",
+		method:        http.MethodOptions,
+		path:          "/api/rehearse/turn",
+		origin:        "https://evil.example.com",
+		requestMethod: http.MethodPost,
 	})
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Fatalf("白名单外的 origin 不该拿到 Allow-Origin，得到 %q", got)
-	}
+	require.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"), "白名单外的 origin 不该拿到 Allow-Origin")
 }
 
 // 白名单为空时不发任何 CORS 头——这是正确行为，不是漏配（RN 不带 Origin）。
@@ -641,7 +555,5 @@ func TestCORSDisabledWhenNoOriginsConfigured(t *testing.T) {
 		authorization: "Bearer " + token(t, "active"),
 		origin:        "https://rehearse.0x81.uk",
 	})
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Fatalf("未配置白名单时不该发 Allow-Origin，得到 %q", got)
-	}
+	require.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"), "未配置白名单时不该发 Allow-Origin")
 }

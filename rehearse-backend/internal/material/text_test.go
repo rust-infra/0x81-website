@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // 本文件对齐 `interview_docs.rs` 的 #[cfg(test)] 块，并补上 Rust 没写但
@@ -16,37 +18,27 @@ import (
 func TestDocxXMLToTextKeepsParagraphBreaks(t *testing.T) {
 	xml := "<w:body><w:p><w:r><w:t>Alice Chen</w:t></w:r></w:p>" +
 		"<w:p><w:r><w:t>Backend Engineer</w:t></w:r></w:p></w:body>"
-	if got := DocxXMLToText(xml); got != "Alice Chen\nBackend Engineer" {
-		t.Fatalf("DocxXMLToText = %q，期望两段各一行", got)
-	}
+	require.Equal(t, "Alice Chen\nBackend Engineer", DocxXMLToText(xml), "DocxXMLToText 期望两段各一行")
 }
 
 // 对齐 Rust 的 `docx_xml_decodes_entities`（interview_docs.rs:131）。
 func TestDocxXMLToTextDecodesEntities(t *testing.T) {
-	if got := DocxXMLToText("<w:t>A &amp; B &lt;C&gt;</w:t>"); got != "A & B <C>" {
-		t.Fatalf("实体解码 = %q，期望 %q", got, "A & B <C>")
-	}
+	require.Equal(t, "A & B <C>", DocxXMLToText("<w:t>A &amp; B &lt;C&gt;</w:t>"), "实体解码")
 }
 
 // <w:br/> 与 <w:tab/> 要在去标签之前换成换行 / 制表符，否则整段会糊成一行。
 func TestDocxXMLToTextHandlesBreaksAndTabs(t *testing.T) {
 	got := DocxXMLToText("<w:p><w:r><w:t>line1</w:t><w:br/><w:t>line2</w:t></w:r></w:p>")
-	if got != "line1\nline2" {
-		t.Fatalf("<w:br/> 处理 = %q，期望 %q", got, "line1\nline2")
-	}
+	require.Equal(t, "line1\nline2", got, "<w:br/> 处理")
 
 	// 行内 tab 会保留，但行首行尾的会被逐行 trim 掉（Rust 同样如此）。
 	got = DocxXMLToText("<w:t>a<w:tab/>b</w:t>")
-	if got != "a\tb" {
-		t.Fatalf("<w:tab/> 处理 = %q，期望 %q", got, "a\tb")
-	}
+	require.Equal(t, "a\tb", got, "<w:tab/> 处理")
 }
 
 // 转义过的标签必须保留成字面文本——这钉住「先去掉真标签、再解实体」的顺序。
 func TestDocxXMLToTextPreservesEscapedTags(t *testing.T) {
-	if got := DocxXMLToText("<w:t>&lt;w:p&gt;</w:t>"); got != "<w:p>" {
-		t.Fatalf("转义标签 = %q，期望 %q", got, "<w:p>")
-	}
+	require.Equal(t, "<w:p>", DocxXMLToText("<w:t>&lt;w:p&gt;</w:t>"), "转义标签")
 }
 
 // 对齐 Rust 的 `short_text_is_flagged_as_likely_scanned`（interview_docs.rs:140），
@@ -64,9 +56,8 @@ func TestIsLikelyScannedThreshold(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IsLikelyScanned(tc.text); got != tc.want {
-				t.Fatalf("IsLikelyScanned(%d 字) = %v，期望 %v", countRunes(tc.text), got, tc.want)
-			}
+			require.Equalf(t, tc.want, IsLikelyScanned(tc.text),
+				"IsLikelyScanned(%d 字)", countRunes(tc.text))
 		})
 	}
 }
@@ -75,35 +66,28 @@ func TestIsLikelyScannedThreshold(t *testing.T) {
 func TestParseDocumentCharCountIsRunes(t *testing.T) {
 	docx := buildDocx(t, "word/document.xml", []byte("<w:p><w:t>你好世界</w:t></w:p>"))
 	doc, err := ParseDocument("resume.docx", docx)
-	if err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if doc.CharCount != 4 {
-		t.Fatalf("CharCount = %d，期望 4（按 rune）", doc.CharCount)
-	}
+	require.NoError(t, err, "不该报错")
+	require.Equal(t, 4, doc.CharCount, "CharCount 期望 4（按 rune）")
 }
 
 func TestParseDocumentRejectsEmptyUpload(t *testing.T) {
 	_, err := ParseDocument("resume.pdf", nil)
-	if err == nil || !strings.Contains(err.Error(), "uploaded file is empty") {
-		t.Fatalf("空上传错误 = %v，期望 uploaded file is empty", err)
-	}
+	require.Error(t, err, "空上传应当报错")
+	require.Contains(t, err.Error(), "uploaded file is empty", "空上传错误")
 }
 
 func TestParseDocumentRejectsOversizeUpload(t *testing.T) {
 	oversize := make([]byte, MaxUploadBytes+1)
 	_, err := ParseDocument("resume.pdf", oversize)
-	if err == nil || !strings.Contains(err.Error(), "uploaded file is too large") {
-		t.Fatalf("超限上传错误 = %v，期望 uploaded file is too large", err)
-	}
+	require.Error(t, err, "超限上传应当报错")
+	require.Contains(t, err.Error(), "uploaded file is too large", "超限上传错误")
 }
 
 // 对齐 Rust 的 `rejects_unknown_extension`（interview_docs.rs:163）。
 func TestParseDocumentRejectsUnknownExtension(t *testing.T) {
 	_, err := ParseDocument("resume.txt", []byte("hello"))
-	if err == nil || !strings.Contains(err.Error(), "only .pdf and .docx are supported") {
-		t.Fatalf("未知后缀错误 = %v", err)
-	}
+	require.Error(t, err, "未知后缀应当报错")
+	require.Contains(t, err.Error(), "only .pdf and .docx are supported", "未知后缀错误")
 }
 
 // 对齐 Rust 的 `rejects_docx_xml_that_expands_past_limit`（interview_docs.rs:146）。
@@ -112,72 +96,53 @@ func TestParseDocumentRejectsDocxXMLExpandingPastLimit(t *testing.T) {
 	bomb := buildDocx(t, "word/document.xml", bytes.Repeat([]byte("a"), MaxUploadBytes+1))
 	// 上传体本身很小（被 deflate 压扁了），所以过得了体积检查——
 	// 真正被拦下的是解压后的 document.xml。
-	if len(bomb) > MaxUploadBytes {
-		t.Fatalf("测试前提不成立：压缩后的炸弹 %d 字节已超过上传上限", len(bomb))
-	}
+	require.LessOrEqual(t, len(bomb), MaxUploadBytes, "测试前提：压缩后的炸弹应不超过上传上限")
 	_, err := ParseDocument("resume.docx", bomb)
-	if err == nil || !strings.Contains(err.Error(), "expands beyond the upload limit") {
-		t.Fatalf("zip 炸弹错误 = %v，期望 expands beyond the upload limit", err)
-	}
+	require.Error(t, err, "zip 炸弹应当报错")
+	require.Contains(t, err.Error(), "expands beyond the upload limit", "zip 炸弹错误")
 }
 
 func TestParseDocumentRejectsInvalidDocxArchive(t *testing.T) {
 	_, err := ParseDocument("resume.docx", []byte("this is not a zip"))
-	if err == nil || !strings.Contains(err.Error(), "invalid docx archive") {
-		t.Fatalf("坏 zip 错误 = %v，期望 invalid docx archive", err)
-	}
+	require.Error(t, err, "坏 zip 应当报错")
+	require.Contains(t, err.Error(), "invalid docx archive", "坏 zip 错误")
 }
 
 func TestParseDocumentRejectsDocxMissingDocumentXML(t *testing.T) {
 	docx := buildDocx(t, "word/styles.xml", []byte("<w:styles/>"))
 	_, err := ParseDocument("resume.docx", docx)
-	if err == nil || !strings.Contains(err.Error(), "docx is missing word/document.xml") {
-		t.Fatalf("缺 document.xml 错误 = %v", err)
-	}
+	require.Error(t, err, "缺 document.xml 应当报错")
+	require.Contains(t, err.Error(), "docx is missing word/document.xml", "缺 document.xml 错误")
 }
 
 func TestParseDocumentRejectsNonUTF8Docx(t *testing.T) {
 	docx := buildDocx(t, "word/document.xml", []byte{0xff, 0xfe, 0xfd})
 	_, err := ParseDocument("resume.docx", docx)
-	if err == nil || !strings.Contains(err.Error(), "is not valid UTF-8") {
-		t.Fatalf("非法 UTF-8 错误 = %v", err)
-	}
+	require.Error(t, err, "非法 UTF-8 应当报错")
+	require.Contains(t, err.Error(), "is not valid UTF-8", "非法 UTF-8 错误")
 }
 
 func TestParseDocumentExtractsDocxText(t *testing.T) {
 	docx := buildDocx(t, "word/document.xml",
 		[]byte("<w:body><w:p><w:t>Alice Chen</w:t></w:p><w:p><w:t>Engineer</w:t></w:p></w:body>"))
 	doc, err := ParseDocument("Resume.DOCX", docx)
-	if err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if doc.Text != "Alice Chen\nEngineer" {
-		t.Fatalf("Text = %q", doc.Text)
-	}
+	require.NoError(t, err, "不该报错")
+	require.Equal(t, "Alice Chen\nEngineer", doc.Text, "Text")
 	// 短文本自然被判成疑似扫描件。
-	if !doc.LikelyScanned {
-		t.Fatal("短文档应当被标记为 likely_scanned")
-	}
+	require.True(t, doc.LikelyScanned, "短文档应当被标记为 likely_scanned")
 }
 
 func TestParseDocumentRejectsInvalidPDF(t *testing.T) {
 	_, err := ParseDocument("resume.pdf", []byte("%PDF-1.4 garbage that is not parseable"))
-	if err == nil || !strings.Contains(err.Error(), "pdf text extraction failed") {
-		t.Fatalf("坏 PDF 错误 = %v，期望 pdf text extraction failed", err)
-	}
+	require.Error(t, err, "坏 PDF 应当报错")
+	require.Contains(t, err.Error(), "pdf text extraction failed", "坏 PDF 错误")
 }
 
 func TestParseDocumentExtractsPDFText(t *testing.T) {
 	doc, err := ParseDocument("resume.pdf", minimalPDF("Hello World"))
-	if err != nil {
-		t.Fatalf("不该报错：%v", err)
-	}
-	if !strings.Contains(doc.Text, "Hello World") {
-		t.Fatalf("PDF 抽取 = %q，期望含 Hello World", doc.Text)
-	}
-	if doc.CharCount != countRunes(doc.Text) {
-		t.Fatalf("CharCount = %d，期望 %d", doc.CharCount, countRunes(doc.Text))
-	}
+	require.NoError(t, err, "不该报错")
+	require.Contains(t, doc.Text, "Hello World", "PDF 抽取")
+	require.Equal(t, countRunes(doc.Text), doc.CharCount, "CharCount")
 }
 
 // buildDocx 在内存里造一个只有一个条目的 docx（zip）。
@@ -186,15 +151,10 @@ func buildDocx(t *testing.T, name string, content []byte) []byte {
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
 	entry, err := writer.Create(name)
-	if err != nil {
-		t.Fatalf("创建 zip 条目：%v", err)
-	}
-	if _, err := entry.Write(content); err != nil {
-		t.Fatalf("写入 zip 条目：%v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("关闭 zip：%v", err)
-	}
+	require.NoError(t, err, "创建 zip 条目")
+	_, err = entry.Write(content)
+	require.NoError(t, err, "写入 zip 条目")
+	require.NoError(t, writer.Close(), "关闭 zip")
 	return buffer.Bytes()
 }
 
