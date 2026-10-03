@@ -250,3 +250,54 @@ type TurnResponse struct {
 	Feedback  *Feedback    `json:"feedback"`
 	NextLines []Expression `json:"next_lines"`
 }
+
+// SummaryRequest 是 `POST /api/rehearse/summary` 的请求体。
+//
+// 比单轮少了 `user_text`（复盘看的是已发生的对话），但历史不能为空。
+type SummaryRequest struct {
+	Scenario   Scenario `json:"scenario"`
+	ScenarioID *string  `json:"scenario_id"`
+	History    []Turn   `json:"history"`
+	// Language 决定 strengths / improvements / expressions 用哪种语言写。
+	// nil 时沿用上游的默认值 `zh-CN`（即中文）——见 coach.summaryTargetLanguage。
+	Language *Language `json:"language"`
+	// Material 原为 `interview`（§7.6 改名）。
+	Material *MaterialContext `json:"material"`
+}
+
+// InterviewFeedback 是面试场景专属的复盘段落。
+type InterviewFeedback struct {
+	StarStructure    string   `json:"star_structure"`
+	QuantifiedImpact string   `json:"quantified_impact"`
+	WeakSpots        []string `json:"weak_spots"`
+}
+
+// SummaryStats 是复盘里的可判定统计，由服务端算，不靠模型。
+type SummaryStats struct {
+	Turns       uint32 `json:"turns"`
+	UserChars   uint32 `json:"user_chars"`
+	Corrections uint32 `json:"corrections"`
+}
+
+// SummaryResponse 是 `POST /api/rehearse/summary` 的响应。
+type SummaryResponse struct {
+	OverallZh    string       `json:"overall_zh"`
+	OverallEn    string       `json:"overall_en"`
+	Strengths    []string     `json:"strengths"`
+	Improvements []string     `json:"improvements"`
+	Expressions  []Expression `json:"expressions"`
+	Stats        SummaryStats `json:"stats"`
+	// InterviewFeedback 只在带材料（面试场景）时出现，其余为 null。
+	InterviewFeedback *InterviewFeedback `json:"interview_feedback"`
+}
+
+// ScenarioDraftRequest 是 `POST /api/rehearse/scenario/draft` 的请求体。
+//
+// 原为 `CoachScenarioDraftRequest { description, locale }`，其中 `locale`
+// 在 Rust 里**从未被读取**（`coach.rs:319`）。这里把它收窄成
+// `language`——新契约里语言是顶层概念（§4.2），而草稿出来的场景需要一个
+// 演练语言。缺省 `en-US`：v1 的 prompt 模板只有英文侧（§11 阶段 7 才做中文）。
+type ScenarioDraftRequest struct {
+	Description string    `json:"description"`
+	Language    *Language `json:"language"`
+}

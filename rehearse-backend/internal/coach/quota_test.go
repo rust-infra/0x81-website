@@ -1,4 +1,4 @@
-package quota
+package coach
 
 import (
 	"context"
@@ -19,10 +19,10 @@ func TestDayKeyUsesUTCPlusEight(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 2026-09-27T17:00:00Z == 2026-09-28 01:00 +08:00
-	if got := DayKeyString(utc); got != "2026-09-28" {
+	if got := dayKeyString(utc); got != "2026-09-28" {
 		t.Fatalf("day key = %q，期望 2026-09-28", got)
 	}
-	if got := ResetsAt(utc).Format(time.RFC3339); got != "2026-09-29T00:00:00+08:00" {
+	if got := resetsAt(utc).Format(time.RFC3339); got != "2026-09-29T00:00:00+08:00" {
 		t.Fatalf("resets_at = %q，期望 2026-09-29T00:00:00+08:00", got)
 	}
 }
@@ -34,7 +34,7 @@ func TestDayKeyBeforeMidnightStaysOnSameDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 15:59Z == 23:59 +08:00，仍是 27 日
-	if got := DayKeyString(utc); got != "2026-09-27" {
+	if got := dayKeyString(utc); got != "2026-09-27" {
 		t.Fatalf("day key = %q，期望 2026-09-27", got)
 	}
 }
@@ -45,7 +45,7 @@ func TestResetsAtIsLocalMidnightNotUTCMidnight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resets := ResetsAt(utc)
+	resets := resetsAt(utc)
 	hour, minute, second := resets.Clock()
 	if hour != 0 || minute != 0 || second != 0 {
 		t.Fatalf("resets_at 的时刻 = %02d:%02d:%02d，期望 00:00:00", hour, minute, second)
@@ -68,7 +68,7 @@ func TestDayKeyIsUTCConstructed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := DayKey(utc)
+	key := dayKey(utc)
 	if key.Location() != time.UTC {
 		t.Fatalf("location = %v，期望 UTC", key.Location())
 	}
@@ -82,7 +82,7 @@ func TestDayKeyIsUTCConstructed(t *testing.T) {
 // ⚠️ 这条是本次移植最容易丢的护栏：`{"enabled":true}` 缺 daily_turn_limit 时，
 // 朴素解码会得到 0 = 不限量。必须取默认值 100。
 func TestSettingsMissingLimitFallsBackToDefaultNotUnlimited(t *testing.T) {
-	var settings Settings
+	var settings QuotaSettings
 	if err := json.Unmarshal([]byte(`{"enabled":true}`), &settings); err != nil {
 		t.Fatal(err)
 	}
@@ -97,18 +97,18 @@ func TestSettingsMissingLimitFallsBackToDefaultNotUnlimited(t *testing.T) {
 
 // 空对象也走默认值。
 func TestSettingsEmptyObjectUsesDefaults(t *testing.T) {
-	var settings Settings
+	var settings QuotaSettings
 	if err := json.Unmarshal([]byte(`{}`), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings != DefaultSettings() {
-		t.Fatalf("settings = %+v，期望 %+v", settings, DefaultSettings())
+	if settings != DefaultQuotaSettings() {
+		t.Fatalf("settings = %+v，期望 %+v", settings, DefaultQuotaSettings())
 	}
 }
 
 // 显式给 0 仍然是不限量——那是产品语义，不能被默认值覆盖。
 func TestSettingsExplicitZeroStaysUnlimited(t *testing.T) {
-	var settings Settings
+	var settings QuotaSettings
 	if err := json.Unmarshal([]byte(`{"daily_turn_limit":0,"enabled":true}`), &settings); err != nil {
 		t.Fatal(err)
 	}
@@ -119,33 +119,33 @@ func TestSettingsExplicitZeroStaysUnlimited(t *testing.T) {
 
 // 对齐 Rust 的 `clamps_limit_into_range`（`coach_settings.rs:53`）。
 func TestClampLimitIntoRange(t *testing.T) {
-	if got := (Settings{DailyTurnLimit: 999_999, Enabled: true}).Clamp().DailyTurnLimit; got != MaxDailyTurnLimit {
+	if got := (QuotaSettings{DailyTurnLimit: 999_999, Enabled: true}).Clamp().DailyTurnLimit; got != MaxDailyTurnLimit {
 		t.Fatalf("clamp 上界 = %d，期望 %d", got, MaxDailyTurnLimit)
 	}
-	if got := (Settings{DailyTurnLimit: 0, Enabled: true}).Clamp().DailyTurnLimit; got != 0 {
+	if got := (QuotaSettings{DailyTurnLimit: 0, Enabled: true}).Clamp().DailyTurnLimit; got != 0 {
 		t.Fatalf("0 不该被夹取，得到 %d", got)
 	}
-	if (Settings{DailyTurnLimit: 100, Enabled: false}).Clamp().Enabled {
+	if (QuotaSettings{DailyTurnLimit: 100, Enabled: false}).Clamp().Enabled {
 		t.Fatal("enabled 不该被 clamp 改动")
 	}
 }
 
 // 对齐 Rust 的 `zero_limit_means_unlimited` / `exceeded_when_enabled_and_at_limit` /
 // `disabled_means_unlimited`。
-func TestWouldExceed(t *testing.T) {
-	unlimited := Settings{DailyTurnLimit: 0, Enabled: true}
-	if _, exceeded := WouldExceed(unlimited, 999_999); exceeded {
+func TestQuotaWouldExceed(t *testing.T) {
+	unlimited := QuotaSettings{DailyTurnLimit: 0, Enabled: true}
+	if _, exceeded := quotaWouldExceed(unlimited, 999_999); exceeded {
 		t.Fatal("limit=0 应当不限量")
 	}
-	limited := Settings{DailyTurnLimit: 100, Enabled: true}
-	if _, exceeded := WouldExceed(limited, 99); exceeded {
+	limited := QuotaSettings{DailyTurnLimit: 100, Enabled: true}
+	if _, exceeded := quotaWouldExceed(limited, 99); exceeded {
 		t.Fatal("第 99 次不该被拒")
 	}
-	if limit, exceeded := WouldExceed(limited, 100); !exceeded || limit != 100 {
+	if limit, exceeded := quotaWouldExceed(limited, 100); !exceeded || limit != 100 {
 		t.Fatalf("第 100 次应当被拒且报出 limit=100，得到 (%d, %v)", limit, exceeded)
 	}
-	disabled := Settings{DailyTurnLimit: 100, Enabled: false}
-	if _, exceeded := WouldExceed(disabled, 100); exceeded {
+	disabled := QuotaSettings{DailyTurnLimit: 100, Enabled: false}
+	if _, exceeded := quotaWouldExceed(disabled, 100); exceeded {
 		t.Fatal("enabled=false 应当不限量")
 	}
 }
@@ -153,32 +153,32 @@ func TestWouldExceed(t *testing.T) {
 // ---------------------------------------------------------------- 服务
 
 func TestSettingsFallsBackToDefaultWhenUnset(t *testing.T) {
-	service := New(storetest.New())
+	service := NewQuotaService(storetest.New())
 	settings, err := service.Settings(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings != DefaultSettings() {
-		t.Fatalf("settings = %+v，期望默认值 %+v", settings, DefaultSettings())
+	if settings != DefaultQuotaSettings() {
+		t.Fatalf("settings = %+v，期望默认值 %+v", settings, DefaultQuotaSettings())
 	}
 }
 
 func TestSettingsFallsBackToDefaultOnBadJSON(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, "{not json")
-	settings, err := New(st).Settings(context.Background())
+	st.SetSetting(quotaSettingKey, "{not json")
+	settings, err := NewQuotaService(st).Settings(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings != DefaultSettings() {
+	if settings != DefaultQuotaSettings() {
 		t.Fatalf("坏 JSON 应当回默认值，得到 %+v", settings)
 	}
 }
 
 func TestUpdateSettingsClampsAndPersists(t *testing.T) {
 	st := storetest.New()
-	service := New(st)
-	saved, err := service.UpdateSettings(context.Background(), Settings{DailyTurnLimit: 999_999, Enabled: true})
+	service := NewQuotaService(st)
+	saved, err := service.UpdateSettings(context.Background(), QuotaSettings{DailyTurnLimit: 999_999, Enabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,8 +197,8 @@ func TestUpdateSettingsClampsAndPersists(t *testing.T) {
 // 消费到上限后必须返回 429，且带上 limit / used / resets_at（§7.6 的信封）。
 func TestCheckAndConsumeReturnsQuotaExceededAtLimit(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, `{"daily_turn_limit":2,"enabled":true}`)
-	service := New(st)
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":2,"enabled":true}`)
+	service := NewQuotaService(st)
 	ctx := context.Background()
 
 	for i := 1; i <= 2; i++ {
@@ -231,8 +231,8 @@ func TestCheckAndConsumeReturnsQuotaExceededAtLimit(t *testing.T) {
 // 超限时不能消费：被拒之后用量必须停在 limit，不能悄悄涨上去。
 func TestCheckAndConsumeDoesNotIncrementWhenRejected(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, `{"daily_turn_limit":1,"enabled":true}`)
-	service := New(st)
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":1,"enabled":true}`)
+	service := NewQuotaService(st)
 	ctx := context.Background()
 
 	if err := service.CheckAndConsume(ctx, "usr_1"); err != nil {
@@ -243,7 +243,7 @@ func TestCheckAndConsumeDoesNotIncrementWhenRejected(t *testing.T) {
 			t.Fatal("超限后不该成功")
 		}
 	}
-	if used := st.Usage("usr_1", DayKey(time.Now())); used != 1 {
+	if used := st.Usage("usr_1", dayKey(time.Now())); used != 1 {
 		t.Fatalf("被拒 3 次后用量 = %d，期望仍是 1", used)
 	}
 }
@@ -251,8 +251,8 @@ func TestCheckAndConsumeDoesNotIncrementWhenRejected(t *testing.T) {
 // limit=0 时 CheckAndConsume 永远成功，且仍然计数（快照要能显示用量）。
 func TestCheckAndConsumeUnlimitedStillCounts(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, `{"daily_turn_limit":0,"enabled":true}`)
-	service := New(st)
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":0,"enabled":true}`)
+	service := NewQuotaService(st)
 	ctx := context.Background()
 
 	for i := 1; i <= 5; i++ {
@@ -273,10 +273,10 @@ func TestCheckAndConsumeUnlimitedStillCounts(t *testing.T) {
 }
 
 // 快照：剩余量、重置时刻、以及「不限量」与「剩余 0」的区别。
-func TestSnapshotReportsRemainingAndResetsAt(t *testing.T) {
+func TestSnapshotReportsRemainingAndresetsAt(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, `{"daily_turn_limit":10,"enabled":true}`)
-	service := New(st)
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":10,"enabled":true}`)
+	service := NewQuotaService(st)
 	ctx := context.Background()
 
 	for i := 0; i < 4; i++ {
@@ -309,8 +309,8 @@ func TestSnapshotReportsRemainingAndResetsAt(t *testing.T) {
 // 用满之后 remaining 是 0 而不是 null —— 与「不限量」必须能区分开。
 func TestSnapshotRemainingIsZeroNotNilWhenExhausted(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(SettingKey, `{"daily_turn_limit":1,"enabled":true}`)
-	service := New(st)
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":1,"enabled":true}`)
+	service := NewQuotaService(st)
 	ctx := context.Background()
 
 	if err := service.CheckAndConsume(ctx, "usr_1"); err != nil {

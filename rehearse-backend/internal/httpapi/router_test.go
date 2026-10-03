@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"github.com/0x81/rehearse-backend/internal/config"
 	"github.com/0x81/rehearse-backend/internal/scenarios"
 	"github.com/0x81/rehearse-backend/internal/store"
+	"github.com/0x81/rehearse-backend/internal/store/storetest"
 )
 
 // newTestRouter 装配一个真实的路由（含真实场景目录）。
@@ -32,11 +32,15 @@ func newTestRouter(t *testing.T, st store.Store) http.Handler {
 
 var testSecret = []byte("test-secret-ascii-only")
 
-// stubStore 让路由测试不依赖真实 Postgres。
-type stubStore struct{ pingErr error }
+// newStore 造一个内存 store，让路由测试不依赖真实 Postgres。
+func newStore() *storetest.Fake { return storetest.New() }
 
-func (s stubStore) Ping(context.Context) error { return s.pingErr }
-func (s stubStore) Close()                     {}
+// newDegradedStore 造一个「库连不上」的 store，用于验 /health 的降级分支。
+func newDegradedStore() *storetest.Fake {
+	st := storetest.New()
+	st.PingErr = errors.New("connection refused")
+	return st
+}
 
 func testConfig() *config.Config {
 	return &config.Config{Port: config.DefaultPort, JWTSecret: testSecret}
@@ -69,7 +73,7 @@ func do(t *testing.T, handler http.Handler, method, path, authorization string) 
 // 健康检查必须**不带 token 也能过**——编排层的 healthcheck 不会带凭证。
 // 这条如果挂了，容器会永远处于 unhealthy。
 func TestHealth_DoesNotRequireAuth(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/health", "")
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", status, body)
@@ -82,7 +86,7 @@ func TestHealth_DoesNotRequireAuth(t *testing.T) {
 // DB 不可用时必须明确报错。§7.3 换成独立托管 PG 之后它是唯一外部依赖，
 // 如果 /health 只回 200，编排层会以为一切正常。
 func TestHealth_ReportsDatabaseFailure(t *testing.T) {
-	router := newTestRouter(t, stubStore{pingErr: errors.New("connection refused")})
+	router := newTestRouter(t, newDegradedStore())
 	status, body := do(t, router, http.MethodGet, "/health", "")
 	if status != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503; body = %s", status, body)
@@ -99,7 +103,7 @@ func TestHealth_ReportsDatabaseFailure(t *testing.T) {
 // 认证要**挂在整棵 /api/rehearse/ 子树上**，漏挂一个路由就是一个未鉴权端点。
 // 这条测保证新加路由时不会忘。
 func TestAPISubtree_RequiresAuth(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	for _, path := range []string{
 		"/api/rehearse/whoami",
 		"/api/rehearse/anything-not-implemented-yet",
@@ -112,7 +116,7 @@ func TestAPISubtree_RequiresAuth(t *testing.T) {
 }
 
 func TestWhoami_ReturnsClaims(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/whoami", "Bearer "+token(t, "active"))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", status, body)
@@ -126,7 +130,7 @@ func TestWhoami_ReturnsClaims(t *testing.T) {
 
 // status 检查要在**路由层**也生效（不只中间件单测）。
 func TestWhoami_RejectsInactiveUser(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/whoami", "Bearer "+token(t, "disabled"))
 	if status != http.StatusUnauthorized {
 		t.Fatalf("status = %d, body = %s", status, body)
@@ -135,7 +139,7 @@ func TestWhoami_RejectsInactiveUser(t *testing.T) {
 
 // 未知路由不该意外套上鉴权信封（会让人以为「这个路径存在但没权限」）。
 func TestUnknownRoute_IsPlain404(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/nope", "")
 	if status != http.StatusNotFound {
 		t.Fatalf("status = %d, body = %s", status, body)
@@ -146,7 +150,7 @@ func TestUnknownRoute_IsPlain404(t *testing.T) {
 }
 
 func TestScenarios_RequiresAuth(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, _ := do(t, router, http.MethodGet, "/api/rehearse/scenarios", "")
 	if status != http.StatusUnauthorized {
 		t.Fatalf("status = %d, 期望 401", status)
@@ -156,7 +160,7 @@ func TestScenarios_RequiresAuth(t *testing.T) {
 // 响应形状要与 moyan-backend 一致：`{success:true, data:[...]}`——
 // `data` 是**裸数组**，不是包了一层的对象（`controllers/coach.rs:20`）。
 func TestScenarios_ShapeAndDefaults(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet, "/api/rehearse/scenarios", "Bearer "+token(t, "active"))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", status, body)
@@ -208,7 +212,7 @@ func hasCJK(value string) bool {
 }
 
 func TestScenarios_LanguageSwitchesTitles(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	auth := "Bearer " + token(t, "active")
 
 	_, zhBody := do(t, router, http.MethodGet, "/api/rehearse/scenarios?language=zh-CN", auth)
@@ -231,7 +235,7 @@ func TestScenarios_LanguageSwitchesTitles(t *testing.T) {
 // 非法的 language 要明确报错，而不是静默按英文处理——
 // 客户端一个拼写错误会表现成「场景全是英文」，比 400 难查。
 func TestScenarios_RejectsUnknownLanguage(t *testing.T) {
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	status, body := do(t, router, http.MethodGet,
 		"/api/rehearse/scenarios?language=klingon", "Bearer "+token(t, "active"))
 	if status != http.StatusBadRequest {
@@ -253,7 +257,7 @@ func TestScenarios_NeverLeaksGuidanceOverTheWire(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	router := newTestRouter(t, stubStore{})
+	router := newTestRouter(t, newStore())
 	auth := "Bearer " + token(t, "active")
 
 	for _, language := range []string{"zh-CN", "en-US"} {

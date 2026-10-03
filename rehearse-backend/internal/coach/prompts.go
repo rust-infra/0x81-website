@@ -187,6 +187,32 @@ const summarySystemPrompt = "You are an English speaking coach for software engi
 	"be specific to this conversation, not generic advice. Only include interview_feedback when an " +
 	"interview material context is present; otherwise return null. Interview feedback fields are Chinese."
 
+// draftSystemPrompt 是场景草稿的固定模板（原 `DRAFT_SYSTEM_PROMPT`）。
+//
+// ⚠️ 与上游稿相比，**字段名全部换成了 §7.6 的新契约**：`persona.locale` →
+// `persona.accent`、`en`/`zh` → `text`/`translation`、`opening_line_zh` →
+// `opening_line_translation`，`category` 的枚举也换成 §5.1 的四族。
+// 这不是措辞偏好：模板里写的键名就是模型会吐出来的键名，留着旧名会让
+// 解析层与 prompt 层对不上，而症状是「草稿永远是空的」。
+//
+// 内容规则（中文标题/描述、英文开场白、2 条开场推荐语、focus_points ≤5）
+// 与上游稿逐条一致。
+const draftSystemPrompt = "You design speaking-practice scenarios for software engineers " +
+	"working remotely with international colleagues. Take the user's Chinese description and " +
+	"return JSON only, in this exact shape:\n" +
+	`{"category":"interview|pitch|hard_talk|daily","title":"...","description":"...",` +
+	`"persona":{"name":"...","role":"...","accent":"en-US|en-GB|en-IN|en-AU|null",` +
+	`"tone":"friendly|neutral|direct|challenging"},` +
+	`"setting":"meeting|one_on_one|coffee_chat|phone_call","opening_line":"...",` +
+	`"opening_line_translation":"...",` +
+	`"opening_next_lines":[{"text":"...","translation":"..."}],` +
+	`"focus_points":["..."],"difficulty":"easy|core|challenge","max_turns":6}` + "\n" +
+	"Rules: title and description and focus_points in Simplified Chinese; opening_line and persona.role in English; " +
+	"opening_line_translation is the Simplified Chinese translation of opening_line (natural spoken Chinese, not a literal gloss); " +
+	"opening_next_lines is exactly 2 natural first-person English replies the learner could open the conversation with, " +
+	"each one answering the opening_line directly (translation is its Simplified Chinese translation); " +
+	"focus_points at most 5, each under 40 characters; max_turns between 3 and 20."
+
 // BuildSummarySystemPrompt 构造复盘的 system prompt。
 //
 // 比单轮简单：只有固定的评价规则 + 场景标题（不给 guidance——复盘看的是

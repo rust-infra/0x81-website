@@ -1,4 +1,4 @@
-package settings
+package coach
 
 import (
 	"context"
@@ -23,14 +23,14 @@ func TestMaskAPIKey(t *testing.T) {
 		{"sk-abcdefghijklmnop", ptr("sk-***mnop")},
 	}
 	for _, tc := range cases {
-		got := MaskAPIKey(tc.key)
+		got := maskAPIKey(tc.key)
 		switch {
 		case tc.want == nil && got != nil:
-			t.Fatalf("MaskAPIKey(%q) = %q，期望 nil", tc.key, *got)
+			t.Fatalf("maskAPIKey(%q) = %q，期望 nil", tc.key, *got)
 		case tc.want != nil && got == nil:
-			t.Fatalf("MaskAPIKey(%q) = nil，期望 %q", tc.key, *tc.want)
+			t.Fatalf("maskAPIKey(%q) = nil，期望 %q", tc.key, *tc.want)
 		case tc.want != nil && *got != *tc.want:
-			t.Fatalf("MaskAPIKey(%q) = %q，期望 %q", tc.key, *got, *tc.want)
+			t.Fatalf("maskAPIKey(%q) = %q，期望 %q", tc.key, *got, *tc.want)
 		}
 	}
 }
@@ -38,7 +38,7 @@ func TestMaskAPIKey(t *testing.T) {
 // 非 ASCII 密钥不能把切片切越界——Rust 按字节判阈值、按字符切片，
 // 照抄会在 Go 里 panic。
 func TestMaskAPIKeyDoesNotPanicOnMultibyte(t *testing.T) {
-	got := MaskAPIKey("密钥密钥密钥") // 6 字符 / 18 字节
+	got := maskAPIKey("密钥密钥密钥") // 6 字符 / 18 字节
 	if got == nil {
 		t.Fatal("不该返回 nil")
 	}
@@ -51,7 +51,7 @@ func ptr(value string) *string { return &value }
 
 // ⚠️ 缺失的 temperature 必须补 0.3，不能被读成 0（0 是合法的贪心温度）。
 func TestDecodeStoredDefaultsTemperature(t *testing.T) {
-	stored, err := decodeStored([]byte(`{"base_url":"https://example.com/v1","model":"m"}`))
+	stored, err := decodeLLMStored([]byte(`{"base_url":"https://example.com/v1","model":"m"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestDecodeStoredDefaultsTemperature(t *testing.T) {
 
 // 显式给 0 要保留 0。
 func TestDecodeStoredKeepsExplicitZeroTemperature(t *testing.T) {
-	stored, err := decodeStored([]byte(`{"temperature":0}`))
+	stored, err := decodeLLMStored([]byte(`{"temperature":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestDecodeStoredKeepsExplicitZeroTemperature(t *testing.T) {
 }
 
 func TestDecodeStoredClampsTemperature(t *testing.T) {
-	stored, err := decodeStored([]byte(`{"temperature":9}`))
+	stored, err := decodeLLMStored([]byte(`{"temperature":9}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,12 +89,12 @@ func TestFillFromEnvIfEmpty(t *testing.T) {
 		Model:   "env-model",
 	}
 
-	filled := fillFromEnvIfEmpty(Stored{}, fallback)
+	filled := fillFromEnvIfEmpty(llmStored{}, fallback)
 	if filled.BaseURL != fallback.BaseURL || filled.APIKey != fallback.APIKey || filled.Model != fallback.Model {
 		t.Fatalf("空配置应当全部由 env 补上，得到 %+v", filled)
 	}
 
-	fromDB := fillFromEnvIfEmpty(Stored{
+	fromDB := fillFromEnvIfEmpty(llmStored{
 		BaseURL: "https://db.example.com/v1",
 		APIKey:  "db-key",
 		Model:   "db-model",
@@ -106,7 +106,7 @@ func TestFillFromEnvIfEmpty(t *testing.T) {
 
 // env 也没有时落到硬默认值——这是从 Rust 继承的行为，写下来免得被当成 bug 改掉。
 func TestFillFromEnvIfEmptyUsesBuiltInDefaults(t *testing.T) {
-	filled := fillFromEnvIfEmpty(Stored{}, config.LLMFallback{})
+	filled := fillFromEnvIfEmpty(llmStored{}, config.LLMFallback{})
 	if filled.BaseURL != defaultLLMBaseURL {
 		t.Fatalf("base_url = %q，期望 %q", filled.BaseURL, defaultLLMBaseURL)
 	}
@@ -120,7 +120,7 @@ func TestFillFromEnvIfEmptyUsesBuiltInDefaults(t *testing.T) {
 }
 
 func TestResolveFallsBackToEnvWhenUnset(t *testing.T) {
-	service := New(storetest.New(), config.LLMFallback{
+	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{
 		BaseURL: "https://env.example.com/v1",
 		APIKey:  "env-key",
 		Model:   "env-model",
@@ -139,7 +139,7 @@ func TestResolveFallsBackToEnvWhenUnset(t *testing.T) {
 
 // 没配过时 Public 的 api_key_set 必须是 false，且掩码为 null。
 func TestPublicReportsUnsetKey(t *testing.T) {
-	service := New(storetest.New(), config.LLMFallback{})
+	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{})
 	public, err := service.Public(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -155,8 +155,8 @@ func TestPublicReportsUnsetKey(t *testing.T) {
 // Public 的 JSON 里绝不能出现 api_key 明文（§13 的凭据不泄漏验收）。
 func TestPublicJSONNeverContainsPlainKey(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(LLMKey, `{"base_url":"https://x/v1","api_key":"sk-supersecretvalue","model":"m"}`)
-	service := New(st, config.LLMFallback{})
+	st.SetSetting(llmSettingKey, `{"base_url":"https://x/v1","api_key":"sk-supersecretvalue","model":"m"}`)
+	service := NewLLMSettingsService(st, config.LLMFallback{})
 
 	public, err := service.Public(context.Background())
 	if err != nil {
@@ -178,9 +178,9 @@ func TestPublicJSONNeverContainsPlainKey(t *testing.T) {
 }
 
 func TestUpdateTrimsBaseURLTrailingSlash(t *testing.T) {
-	service := New(storetest.New(), config.LLMFallback{})
+	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{})
 	baseURL := "https://api.example.com/v1///"
-	public, err := service.Update(context.Background(), UpdateRequest{BaseURL: &baseURL})
+	public, err := service.Update(context.Background(), LLMUpdateRequest{BaseURL: &baseURL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,11 +192,11 @@ func TestUpdateTrimsBaseURLTrailingSlash(t *testing.T) {
 // 空字符串的 api_key 表示「不改」——表单每次都会回传，误判成清空会顺手抹掉密钥。
 func TestUpdateEmptyAPIKeyDoesNotClear(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(LLMKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"m"}`)
-	service := New(st, config.LLMFallback{})
+	st.SetSetting(llmSettingKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"m"}`)
+	service := NewLLMSettingsService(st, config.LLMFallback{})
 
 	empty := "  "
-	public, err := service.Update(context.Background(), UpdateRequest{APIKey: &empty})
+	public, err := service.Update(context.Background(), LLMUpdateRequest{APIKey: &empty})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,10 +208,10 @@ func TestUpdateEmptyAPIKeyDoesNotClear(t *testing.T) {
 // 要清掉密钥必须显式 clear_api_key。
 func TestUpdateClearAPIKeyFlag(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(LLMKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"m"}`)
-	service := New(st, config.LLMFallback{})
+	st.SetSetting(llmSettingKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"m"}`)
+	service := NewLLMSettingsService(st, config.LLMFallback{})
 
-	public, err := service.Update(context.Background(), UpdateRequest{ClearAPIKey: true})
+	public, err := service.Update(context.Background(), LLMUpdateRequest{ClearAPIKey: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,11 +223,11 @@ func TestUpdateClearAPIKeyFlag(t *testing.T) {
 // 局部更新：只改 model 不能动其他字段。
 func TestUpdateIsPartial(t *testing.T) {
 	st := storetest.New()
-	st.SetSetting(LLMKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"old","temperature":0.7}`)
-	service := New(st, config.LLMFallback{})
+	st.SetSetting(llmSettingKey, `{"base_url":"https://x/v1","api_key":"sk-original-key","model":"old","temperature":0.7}`)
+	service := NewLLMSettingsService(st, config.LLMFallback{})
 
 	model := "new-model"
-	public, err := service.Update(context.Background(), UpdateRequest{Model: &model})
+	public, err := service.Update(context.Background(), LLMUpdateRequest{Model: &model})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,13 +247,13 @@ func TestUpdateIsPartial(t *testing.T) {
 
 // 写进去的值要能读回来（跨请求一致）。
 func TestUpdateRoundTripThroughStore(t *testing.T) {
-	service := New(storetest.New(), config.LLMFallback{})
+	service := NewLLMSettingsService(storetest.New(), config.LLMFallback{})
 	baseURL := "https://api.deepseek.com/v1"
 	model := "deepseek-flash"
 	key := "sk-abcdefghijklmnop"
 	temperature := float32(0.5)
 
-	if _, err := service.Update(context.Background(), UpdateRequest{
+	if _, err := service.Update(context.Background(), LLMUpdateRequest{
 		BaseURL: &baseURL, Model: &model, APIKey: &key, Temperature: &temperature,
 	}); err != nil {
 		t.Fatal(err)

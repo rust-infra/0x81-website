@@ -117,6 +117,9 @@ func ValidateScenario(input model.Scenario) (model.Scenario, error) {
 // 三条限制缺一不可：轮数、单条长度、**总长度**。只看单条的话，
 // 40 条各 2000 字能把 prompt 撑到 8 万字。
 func ValidateHistory(history []model.Turn, userText string) error {
+	if err := validateTurnRoles(history); err != nil {
+		return err
+	}
 	if len(history) > MaxHistoryTurns {
 		return fmt.Errorf("history must have at most %d turns", MaxHistoryTurns)
 	}
@@ -139,6 +142,9 @@ func ValidateHistory(history []model.Turn, userText string) error {
 // ValidateSummaryHistory 是复盘接口的历史校验：比单轮少了 user_text，
 // 但要求历史非空（没有对话就没什么可复盘的）。
 func ValidateSummaryHistory(history []model.Turn) error {
+	if err := validateTurnRoles(history); err != nil {
+		return err
+	}
 	if len(history) == 0 {
 		return fmt.Errorf("history is required")
 	}
@@ -151,6 +157,38 @@ func ValidateSummaryHistory(history []model.Turn) error {
 	}
 	if total > MaxTotalChars {
 		return fmt.Errorf("history must be at most %d characters", MaxTotalChars)
+	}
+	return nil
+}
+
+// ValidateLanguageReady 校验这套语言现在能不能真的演练。
+//
+// 中文侧只有英文 prompt 模板（§11 阶段 7 才做中文），所以 `zh-CN` 现在
+// **必须明确拒绝**，不能拿英文模板凑合——凑合的话用户选中文会得到一个
+// 说英文的 AI，那种静默的错误行为比一个 400 难查得多。
+//
+// ⚠️ 这条护栏必须跑在**扣额度之前**（见 Turn / Summary / DraftScenario 的
+// 调用位置）。放在后面的话，用户会白掉一次额度、只拿到一个 400，
+// 而他并没有做错任何事——是服务端还没做完。
+func ValidateLanguageReady(language model.Language) error {
+	if language.IsChinese() {
+		return ErrChinesePromptNotReady
+	}
+	return nil
+}
+
+// validateTurnRoles 校验每一条历史的 role。
+//
+// Rust 侧不需要这一步——`CoachRole` 是真枚举，非法值在 serde 反序列化阶段
+// 就被拒（`models/coach.rs:58-63`）。Go 的 `model.Role` 是字符串类型，
+// `json.Unmarshal` 照单全收，不校验的话一条 `role: "system"` 会一路走到
+// `BuildTranscript`，被当成 COACH 渲染——**那就是一条注入通道**：
+// 用户可以用 history 里的角色标签伪造「教练说过的话」。
+func validateTurnRoles(history []model.Turn) error {
+	for i, turn := range history {
+		if !turn.Role.Valid() {
+			return fmt.Errorf("history[%d].role must be one of coach, user", i)
+		}
 	}
 	return nil
 }
