@@ -1037,7 +1037,21 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | **3** | **业务移植**：14 个场景目录、`/turn`、`/summary`、`/scenario/draft`、配额、管理设置（含 LLM 配置）、材料解析三条路径；**行为对齐测试**（§7.8） | 新增后端 + `moyan-admin` Caddy 分流 |
 
 > 🔄 **阶段 3 进行中**（2026-10-02）：**场景目录已落地**——14 个 JSON（11 个从 `coach_scenarios.rs` 用脚本抽取、3 个新增）、`internal/scenarios` 的加载与查表、`GET /api/rehearse/scenarios` 端点，`go test -race` 全绿。**§5.1 的分族表已变成可执行断言**（`TestCatalogMatchesSection51`），guidance 不下发有结构测试 + 线上字节双重保障。
-> 待做：`/turn`、`/summary`、`/scenario/draft`、配额、管理设置、材料解析三条路径。
+>
+> ✅ **阶段 3 英文侧已完成**（2026-10-03）：§7.5 的路由表全部落地（`/turn`、`/summary`、`/scenario/draft`、配额、`/api/admin/settings/rehearse`、材料三条路径）；`gofmt` / `go vet` / `golangci-lint` / `go test -race` / `CGO_ENABLED=0 go build` 全绿。护栏逐条对照 Rust 复核过一遍，抓到并修掉两条「有护栏的样子、没有护栏的作用」：**`enabled=false` 没被 `CheckAndConsume` 读**（关掉配额仍会 429）、**`scenario.source` 没校验**。
+>
+> **阶段 3 未完成的部分**：真实 Supabase 连通性与 pooler 冒烟、`rehearse_usage` 的并发原子性——都需要真库（`internal/store/usage_integration_test.go` 由 `REHEARSE_TEST_DATABASE_URL` 门控）。
+>
+> ⚠️ **阶段 3 与上游的六处有意差异**（都写在代码注释里，这里是索引）：
+>
+> | # | 差异 | 理由 |
+> |---|---|---|
+> | 1 | 枚举非法值回 **400 + 信封**（上游是 422 纯文本） | axum 对 serde 枚举拒绝用的是默认 rejection，正文是 `text/plain`，**绕过了 §7.6 的信封**；同一类错误上游还有 400 信封的另一半（`check_enum`）。统一成 400 信封。尚无已发布客户端，无迁移成本 |
+> | 2 | 管理端 `PUT` 是**局部更新**（上游是整体替换） | §7.3.2 让 LLM 表单把 body 也 PUT 到本接口，而那个 body 不含 `daily_turn_limit`；整体替换会让管理员改一次模型就把配额静默重置 |
+> | 3 | 管理端响应把配额与 LLM 配置**扁平合并**成一层 | 同一个表单要能同时渲染两个后端的结果，嵌套会逼客户端写两套解析 |
+> | 4 | 材料链路的非视觉上游失败回 **503 固定文案**（上游透传 `LLM error (status): body` 当 400） | 上游响应体可能含账号标识；§13 的「凭据不泄漏」。`vision_not_supported → 422` 保留 |
+> | 5 | `next_lines` **只过滤一次**（上游过滤两遍） | 上游第一遍的「最多 2 条」会提前砍掉候选，导致本可保留的建议被丢掉；过滤规则（去空/去重/去复读/上限 2）一条不少 |
+> | 6 | 中文演练在阶段 7 之前**明确 400**（上游用英文模板照跑） | 拿英文模板凑合会让选中文的用户得到一个说英文的 AI，静默的错误行为比 400 难查 |
 | **4** | **App 搬家 + 双向切换**：新建 `rehearse-app/`（搬 45 文件 + 4 依赖，`API_URL=https://rehearse.0x81.uk`、`AUTH_URL=https://auth.0x81.uk`）；墨言删 coach（App 侧 + Rust 侧）、撤销 Tab 改动、首页加导流卡；网关加 `rehearse.0x81.uk` 的 Host 分支；**`moyan-backend` 的 `jwt_middleware` 加 `status` 检查**（§7.4.3） | App ×2 + 后端 ×2 + 网关 |
 | **5** | **材料确认页适配小屏**：剪贴板优先 + 分段校对 + 聚焦疑似错误（§10.2） | App |
 | **6** | （可选）**即时吊销通道**：deny-list / 状态缓存，补上 `status` 进 claims 后仍受 TTL 约束的那段窗口（§7.4.3、§15） | 后端 ×2 |

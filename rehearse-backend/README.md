@@ -91,6 +91,34 @@ make migrate-up
 **阶段 2（服务骨架）已完成**：`/health`、`/api/rehearse/whoami`、JWT 验签中间件、
 错误信封、迁移、Dockerfile、CI 门禁。
 
-**阶段 3 待做**：业务移植（`/turn`、`/summary`、`/scenario/draft`、配额、
-材料解析、`/api/admin/settings/rehearse`）。路由表见设计稿 §7.5，
-模块对照表见 §7.9。
+**阶段 3（业务移植）已完成**（英文侧）。§7.5 的路由表全部落地：
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/rehearse/quota` | 配额快照 + `llm_configured` |
+| `GET /api/rehearse/scenarios` | 14 个预置场景（`language` 参数非法回 400） |
+| `POST /api/rehearse/turn` | 一轮对话（失败重试一次，解析失败走降级） |
+| `POST /api/rehearse/summary` | 复盘（不计额度、不重试） |
+| `POST /api/rehearse/scenario/draft` | 场景草稿（强制 `source=custom`） |
+| `POST /api/rehearse/material/text` | PDF / DOCX / 图片 → 文本 |
+| `POST /api/rehearse/material/profile` | 文本 → 紧凑面试档案 |
+| `GET\|PUT /api/admin/settings/rehearse` | 配额 + LLM 配置（`X-Admin-Token`） |
+| `GET /health`、`GET /api/rehearse/whoami` | 后者是阶段 2 的冒烟端点，**不在 §7.5 表里** |
+
+**已知限制：中文演练属阶段 7。** 选 `language: "zh-CN"` 会拿到 400（中文
+prompt 模板还没做，见 `internal/coach/prompts.go` 的 `ErrChinesePromptNotReady`）。
+预置场景里有 2 个的默认语言是 `zh-CN`——客户端在开始会话时把 `language`
+覆盖成 `en-*` 即可继续演练，不覆盖就会撞上这个 400。阶段 7 落地后这条消失。
+
+**阶段 3 尚未验证的部分**：真实 Supabase 的连通性（含 pooler 冒烟）与
+`rehearse_usage` 的并发原子性——两者都需要真库，本地跑不了。
+`internal/store/usage_integration_test.go` 用 `REHEARSE_TEST_DATABASE_URL`
+门控，设了就跑：
+
+```sh
+REHEARSE_TEST_DATABASE_URL='postgres://...' go test ./internal/store/ -run Integration -v
+```
+
+**下一步是阶段 4**（App 搬家 + 双向切换），那是唯一的原子切换点：
+先起 `rehearse-backend` 并确认网关路由通 → 再发 Rehearse App → 最后删墨言侧 coach。
+⚠️ 要排在 UTC+8 零点之后做（§11）。
