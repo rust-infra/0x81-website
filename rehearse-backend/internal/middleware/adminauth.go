@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"net/http"
+	"github.com/gin-gonic/gin"
 )
 
 // 管理端鉴权：`X-Admin-Token`，与用户侧的 JWT 是**两套**互不相干的凭证。
@@ -40,19 +40,17 @@ func CheckAdminToken(configured string, provided *string) *APIError {
 	return Unauthorized(MsgInvalidAdminToken)
 }
 
-// RequireAdminToken 返回管理端验票中间件。
-func RequireAdminToken(configured string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var provided *string
-			if raw := r.Header.Get(AdminTokenHeader); raw != "" {
-				provided = &raw
-			}
-			if err := CheckAdminToken(configured, provided); err != nil {
-				WriteError(w, err)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
+// RequireAdminToken 返回管理端验票中间件（gin）。
+func RequireAdminToken(configured string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var provided *string
+		if raw := c.GetHeader(AdminTokenHeader); raw != "" {
+			provided = &raw
+		}
+		if err := CheckAdminToken(configured, provided); err != nil {
+			Abort(c, err)
+			return
+		}
+		c.Next()
 	}
 }

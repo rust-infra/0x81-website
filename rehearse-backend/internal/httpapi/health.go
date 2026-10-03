@@ -3,6 +3,8 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/0x81/rehearse-backend/internal/store"
 )
 
@@ -14,20 +16,19 @@ import (
 // 为什么要把 DB 可达性算进健康检查：§7.3 换成独立托管 PG 之后，
 // Postgres 成了唯一的外部依赖，它挂了 Rehearse 整体不可用。如果 `/health`
 // 只回 200，编排层会以为一切正常。
-func health(st store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := st.Ping(r.Context()); err != nil {
+func health(st store.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := st.Ping(c.Request.Context()); err != nil {
 			// 细节只进日志（在 store 层记），响应里不出现。
-			writeHealth(w, http.StatusServiceUnavailable, "degraded", "unreachable")
+			c.JSON(http.StatusServiceUnavailable, healthBody("degraded", "unreachable"))
 			return
 		}
-		writeHealth(w, http.StatusOK, "ok", "ok")
+		c.JSON(http.StatusOK, healthBody("ok", "ok"))
 	}
 }
 
-func writeHealth(w http.ResponseWriter, status int, overall, database string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	// 手写而不是用 middleware.WriteData：这个端点不属于用户 API 的信封体系。
-	_, _ = w.Write([]byte(`{"status":"` + overall + `","database":"` + database + `"}` + "\n"))
+// healthBody 手写而不是用 middleware.DataEnvelope：这个端点不属于用户 API
+// 的信封体系（见上）。
+func healthBody(overall, database string) map[string]string {
+	return map[string]string{"status": overall, "database": database}
 }

@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -45,9 +45,13 @@ const Leeway = 60 * time.Second
 // StatusActive 是唯一放行的 status 值（§7.4.3）。
 const StatusActive = "active"
 
-type claimsKey struct{}
+// claimsContextKey 是 claims 在 gin.Context 里的键。
+//
+// 用**不导出的常量**而不是字符串字面量散在各处：`c.Get("claims")` 里的
+// 拼写错误不会编译失败，只会静默拿到 nil，然后表现成「用户 id 是空的」。
+const claimsContextKey = "rehearse.claims"
 
-// RequireAuth 返回验签中间件。
+// RequireAuth 返回验签中间件（gin）。
 //
 // ⚠️ 这里**故意不实现** moyan-backend 的 legacy token 兜底分支
 // （`ALLOW_LEGACY_TOKEN_AUTH`）。那个开关在线上必须关闭，而它的存在本身
@@ -57,48 +61,50 @@ type claimsKey struct{}
 //
 // 同样不做的事：OAuth、签发 token、建号、读 `users` 表。Rehearse 只消费
 // 认证服务已经确定的身份。
-func RequireAuth(secret []byte) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			raw, ok := extractBearer(r)
-			if !ok {
-				WriteError(w, Unauthorized(MsgMissingToken))
-				return
-			}
+func RequireAuth(secret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		raw, ok := extractBearer(c.Request)
+		if !ok {
+			Abort(c, Unauthorized(MsgMissingToken))
+			return
+		}
 
-			claims := &Claims{}
-			_, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) {
-				return secret, nil
-			},
-				// 只接受 HS256，与 Rust 侧 `Validation::new(Algorithm::HS256)` 对齐。
-				// 不限定算法会让 `alg: none` 之类的攻击面存在。
-				jwt.WithValidMethods([]string{"HS256"}),
-				// exp 必填——Rust 侧默认 required_spec_claims 含 exp。
-				jwt.WithExpirationRequired(),
-				jwt.WithLeeway(Leeway),
-			)
-			if err != nil {
-				// 不把底层错误下发：它可能泄漏密钥或 token 内容（§13）。
-				WriteError(w, Unauthorized(MsgInvalidToken))
-				return
-			}
+		claims := &Claims{}
+		_, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) {
+			return secret, nil
+		},
+			// 只接受 HS256，与 Rust 侧 `Validation::new(Algorithm::HS256)` 对齐。
+			// 不限定算法会让 `alg: none` 之类的攻击面存在。
+			jwt.WithValidMethods([]string{"HS256"}),
+			// exp 必填——Rust 侧默认 required_spec_claims 含 exp。
+			jwt.WithExpirationRequired(),
+			jwt.WithLeeway(Leeway),
+		)
+		if err != nil {
+			// 不把底层错误下发：它可能泄漏密钥或 token 内容（§13）。
+			Abort(c, Unauthorized(MsgInvalidToken))
+			return
+		}
 
-			// status 检查（§7.4.3）。moyan-backend 目前不做这一步，所以这是
-			// Rehearse 侧更严的地方；等墨言补上后两边行为一致。
-			if claims.Status != StatusActive {
-				WriteError(w, Unauthorized(MsgInactiveAccount))
-				return
-			}
+		// status 检查（§7.4.3）。moyan-backend 目前不做这一步，所以这是
+		// Rehearse 侧更严的地方；等墨言补上后两边行为一致。
+		if claims.Status != StatusActive {
+			Abort(c, Unauthorized(MsgInactiveAccount))
+			return
+		}
 
-			ctx := context.WithValue(r.Context(), claimsKey{}, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
+		c.Set(claimsContextKey, claims)
+		c.Next()
 	}
 }
 
 // ClaimsFrom 取出中间件注入的 claims。只有走过 RequireAuth 的处理器才会拿到。
-func ClaimsFrom(ctx context.Context) (*Claims, bool) {
-	claims, ok := ctx.Value(claimsKey{}).(*Claims)
+func ClaimsFrom(c *gin.Context) (*Claims, bool) {
+	value, ok := c.Get(claimsContextKey)
+	if !ok {
+		return nil, false
+	}
+	claims, ok := value.(*Claims)
 	return claims, ok
 }
 

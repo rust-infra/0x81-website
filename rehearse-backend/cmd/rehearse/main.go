@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/config"
 	"github.com/0x81/rehearse-backend/internal/httpapi"
@@ -78,6 +80,13 @@ func run() error {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: parseLevel(cfg.LogLevel),
 	})))
+
+	// gin 默认是 debug 模式：启动时把整张路由表打到 stdout，且每个请求都做
+	// 额外检查。生产要 release——路由表属于内部结构，没必要出现在容器日志里。
+	// 排查路由问题时用 `GIN_MODE=debug` 覆盖。
+	if os.Getenv("GIN_MODE") == "" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	// 连库：**惰性**的，`pgxpool` 不会在创建时真连（见下面的启动探测）。
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

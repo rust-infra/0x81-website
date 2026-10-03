@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"net/http"
+	"github.com/gin-gonic/gin"
 
 	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/middleware"
@@ -58,19 +58,19 @@ type adminSettingsUpdate struct {
 
 func adminGetSettingsHandler(
 	quota *coach.QuotaService, llmSettings *coach.LLMSettingsService,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := quota.Settings(r.Context())
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		settings, err := quota.Settings(c.Request.Context())
 		if err != nil {
-			middleware.WriteError(w, middleware.Repository(err))
+			middleware.Abort(c, middleware.Repository(err))
 			return
 		}
-		public, err := llmSettings.Public(r.Context())
+		public, err := llmSettings.Public(c.Request.Context())
 		if err != nil {
-			middleware.WriteError(w, middleware.Repository(err))
+			middleware.Abort(c, middleware.Repository(err))
 			return
 		}
-		middleware.WriteData(w, http.StatusOK, adminSettingsResponse{
+		middleware.OK(c, adminSettingsResponse{
 			DailyTurnLimit: settings.DailyTurnLimit,
 			Enabled:        settings.Enabled,
 			BaseURL:        public.BaseURL,
@@ -84,11 +84,11 @@ func adminGetSettingsHandler(
 
 func adminUpdateSettingsHandler(
 	quota *coach.QuotaService, llmSettings *coach.LLMSettingsService,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		var req adminSettingsUpdate
-		if err := decodeJSON(w, r, &req); err != nil {
-			middleware.WriteError(w, err)
+		if err := bindJSON(c, &req); err != nil {
+			middleware.Abort(c, err)
 			return
 		}
 
@@ -97,9 +97,9 @@ func adminUpdateSettingsHandler(
 		// （重新 GET 就能看出来），而且两个键本来就各自独立，
 		// 比强行塞进一个事务简单得多。
 		if req.DailyTurnLimit != nil || req.Enabled != nil {
-			current, err := quota.Settings(r.Context())
+			current, err := quota.Settings(c.Request.Context())
 			if err != nil {
-				middleware.WriteError(w, middleware.Repository(err))
+				middleware.Abort(c, middleware.Repository(err))
 				return
 			}
 			if req.DailyTurnLimit != nil {
@@ -108,25 +108,25 @@ func adminUpdateSettingsHandler(
 			if req.Enabled != nil {
 				current.Enabled = *req.Enabled
 			}
-			if _, err := quota.UpdateSettings(r.Context(), current); err != nil {
-				middleware.WriteError(w, middleware.Repository(err))
+			if _, err := quota.UpdateSettings(c.Request.Context(), current); err != nil {
+				middleware.Abort(c, middleware.Repository(err))
 				return
 			}
 		}
 
-		if _, err := llmSettings.Update(r.Context(), coach.LLMUpdateRequest{
+		if _, err := llmSettings.Update(c.Request.Context(), coach.LLMUpdateRequest{
 			BaseURL:     req.BaseURL,
 			APIKey:      req.APIKey,
 			Model:       req.Model,
 			Temperature: req.Temperature,
 			ClearAPIKey: req.ClearAPIKey,
 		}); err != nil {
-			middleware.WriteError(w, err)
+			middleware.Abort(c, err)
 			return
 		}
 
 		// 回写后的完整视图：客户端不用再发一次 GET 就知道实际生效的值
 		// （尤其是被 clamp 过的 daily_turn_limit 与被掩码的 key）。
-		adminGetSettingsHandler(quota, llmSettings)(w, r)
+		adminGetSettingsHandler(quota, llmSettings)(c)
 	}
 }

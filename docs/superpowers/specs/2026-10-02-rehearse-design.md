@@ -303,7 +303,7 @@ Rust 侧已经是**固定模板 + 注入防护**的形态：`build_system_prompt
    ▼        ▼           ▼          ▼             ▼              ▼
 moyan-web admin-moyan  auth.0x81  moyan-backend  rehearse-backend
  :5000     :5001       ★ 新增     :4323          :4324  ★ 新增
- （静态）  （静态）     → 4323     （Rust/Axum）  （Go/net/http）
+ （静态）  （静态）     → 4323     （Rust/Axum）  （Go/gin）
                                   ├ 签发 JWT      └ 只验 JWT
                                   └ 验 JWT
                                         │              │
@@ -406,7 +406,7 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 
 | 关注点 | 选型 | 理由 |
 |---|---|---|
-| HTTP | 标准库 `net/http` + `ServeMux`（Go 1.22+ 支持 `POST /api/rehearse/turn` 模式串） | 零第三方路由依赖 |
+| HTTP | **`github.com/gin-gonic/gin`**（2026-10-04 改；原稿写的是标准库 `net/http` + `ServeMux`） | 路由分组、中间件链、请求体绑定、multipart、404 兜底都由框架提供——手写一遍是几百行没有业务价值的样板。见下面的「为什么换掉 ServeMux」 |
 | Postgres 驱动 | **`github.com/jackc/pgx/v5`**（`pgxpool`） | 纯 Go，无 cgo——`CGO_ENABLED=0` 仍然成立，静态二进制与 `scratch` 镜像都依赖这一点（§7.3.2） |
 | 数据访问 | `database/sql` + `pgx` 的 `stdlib` 适配，手写 SQL | Rehearse 只碰自己的表（§7.3.3），不需要 ORM 或 sqlc 代码生成 |
 | JWT 验签 | `github.com/golang-jwt/jwt/v5` | HS256，claims 与 Rust 侧逐字段一致（§7.4）。**只验签，不签发** |
@@ -414,8 +414,15 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 | PDF 抽文本 | `github.com/ledongthuc/pdf` | 纯 Go。Rust 侧用的是 `pdf-extract`（底层 `lopdf`，也是纯 Rust），所以能力对齐没有架构障碍 |
 | DOCX | 标准库 `archive/zip` + `encoding/xml` | Rust 侧用 `zip` crate，同理 |
 | LLM 调用 | 标准库 `net/http` + `encoding/json` | OpenAI 兼容协议，不需要 SDK |
+| CORS | `github.com/rs/cors` | 显式 origin 白名单 + 预检；⚠️ 它的「空列表」语义是**允许所有来源**，所以空白名单时要在套之前分叉（见 `internal/middleware/cors.go`） |
+| UUID | `github.com/google/uuid` | 自定义场景 id 的形状是 `custom_<32 位十六进制>`（对齐 Rust 的 `Uuid::new_v4().simple()`），没必要手写 v4 的版本位与变体位 |
+| 测试断言 | `github.com/stretchr/testify` | `require` / `assert` 取代 `if … { t.Fatalf(…) }` 样板；断言点有 680 处，是代码量最大的一块 |
 | 日志 | 标准库 `log/slog` | 结构化日志 |
 | 配置 | 标准库 `os.Getenv` | 与现有 compose 注入方式一致 |
+
+**为什么换掉 ServeMux（2026-10-04）**：原稿选标准库的理由是「零第三方路由依赖」，但实现下来它换到的是**大量手写样板**——路由分组、每组挂中间件、请求体绑定 + 体积上限、multipart 解析、404 兜底、claims 传递，每一项都要自己写一遍，而且写错了不会编译失败（漏挂一个鉴权中间件就是一个未鉴权端点）。换 gin 之后 `internal/httpapi` 的处理器从「每个约 18 行」收敛成路由表里的一行（`api.POST("/turn", authedJSON(deps.Coach.Turn))`）。代价是多了一棵依赖树，但它全是纯 Go，`CGO_ENABLED=0` 与 `scratch` 镜像两条约束都不受影响。
+
+⚠️ 换框架带出一处**行为变化**，已写进测试：gin（与 axum 原版一致）**先匹配路由再跑中间件**，所以未注册路径不再撞鉴权，而是直接 404。旧 ServeMux 把中间件套在 `/api/rehearse/` 前缀上，任意子路径都会先撞鉴权。未鉴权的 404 只泄漏「该路径不存在」，不泄漏业务信息；`TestEveryUserRouteRequiresAuth` 改成直接遍历引擎注册的路由表，保证「新加端点忘了挂鉴权」会被抓到。
 
 **约束：任何引入 cgo 的依赖都要否决。** 一旦 `CGO_ENABLED=1`，静态二进制、`scratch` 镜像、以及「一条 `docker build` 就出成品」这三条收益全部消失（cgo 要 C 工具链、要 libc，构建段和运行段都会变重）——那就失去了换 Go 的意义。
 
@@ -706,7 +713,7 @@ ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
 | `middleware/auth.rs` | 147 | **只取 JWT 部分**（约一半），去掉 legacy 兜底分支 |
 | `middleware/admin_auth.rs` | 67 | 直译（`X-Admin-Token`，注意 ASCII 约束见 README） |
 | `services/coach_settings.rs` | 65 | 直译 |
-| `routes/coach.rs` | 29 | 重写为 `ServeMux` 注册 |
+| `routes/coach.rs` | 29 | 重写为 gin 路由注册（`internal/httpapi/router.go`） |
 | **合计** | **约 4,240 行 Rust** | **预计 2,500–3,500 行 Go** |
 
 **移植的验收门槛是「行为对齐」，不是「能跑」**：同一组输入（场景、历史、用户发言），Rust 与 Go 两版产出的**护栏判定与响应结构**必须一致。prompt 文本本身可以有细微差异（模型输出本来就非确定），但长度上限、轮数上限、枚举校验、配额计数、错误码这些**可判定的部分必须逐条对齐**。
@@ -733,7 +740,7 @@ rehearse-backend/
 ├── internal/
 │   ├── config/config.go          # env 集中读取与校验（§7.7）；缺关键项直接报错退出
 │   ├── httpapi/                  # HTTP 层
-│   │   ├── router.go             # ServeMux 注册（Go 1.22+ 的 "POST /api/..." 模式串）
+│   │   ├── router.go             # gin 引擎装配：路由分组 + 两棵鉴权子树
 │   │   ├── health.go             # GET /health
 │   │   ├── coach.go              # /scenarios /turn /summary /scenario/draft /quota
 │   │   ├── material.go           # /material/text /material/profile
@@ -1152,7 +1159,7 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | 材料上下文 | 任意场景可挂；v1 `kind` 仍只有 `resume` / `job` |
 | 材料导入 | 可选增强，非必经路径；v1 走完整三条路径（粘贴 / 文档 / 图片）+ 剪贴板优先 + 分段校对；真机实测后再决定是否收窄（§10.3） |
 | 仓库 | 同仓新增 `rehearse-app/` 与 `rehearse-backend/` |
-| 后端 | **独立服务，Go 重写**（`net/http` + `pgx`，无 cgo） |
+| 后端 | **独立服务，Go 重写**（`gin` + `pgx`，无 cgo） |
 | 后端端口 | `4324` |
 | Go module 与包结构 | `github.com/0x81/rehearse-backend`；**按领域分包**（`internal/coach` / `scenarios` / `material` / `llm` / `store`…），不镜像 Rust 目录。场景数据走 `go:embed`，护栏集中在 `coach/guards.go`（§7.9） |
 | App 域名 | 业务 `https://rehearse.0x81.uk`；登录 `https://auth.0x81.uk` |
@@ -1214,7 +1221,7 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - ✅ `sqlx::migrate!("./migrations")` 在启动时无条件执行（`sqlite.rs:432`）——墨言的迁移行为不变（§7.3.3）
 - ✅ 容器侧 env 键名不带前缀，compose 侧带 `MOYAN_` 前缀（`docker-compose.yml:41-46`）
 - ✅ App 的 base URL 来自 `app.config.js` 的 `API_URL` → `extra.apiUrl` → `getApiBase()`，Rehearse 照抄即可
-- ✅ 本机 Go 版本 `go1.23.9`（够用，`ServeMux` 的 method+path 模式需要 ≥ 1.22）
+- ✅ 本机 Go 版本 `go1.23.9`（够用；gin v1.10.0 与全部依赖都兼容 go 1.23）
 - ✅ **Go module 路径与项目目录结构定稿**（2026-10-02）：module `github.com/0x81/rehearse-backend`，**按 Go 惯例按领域分包**（不镜像 Rust 的 `services/` `models/` `controllers/`），完整目录树与 Rust → Go 对照表见 §7.9。因为选了「按领域分包」，§7.8 要求的对照清单**改由 §7.9 那张表承担**——这是该选择的必需配套，不是可选文档
 - ✅ **`moyan-backend/src/repositories/`（3 文件 6,597 行）不移植**：Rehearse 只碰自己那两张表（§7.3.2），写一个薄的 `internal/store/` 即可。这是「独立库」决定带来的简化
 - ✅ **CI 在 `.github/workflows/`**：现有 `rust-checks.yml` / `docker-build.yml` / `release-rust-binaries.yml`，Go 门禁新增 `go-checks.yml` 与它们并列（§7.9、§15 #6）

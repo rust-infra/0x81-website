@@ -2,11 +2,11 @@ package coach
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/0x81/rehearse-backend/internal/middleware"
 	"github.com/0x81/rehearse-backend/internal/model"
@@ -78,26 +78,18 @@ func (s *Service) DraftScenario(
 		return model.Scenario{}, middleware.ServiceUnavailable(MsgDraftUnavailable)
 	}
 
-	id, err := newCustomScenarioID()
-	if err != nil {
-		return model.Scenario{}, middleware.Internal(err)
-	}
-	return parseDraftPayload(raw, id, language)
+	return parseDraftPayload(raw, newCustomScenarioID(), language)
 }
 
 // newCustomScenarioID 生成 `custom_<32 位十六进制>`。
 //
 // 形状对齐 Rust 的 `format!("custom_{}", Uuid::new_v4().simple())`：v4 UUID
-// 的无连字符形式。用标准库拼而不是引一个 uuid 依赖——为了 32 个十六进制
-// 字符加一个第三方包不值得，而 v4 的版本位与变体位各一行就能设对。
-func newCustomScenarioID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", fmt.Errorf("generate scenario id: %w", err)
-	}
-	raw[6] = (raw[6] & 0x0f) | 0x40 // version 4
-	raw[8] = (raw[8] & 0x3f) | 0x80 // variant RFC 4122
-	return "custom_" + hex.EncodeToString(raw[:]), nil
+// 的**无连字符**形式，所以要把标准库带的那四个连字符去掉。
+//
+// `uuid.NewString()` 在随机源失败时 panic（内部是 `Must`），与 Rust 的
+// `Uuid::new_v4()` 一致——两者都认为「拿不到熵」是不可继续的系统故障。
+func newCustomScenarioID() string {
+	return "custom_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 // llmDraftPayload 是模型输出的形状（§7.6 的新字段名）。

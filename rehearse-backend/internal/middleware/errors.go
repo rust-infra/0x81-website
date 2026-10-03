@@ -1,4 +1,4 @@
-// Package middleware 提供 HTTP 层的横切能力：错误信封与 JWT 验签。
+// Package middleware 提供 HTTP 层的横切能力：错误信封、JWT 验签、管理端验票、CORS。
 //
 // 本文件是**逐字段复刻** moyan-backend 的响应形状
 // （`moyan-backend/src/middleware/error.rs`）。这不是风格问题：
@@ -10,12 +10,17 @@
 //  1. `error.code` 是 **HTTP 状态码（数字）**，不是字符串枚举。
 //     401 的形状是 `{"code":401,...}` 而**不是** `{"code":"unauthorized",...}`。
 //  2. `reason` 只在 429 / 422 出现；其余分支没有这个键。
+//
+// 信封的构造是**纯函数**（`Envelope` / `DataEnvelope`），gin 只是最后一步
+// 序列化。这样「形状对不对」可以脱离框架单测，也避免把状态码映射写进
+// 框架的调用约定里。
 package middleware
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 401 的两条消息与 moyan-backend 完全一致（`middleware/auth.rs:50/60`）。
@@ -91,19 +96,14 @@ func Unprocessable(reason, message string) *APIError {
 	return &APIError{Status: http.StatusUnprocessableEntity, Message: message, Reason: reason}
 }
 
-// WriteData 写成功响应：`{success:true, data:...}`（`error.rs:140-145`）。
-func WriteData(w http.ResponseWriter, status int, data any) {
-	writeJSON(w, status, map[string]any{"success": true, "data": data})
-}
-
-// WriteError 写失败响应。
+// Envelope 把错误渲染成 `(HTTP 状态码, 响应体)`。
 //
 // 形状（`error.rs:109-117`）：
 //
 //	{"success":false,"error":{"code":<数字>,"message":"..."}}
 //
 // 带 reason 时（429 / 422）额外多一个 `reason` 键。
-func WriteError(w http.ResponseWriter, err error) {
+func Envelope(err error) (int, map[string]any) {
 	apiErr, ok := err.(*APIError)
 	if !ok {
 		apiErr = Internal(err)
@@ -119,21 +119,35 @@ func WriteError(w http.ResponseWriter, err error) {
 	for key, value := range apiErr.Extra {
 		inner[key] = value
 	}
-
-	writeJSON(w, apiErr.Status, map[string]any{"success": false, "error": inner})
+	return apiErr.Status, map[string]any{"success": false, "error": inner}
 }
 
-// WriteImportFailed 是唯一一个信封形状不同的分支（`error.rs:86-92`）：
-// 键名是 **`errors`**（复数、无 `error` 外层）。导入失败要一次返回多条逐行错误。
-func WriteImportFailed(w http.ResponseWriter, items any) {
-	writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "errors": items})
+// DataEnvelope 是成功信封：`{success:true, data:...}`（`error.rs:140-145`）。
+func DataEnvelope(data any) map[string]any {
+	return map[string]any{"success": true, "data": data}
 }
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		// 头已经发出去了，改不了状态码，只能记日志。
-		slog.Error("failed to encode response", "err", err)
-	}
+// ImportFailedEnvelope 是唯一一个信封形状不同的分支（`error.rs:86-92`）：
+// 键名是 **`errors`**（复数、无 `error` 外层）。
+//
+// ⚠️ Rehearse 目前**没有任何端点用它**——导入能力留在墨言侧。留着是为了
+// §7.6 那张「信封逐字段对齐」的表是完整的：将来真加导入端点时，
+// 形状已经在这里定死，不用回头翻 Rust。
+func ImportFailedEnvelope(items any) (int, map[string]any) {
+	return http.StatusBadRequest, map[string]any{"success": false, "errors": items}
+}
+
+// Abort 写错误信封并**中止**后续 handler。
+//
+// 用 `AbortWithStatusJSON` 而不是 `JSON`：中间件里用后者的话，请求会继续
+// 走到业务 handler，于是「401 之后再写一个 200」——Go 只保留第一个状态码，
+// 表现是响应体被覆盖，很难查。
+func Abort(c *gin.Context, err error) {
+	status, body := Envelope(err)
+	c.AbortWithStatusJSON(status, body)
+}
+
+// OK 写成功信封。
+func OK(c *gin.Context, data any) {
+	c.JSON(http.StatusOK, DataEnvelope(data))
 }

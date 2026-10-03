@@ -57,6 +57,25 @@ prepared statement**，所以 DSN 里要带：
 而且它对应的 v5 模式 `describe_exec` 恰恰是 transaction pooler 下**不能**用的那个
 （它要 2 次 round trip，而 pooler 会在两次之间切换连接）。
 
+## 依赖
+
+**能用库就不手写**（2026-10-04 定）。现在的直接依赖：
+
+| 依赖 | 用途 | 为什么不用标准库手写 |
+|---|---|---|
+| `gin-gonic/gin` | HTTP 框架 | 路由分组、中间件链、请求体绑定、multipart、404 兜底——手写是几百行样板，而且漏挂一个鉴权中间件不会编译失败 |
+| `jackc/pgx/v5` | Postgres | 纯 Go，无 cgo |
+| `golang-jwt/jwt/v5` | JWT 验签 | 只验签、不签发 |
+| `rs/cors` | CORS | ⚠️ 空 `AllowedOrigins` 的语义是**允许所有来源**，见 `internal/middleware/cors.go` 的分叉 |
+| `google/uuid` | 自定义场景 id | v4 的版本位/变体位不用自己设 |
+| `ledongthuc/pdf` | PDF 抽文本 | 纯 Go，不引 cgo（运行镜像是 `scratch`） |
+| `stretchr/testify` | 测试断言 | 680 处断言点，`require`/`assert` 取代 `if … { t.Fatalf(…) }` 样板 |
+
+⚠️ `go.mod` 末尾**显式钉住**了三个只出现在测试依赖链里的模块（`kr/pretty` /
+`kr/text` / `rogpeppe/go-internal`）。不钉的话 `go mod tidy` 会把
+`rogpeppe/go-internal` 解析到 v1.16.0，而它要求 go >= 1.25，与本仓的 go 1.23
+冲突，tidy 直接失败。
+
 ## 常用命令
 
 ```sh

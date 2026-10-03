@@ -1,15 +1,16 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/middleware"
-	"github.com/0x81/rehearse-backend/internal/model"
 )
 
-// 本文件是 `/api/rehearse/*` 的用户侧接口（§7.5 的路由表）。
+// 本文件是 `/api/rehearse/*` 用户侧接口的公共管道（§7.5 的路由表）。
 //
 // 移植自 `moyan-backend/src/controllers/coach.rs`（162 行），
 // 目标文件是设计稿 §7.9 指定的 `internal/httpapi/coach.go`。
@@ -25,27 +26,58 @@ import (
 // 一个 1 GB 的 body 把内存撑爆——**字符数校验拦不住这个**，它要先读完。
 const maxJSONBodyBytes = 2 * 1024 * 1024
 
-// decodeJSON 解请求体。
+// authedJSON 是「取 claims → 解请求体 → 调服务 → 写信封」这套样板的唯一实现。
 //
-// ⚠️ 解析失败统一回 **400 + 信封**。上游在同类错误上有两种表现
-// （serde 枚举拒绝 → 422 纯文本；`check_enum` → 400 信封），详见
+// 四个端点的处理器本来各自重复一遍这四步（每个约 18 行），差别只在被调的
+// 服务方法——那正是泛型能消掉的部分。现在路由表里一行一个：
+//
+//	api.POST("/turn", authedJSON(deps.Coach.Turn))
+//
+// ⚠️ 它**不**替代 `requireClaims` 的错误分支：拿不到 claims 只可能是路由
+// 没挂 `RequireAuth`，是装配错误，回 500 而不是 401，免得伪装成「没登录」。
+func authedJSON[Req, Res any](
+	fn func(ctx context.Context, userID string, req Req) (Res, error),
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, ok := requireClaims(c)
+		if !ok {
+			return
+		}
+		var req Req
+		if err := bindJSON(c, &req); err != nil {
+			middleware.Abort(c, err)
+			return
+		}
+		out, err := fn(c.Request.Context(), claims.Sub, req)
+		if err != nil {
+			middleware.Abort(c, err)
+			return
+		}
+		middleware.OK(c, out)
+	}
+}
+
+// bindJSON 解请求体，并施加体积上限。
+//
+// ⚠️ 上限必须在这里设，不能靠业务层的字符数校验：那个校验要先把 body
+// 读完才有机会跑，而「读完一个 1 GB 的 body」本身就是要防的事。
+//
+// 解析失败统一回 **400 + 信封**。上游在同类错误上有两种表现（serde 枚举
+// 拒绝 → 422 纯文本；`check_enum` → 400 信封），详见
 // `internal/coach/guards.go` 顶部的说明。这里保持信封一致。
-func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+func bindJSON(c *gin.Context, target any) error {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxJSONBodyBytes)
+	if err := c.ShouldBindJSON(target); err != nil {
 		return middleware.BadRequest("invalid request body: " + err.Error())
 	}
 	return nil
 }
 
 // requireClaims 取验签中间件注入的 claims。
-//
-// 取不到只可能是路由没挂 `RequireAuth`——装配错误，回 500 而不是 401，
-// 免得把它伪装成「用户没登录」。
-func requireClaims(w http.ResponseWriter, r *http.Request) (*middleware.Claims, bool) {
-	claims, ok := middleware.ClaimsFrom(r.Context())
+func requireClaims(c *gin.Context) (*middleware.Claims, bool) {
+	claims, ok := middleware.ClaimsFrom(c)
 	if !ok {
-		middleware.WriteError(w, middleware.Internal(errMissingClaims))
+		middleware.Abort(c, middleware.Internal(errMissingClaims))
 		return nil, false
 	}
 	return claims, true
@@ -66,23 +98,25 @@ type quotaResponse struct {
 	LLMConfigured bool `json:"llm_configured"`
 }
 
-func quotaHandler(quota *coach.QuotaService, llmSettings *coach.LLMSettingsService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := requireClaims(w, r)
+// quotaHandler 是唯一一个不能走 `authedJSON` 的端点：它要**读两个服务**
+// 再把结果合成一个响应，没有单一的「服务方法」可以传进去。
+func quotaHandler(quota *coach.QuotaService, llmSettings *coach.LLMSettingsService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, ok := requireClaims(c)
 		if !ok {
 			return
 		}
-		snapshot, err := quota.Snapshot(r.Context(), claims.Sub)
+		snapshot, err := quota.Snapshot(c.Request.Context(), claims.Sub)
 		if err != nil {
-			middleware.WriteError(w, err)
+			middleware.Abort(c, err)
 			return
 		}
-		resolved, err := llmSettings.Resolve(r.Context())
+		resolved, err := llmSettings.Resolve(c.Request.Context())
 		if err != nil {
-			middleware.WriteError(w, middleware.Repository(err))
+			middleware.Abort(c, middleware.Repository(err))
 			return
 		}
-		middleware.WriteData(w, http.StatusOK, quotaResponse{
+		middleware.OK(c, quotaResponse{
 			Limit:         snapshot.Limit,
 			Used:          snapshot.Used,
 			Remaining:     snapshot.Remaining,
@@ -90,66 +124,5 @@ func quotaHandler(quota *coach.QuotaService, llmSettings *coach.LLMSettingsServi
 			Enabled:       snapshot.Enabled,
 			LLMConfigured: resolved.Configured(),
 		})
-	}
-}
-
-func turnHandler(service *coach.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := requireClaims(w, r)
-		if !ok {
-			return
-		}
-		var req model.TurnRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		out, err := service.Turn(r.Context(), claims.Sub, req)
-		if err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		middleware.WriteData(w, http.StatusOK, out)
-	}
-}
-
-// summaryHandler 不需要 user id：复盘不计额度、不写任何按用户的数据
-// （`controllers/coach.rs:57-63` 同样不取 claims）。
-//
-// 它仍然在验签子树下——**鉴权**（这是谁）与**授权用不用得上**（拿 sub 做什么）
-// 是两件事。
-func summaryHandler(service *coach.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req model.SummaryRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		out, err := service.Summary(r.Context(), req)
-		if err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		middleware.WriteData(w, http.StatusOK, out)
-	}
-}
-
-func draftHandler(service *coach.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := requireClaims(w, r)
-		if !ok {
-			return
-		}
-		var req model.ScenarioDraftRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		out, err := service.DraftScenario(r.Context(), claims.Sub, req)
-		if err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		middleware.WriteData(w, http.StatusOK, out)
 	}
 }

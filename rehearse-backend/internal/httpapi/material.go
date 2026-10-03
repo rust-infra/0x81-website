@@ -6,6 +6,8 @@ import (
 	"mime/multipart"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/0x81/rehearse-backend/internal/llm"
 	"github.com/0x81/rehearse-backend/internal/material"
 	"github.com/0x81/rehearse-backend/internal/middleware"
@@ -35,41 +37,44 @@ const (
 // 两条分支：有图片就走视觉模型逐字识别；否则取第一份文档抽文本。
 // **图片优先**——与 Rust 的判断顺序一致（`controllers/coach.rs:120`）：
 // 同时传了两者时按图片处理，因为图片是「文档抽不出文本」的兜底路径。
-func materialTextHandler(ocr *material.OCRService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := requireClaims(w, r)
+//
+// 它是唯一一个不走 `authedJSON` 的用户端点：请求体是 multipart，
+// 没有可绑定的 JSON 结构体。
+func materialTextHandler(ocr *material.OCRService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, ok := requireClaims(c)
 		if !ok {
 			return
 		}
 
-		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBodyBytes)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBodyBytes)
 		// maxMemory 与 body 上限相同：**保证一个字节都不落盘**。
 		// §10 的隐私约定是材料只在内存里处理，而 ParseMultipartForm 在超过
 		// maxMemory 时会把部分内容写进系统临时目录——那样「不落盘」就破了。
-		if err := r.ParseMultipartForm(maxUploadBodyBytes); err != nil {
-			middleware.WriteError(w, middleware.BadRequest("invalid multipart: "+err.Error()))
+		if err := c.Request.ParseMultipartForm(maxUploadBodyBytes); err != nil {
+			middleware.Abort(c, middleware.BadRequest("invalid multipart: "+err.Error()))
 			return
 		}
 		defer func() {
-			if r.MultipartForm != nil {
+			if c.Request.MultipartForm != nil {
 				// 正常路径下没有临时文件（见上），这里是防御性清理。
-				_ = r.MultipartForm.RemoveAll()
+				_ = c.Request.MultipartForm.RemoveAll()
 			}
 		}()
 
-		images, err := readImages(r.MultipartForm.File[fieldImages])
+		images, err := readImages(c.Request.MultipartForm.File[fieldImages])
 		if err != nil {
-			middleware.WriteError(w, err)
+			middleware.Abort(c, err)
 			return
 		}
 
 		if len(images) > 0 {
-			text, err := ocr.OCR(r.Context(), claims.Sub, images)
+			text, err := ocr.OCR(c.Request.Context(), claims.Sub, images)
 			if err != nil {
-				middleware.WriteError(w, err)
+				middleware.Abort(c, err)
 				return
 			}
-			middleware.WriteData(w, http.StatusOK, model.MaterialTextResponse{
+			middleware.OK(c, model.MaterialTextResponse{
 				Text:      text,
 				CharCount: len([]rune(text)),
 				// 图片路径**恒为 false**：OCR 本来就是逐字识别，
@@ -80,51 +85,27 @@ func materialTextHandler(ocr *material.OCRService) http.HandlerFunc {
 			return
 		}
 
-		docs := r.MultipartForm.File[fieldDocs]
+		docs := c.Request.MultipartForm.File[fieldDocs]
 		if len(docs) == 0 {
-			middleware.WriteError(w, middleware.BadRequest("docs or images is required"))
+			middleware.Abort(c, middleware.BadRequest("docs or images is required"))
 			return
 		}
 		fileName, data, err := readFile(docs[0])
 		if err != nil {
-			middleware.WriteError(w, err)
+			middleware.Abort(c, err)
 			return
 		}
 		parsed, err := material.ParseDocument(fileName, data)
 		if err != nil {
-			middleware.WriteError(w, err)
+			middleware.Abort(c, err)
 			return
 		}
-		middleware.WriteData(w, http.StatusOK, model.MaterialTextResponse{
+		middleware.OK(c, model.MaterialTextResponse{
 			Text:          parsed.Text,
 			CharCount:     parsed.CharCount,
 			LikelyScanned: parsed.LikelyScanned,
 			Source:        model.MaterialSourceDocument,
 		})
-	}
-}
-
-// materialProfileHandler 是 `POST /api/rehearse/material/profile`。
-//
-// 输入是**用户确认过的文本**（图片与原文在确认之后就不再参与），
-// 输出是之后挂到 `/turn` 与 `/summary` 上的紧凑档案。
-func materialProfileHandler(profile *material.ProfileService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := requireClaims(w, r)
-		if !ok {
-			return
-		}
-		var req model.MaterialProfileRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		out, err := profile.Profile(r.Context(), claims.Sub, req)
-		if err != nil {
-			middleware.WriteError(w, err)
-			return
-		}
-		middleware.WriteData(w, http.StatusOK, out)
 	}
 }
 
