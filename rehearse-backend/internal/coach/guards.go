@@ -52,6 +52,25 @@ var (
 	Difficulties = []string{"easy", "core", "challenge"}
 )
 
+// ⚠️ 一条与上游**有意的**状态码差异，写在最前面免得被当成 bug「修」回去：
+//
+// Rust 里 `category` / `language` / `persona.locale` / `role` / `mode` / `source`
+// 是**真枚举**，非法值在 serde 反序列化阶段就被拒。而 axum 对 `Json<T>` 的
+// 反序列化失败用的是**默认 rejection**：422 + `text/plain` 正文
+// （形如 "Failed to deserialize the JSON body into the target type: ..."），
+// **不是** §7.6 那个 `{success:false, error:{code,message}}` 信封。
+//
+// 也就是说，上游对同一类错误有两种表现：`persona.tone` / `setting` /
+// `difficulty`（Rust 里是 String + check_enum）走 400 信封，
+// `category` / `mode` / `role` 走 422 纯文本。同一个客户端要写两套处理。
+//
+// Go 侧统一成 **400 + 信封**：§7.6 把信封写成契约，纯文本 422 是上游对
+// 自己契约的偏离，不是特性。Rehearse 尚无已发布客户端（§7.5 的窗口期），
+// 所以这次统一没有迁移成本。
+//
+// 唯一保留的 422 是 `vision_not_supported`——那是**语义上**的 422
+// （请求合法、当前能力做不到），与「请求本身不合法」不是一回事。
+
 // ValidateScenario 校验并规范化客户端传来的场景。
 //
 // ⚠️ 场景字段**全部来自客户端**，属于**数据不是指令**（见 model 包的注释）。
@@ -80,6 +99,9 @@ func ValidateScenario(input model.Scenario) (model.Scenario, error) {
 		return model.Scenario{}, err
 	}
 
+	if !input.Source.Valid() {
+		return model.Scenario{}, fmt.Errorf("source must be one of %s", joinSources())
+	}
 	if !input.Category.Valid() {
 		return model.Scenario{}, fmt.Errorf("category must be one of %s", joinCategories())
 	}
@@ -433,6 +455,14 @@ func joinCategories() string {
 	out := make([]string, 0, len(model.AllCategories))
 	for _, category := range model.AllCategories {
 		out = append(out, string(category))
+	}
+	return strings.Join(out, ", ")
+}
+
+func joinSources() string {
+	out := make([]string, 0, len(model.AllSources))
+	for _, source := range model.AllSources {
+		out = append(out, string(source))
 	}
 	return strings.Join(out, ", ")
 }

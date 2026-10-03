@@ -327,3 +327,33 @@ func TestSnapshotRemainingIsZeroNotNilWhenExhausted(t *testing.T) {
 		t.Fatalf("remaining = %d，期望 0", *snapshot.Remaining)
 	}
 }
+
+// ⚠️ `enabled == false` 必须真的走「不限量」那条路。
+//
+// 这条是被独立审计抓出来的：`Enabled` 曾经只出现在 Snapshot 与测试用的
+// `quotaWouldExceed` 里，`CheckAndConsume` 根本没读它——于是管理端把开关关掉
+// 之后，服务端照样按 daily_turn_limit 返回 429。字段存在、快照也显示
+// enabled=false，但限流照旧，属于典型的「有护栏的样子、没有护栏的作用」。
+func TestCheckAndConsumeUnlimitedWhenDisabled(t *testing.T) {
+	st := storetest.New()
+	st.SetSetting(quotaSettingKey, `{"daily_turn_limit":1,"enabled":false}`)
+	service := NewQuotaService(st)
+	ctx := context.Background()
+
+	for i := 1; i <= 5; i++ {
+		if err := service.CheckAndConsume(ctx, "usr_1"); err != nil {
+			t.Fatalf("第 %d 次不该失败（配额已关闭）：%v", i, err)
+		}
+	}
+	// 关掉的是限流，不是计数：快照仍要显示用量。
+	snapshot, err := service.Snapshot(ctx, "usr_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Used != 5 {
+		t.Fatalf("used = %d，期望 5（关闭配额后仍要计数）", snapshot.Used)
+	}
+	if snapshot.Enabled {
+		t.Fatal("enabled 应当为 false")
+	}
+}

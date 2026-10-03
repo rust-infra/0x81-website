@@ -225,6 +225,19 @@ func (s *QuotaService) CheckAndConsume(ctx context.Context, userID string) error
 	now := s.now()
 	day := dayKey(now)
 
+	// ⚠️ 「关掉配额」和「上限为 0」是两条**不同**的路，但都不能进原子消费那条
+	// 语句：把它塞进 `turns_used < 0` 会让条件永远为假，把所有请求都拒掉。
+	//
+	// 两者的区别只在于**要不要计数**：`limit == 0` 是「不限量但要看用量」，
+	// 所以要 increment；`enabled == false` 是「这个功能关掉了」，照旧计数
+	// （快照仍要显示用量），行为与 Rust 一致（`coach_quota.rs:100-108`）。
+	if !settings.Enabled || settings.DailyTurnLimit == 0 {
+		if _, err := s.store.UsageIncrement(ctx, userID, day); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// 消费成功时的返回值这里用不上（客户端要的是快照，不是这一轮的序号），
 	// 所以只取成功与否。失败时再单独读一次用量——原子消费那条语句在被
 	// WHERE 挡下时没有输出，拿不到 used。

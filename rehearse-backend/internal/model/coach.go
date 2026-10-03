@@ -85,6 +85,23 @@ const (
 	SourceCustom Source = "custom"
 )
 
+// AllSources 是 source 的合法取值。
+var AllSources = []Source{SourcePreset, SourceCustom}
+
+// Valid 用于校验客户端传来的 source。
+//
+// Rust 侧 `CoachScenarioSource` 是真枚举（`models/coach.rs:13-18`），非法值在
+// 反序列化阶段就被拒；Go 的字符串类型不会，所以这里必须显式校验，
+// 否则 `"source":"whatever"` 会被原样收下再回显给客户端。
+func (s Source) Valid() bool {
+	for _, known := range AllSources {
+		if s == known {
+			return true
+		}
+	}
+	return false
+}
+
 // Mode 是演练模式（原 `coach_mode`）。
 type Mode string
 

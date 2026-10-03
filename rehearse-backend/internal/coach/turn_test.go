@@ -521,6 +521,21 @@ func TestTurnRejectsChineseLanguageUntilStage7(t *testing.T) {
 	}
 }
 
+// source 也必须是 preset / custom。Rust 侧它是真枚举，非法值在反序列化
+// 阶段就被拒；Go 的字符串类型不校验的话会被原样收下再回显。
+func TestTurnRejectsUnknownSource(t *testing.T) {
+	h := newHarness(t, validTurnPayload)
+	req := fixtureTurnRequest()
+	req.Scenario.Source = "whatever"
+
+	if err := apiError(t, mustErr(h.service.Turn(ctx(), "usr_1", req))); err.Status != 400 {
+		t.Fatalf("status = %d", err.Status)
+	}
+	if h.calls != 0 {
+		t.Fatalf("不该调 LLM，实际 %d 次", h.calls)
+	}
+}
+
 func TestTurnRejectsInvalidLanguageOverride(t *testing.T) {
 	h := newHarness(t, validTurnPayload)
 	req := fixtureTurnRequest()
