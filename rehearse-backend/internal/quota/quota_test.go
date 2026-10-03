@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/0x81/rehearse-backend/internal/middleware"
-	"github.com/0x81/rehearse-backend/internal/store"
+	"github.com/0x81/rehearse-backend/internal/store/storetest"
 )
 
 // ---------------------------------------------------------------- 日界
@@ -152,66 +152,8 @@ func TestWouldExceed(t *testing.T) {
 
 // ---------------------------------------------------------------- 服务
 
-// fakeStore 是 store.Store 的内存实现，让 quota 的行为可测而不需要真库。
-type fakeStore struct {
-	usage    map[string]uint32
-	settings map[string]string
-}
-
-func newFakeStore() *fakeStore {
-	return &fakeStore{usage: map[string]uint32{}, settings: map[string]string{}}
-}
-
-func (f *fakeStore) Ping(context.Context) error { return nil }
-func (f *fakeStore) Close()                     {}
-
-func (f *fakeStore) key(userID string, day time.Time) string {
-	return userID + "|" + day.Format("2006-01-02")
-}
-
-func (f *fakeStore) UsageGet(_ context.Context, userID string, day time.Time) (uint32, error) {
-	return f.usage[f.key(userID, day)], nil
-}
-
-func (f *fakeStore) UsageTryConsume(
-	ctx context.Context, userID string, day time.Time, limit uint32,
-) (uint32, bool, error) {
-	if limit == 0 {
-		used, err := f.UsageIncrement(ctx, userID, day)
-		return used, true, err
-	}
-	used := f.usage[f.key(userID, day)]
-	if used >= limit {
-		return 0, false, nil
-	}
-	used++
-	f.usage[f.key(userID, day)] = used
-	return used, true, nil
-}
-
-func (f *fakeStore) UsageIncrement(_ context.Context, userID string, day time.Time) (uint32, error) {
-	key := f.key(userID, day)
-	f.usage[key]++
-	return f.usage[key], nil
-}
-
-func (f *fakeStore) SettingGet(_ context.Context, key string) (string, error) {
-	value, ok := f.settings[key]
-	if !ok {
-		return "", store.ErrSettingNotFound
-	}
-	return value, nil
-}
-
-func (f *fakeStore) SettingPut(_ context.Context, key, value string) error {
-	f.settings[key] = value
-	return nil
-}
-
-var _ store.Store = (*fakeStore)(nil)
-
 func TestSettingsFallsBackToDefaultWhenUnset(t *testing.T) {
-	service := New(newFakeStore())
+	service := New(storetest.New())
 	settings, err := service.Settings(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -222,8 +164,8 @@ func TestSettingsFallsBackToDefaultWhenUnset(t *testing.T) {
 }
 
 func TestSettingsFallsBackToDefaultOnBadJSON(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = "{not json"
+	st := storetest.New()
+	st.SetSetting(SettingKey, "{not json")
 	settings, err := New(st).Settings(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -234,7 +176,7 @@ func TestSettingsFallsBackToDefaultOnBadJSON(t *testing.T) {
 }
 
 func TestUpdateSettingsClampsAndPersists(t *testing.T) {
-	st := newFakeStore()
+	st := storetest.New()
 	service := New(st)
 	saved, err := service.UpdateSettings(context.Background(), Settings{DailyTurnLimit: 999_999, Enabled: true})
 	if err != nil {
@@ -254,8 +196,8 @@ func TestUpdateSettingsClampsAndPersists(t *testing.T) {
 
 // 消费到上限后必须返回 429，且带上 limit / used / resets_at（§7.6 的信封）。
 func TestCheckAndConsumeReturnsQuotaExceededAtLimit(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = `{"daily_turn_limit":2,"enabled":true}`
+	st := storetest.New()
+	st.SetSetting(SettingKey, `{"daily_turn_limit":2,"enabled":true}`)
 	service := New(st)
 	ctx := context.Background()
 
@@ -288,8 +230,8 @@ func TestCheckAndConsumeReturnsQuotaExceededAtLimit(t *testing.T) {
 
 // 超限时不能消费：被拒之后用量必须停在 limit，不能悄悄涨上去。
 func TestCheckAndConsumeDoesNotIncrementWhenRejected(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = `{"daily_turn_limit":1,"enabled":true}`
+	st := storetest.New()
+	st.SetSetting(SettingKey, `{"daily_turn_limit":1,"enabled":true}`)
 	service := New(st)
 	ctx := context.Background()
 
@@ -301,19 +243,15 @@ func TestCheckAndConsumeDoesNotIncrementWhenRejected(t *testing.T) {
 			t.Fatal("超限后不该成功")
 		}
 	}
-	used, err := st.UsageGet(ctx, "usr_1", DayKey(time.Now()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if used != 1 {
+	if used := st.Usage("usr_1", DayKey(time.Now())); used != 1 {
 		t.Fatalf("被拒 3 次后用量 = %d，期望仍是 1", used)
 	}
 }
 
 // limit=0 时 CheckAndConsume 永远成功，且仍然计数（快照要能显示用量）。
 func TestCheckAndConsumeUnlimitedStillCounts(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = `{"daily_turn_limit":0,"enabled":true}`
+	st := storetest.New()
+	st.SetSetting(SettingKey, `{"daily_turn_limit":0,"enabled":true}`)
 	service := New(st)
 	ctx := context.Background()
 
@@ -336,8 +274,8 @@ func TestCheckAndConsumeUnlimitedStillCounts(t *testing.T) {
 
 // 快照：剩余量、重置时刻、以及「不限量」与「剩余 0」的区别。
 func TestSnapshotReportsRemainingAndResetsAt(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = `{"daily_turn_limit":10,"enabled":true}`
+	st := storetest.New()
+	st.SetSetting(SettingKey, `{"daily_turn_limit":10,"enabled":true}`)
 	service := New(st)
 	ctx := context.Background()
 
@@ -370,8 +308,8 @@ func TestSnapshotReportsRemainingAndResetsAt(t *testing.T) {
 
 // 用满之后 remaining 是 0 而不是 null —— 与「不限量」必须能区分开。
 func TestSnapshotRemainingIsZeroNotNilWhenExhausted(t *testing.T) {
-	st := newFakeStore()
-	st.settings[SettingKey] = `{"daily_turn_limit":1,"enabled":true}`
+	st := storetest.New()
+	st.SetSetting(SettingKey, `{"daily_turn_limit":1,"enabled":true}`)
 	service := New(st)
 	ctx := context.Background()
 

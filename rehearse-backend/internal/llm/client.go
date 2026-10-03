@@ -24,7 +24,21 @@ type Settings struct {
 	BaseURL string
 	APIKey  string
 	Model   string
+	// Temperature 会随每次请求发出（Rust 侧 `llm_client.rs:519`）。
+	//
+	// ⚠️ 零值 0 是一个**合法**的采样温度，不是「没配置」。缺省值 0.3 由
+	// settings 包在解码时补上，别在这里用零值判断「有没有设」。
+	Temperature float32
 }
+
+// DefaultTemperature 与 moyan-backend 的 `default_temperature` 一致。
+const DefaultTemperature float32 = 0.3
+
+// MinTemperature / MaxTemperature 是管理端能设置的范围（Rust 用 clamp）。
+const (
+	MinTemperature float32 = 0
+	MaxTemperature float32 = 2
+)
 
 // Configured 判断三项是否都填了。任一为空就视为未配置。
 func (s Settings) Configured() bool {
@@ -77,21 +91,40 @@ func New() *Client {
 	}
 }
 
+// chatMessage.Content 是 `any` 而不是 string：纯文本请求发字符串，
+// 带图片的请求发 content parts 数组。OpenAI-compatible 接口两种都收。
 type chatMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
 }
 
 type chatRequest struct {
-	Model          string          `json:"model"`
-	Messages       []chatMessage   `json:"messages"`
-	MaxTokens      int             `json:"max_tokens,omitempty"`
+	Model    string        `json:"model"`
+	Messages []chatMessage `json:"messages"`
+	// Temperature 始终发出——Rust 的 `build_chat_body` 无条件带上它
+	// （`llm_client.rs:519`）。用 `omitempty` 会让 0 被静默丢掉，
+	// 而 0 是合法温度（贪心解码）。
+	Temperature float32 `json:"temperature"`
+	// MaxTokens 只在给了上限时出现（Rust: `if let Some(max_tokens)`）。
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// ResponseFormat 固定要求 JSON 输出，与 Rust 一致。
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
-	Temperature    *float64        `json:"temperature,omitempty"`
+	// ReasoningEffort 只在 DeepSeek 上出现，见 `reasoningEffort`。
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 type responseFormat struct {
 	Type string `json:"type"`
+}
+
+// reasoningEffort 复刻 Rust 的一条特殊处理（`llm_client.rs:526-531`）：
+// DeepSeek Flash 在 OpenCode 网关上默认走思考模式，会把可见生成挤到
+// 推理通道里；陪练与复盘的 JSON 自带推理字段，不需要它。
+func reasoningEffort(model string) string {
+	if strings.Contains(strings.ToLower(model), "deepseek") {
+		return "none"
+	}
+	return ""
 }
 
 type chatResponse struct {
@@ -115,6 +148,19 @@ func (c *Client) ChatJSON(
 	system, user string,
 	maxTokens int,
 ) (string, error) {
+	return c.chatCompletion(ctx, settings, system, user, maxTokens)
+}
+
+// chatCompletion 是两种请求形态的共同实现。
+//
+// `userContent` 是 `any`：纯文本传 string，带图片传 content parts 数组。
+func (c *Client) chatCompletion(
+	ctx context.Context,
+	settings Settings,
+	system string,
+	userContent any,
+	maxTokens int,
+) (string, error) {
 	if !settings.Configured() {
 		return "", ErrNotConfigured
 	}
@@ -123,10 +169,12 @@ func (c *Client) ChatJSON(
 		Model: settings.Model,
 		Messages: []chatMessage{
 			{Role: "system", Content: system},
-			{Role: "user", Content: user},
+			{Role: "user", Content: userContent},
 		},
-		MaxTokens:      maxTokens,
-		ResponseFormat: &responseFormat{Type: "json_object"},
+		Temperature:     settings.Temperature,
+		MaxTokens:       maxTokens,
+		ResponseFormat:  &responseFormat{Type: "json_object"},
+		ReasoningEffort: reasoningEffort(settings.Model),
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal chat request: %w", err)
