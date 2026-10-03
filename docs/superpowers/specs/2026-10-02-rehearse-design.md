@@ -1049,6 +1049,18 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 >
 > **阶段 3 未完成的部分**：真实 Supabase 连通性与 pooler 冒烟、`rehearse_usage` 的并发原子性——都需要真库（`internal/store/usage_integration_test.go` 由 `REHEARSE_TEST_DATABASE_URL` 门控）。
 >
+> ✅ **阶段 3 的接线也补完了**（2026-10-04）：本行的影响面写的是「新增后端 + `moyan-admin` Caddy 分流」，前半句做完了、后半句当时漏了。补齐的是：
+>
+> | 接线点 | 状态 |
+> |---|---|
+> | `docker-compose.yml` 的 `rehearse-backend` 服务 | ✅ 已有（阶段 2）：build 上下文、`REHEARSE_DATABASE_URL:?` / `AUTH_JWT_SECRET:?` 强制校验、LLM env 兜底、healthcheck |
+> | `moyan-admin/Caddyfile` 的路径分流 | ✅ **本次补**：`handle /api/admin/settings/rehearse*` → `rehearse-backend:4324`，放在 `handle /api/*` **之前**（Caddy 的 handle 按书写顺序匹配） |
+> | 网关 `rehearse.0x81.uk` Host 分支 | ✅ **本次补**（原属阶段 4，提前铺）：`website-rs` 的 `resolve_upstream` + compose 的 `PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend` + `depends_on`。不补的话它会**静默落到占位路由**（`/` 返 200 的占位 JSON、其它路径 404）——`routing_table_maps_every_configured_host` 那条测试防的就是这个 |
+> | `moyan-backend` 侧的 `AUTH_*` 改名 | ✅ **本次补**：§7.7 要求两边都改，之前只改了 `rehearse-backend`，`moyan-backend` 还写着 `${MOYAN_JWT_SECRET:-change-me-in-production}`——**两个后端读不同的键名，只配一个的话另一个会带着假默认值起来**，正是 §7.7 要消灭的那种静默故障 |
+> | `.env.example` 的 `REHEARSE_*` | ✅ **本次补**：`REHEARSE_DATABASE_URL` / `REHEARSE_LLM_*` / `REHEARSE_ALLOWED_ORIGINS` |
+>
+> ⚠️ **`moyan-backend` 的改名需要在服务器上同步操作**（§7.7 的三步走）：把 `.env` 里的 `MOYAN_JWT_SECRET` / `MOYAN_ADMIN_TOKEN` **改名、值原样搬**（不要重新生成——换值会让所有已发出的 token 立即失效），再 `docker compose up -d`。现在 compose 用的是 `:?`，`.env` 没改名的话 `docker compose up -d` 会**直接报错退出**（这是设计意图：fail loud 而不是带假密钥启动）。已经在跑的容器不受影响。
+>
 > ⚠️ **阶段 3 与上游的六处有意差异**（都写在代码注释里，这里是索引）：
 >
 > | # | 差异 | 理由 |

@@ -38,11 +38,15 @@ services:
       - DATABASE_BACKEND=${MOYAN_DATABASE_BACKEND:-sqlite}
       - DATABASE_URL=${MOYAN_DATABASE_URL:-sqlite:/data/moyan.db}
       - MONGODB_DATABASE=${MOYAN_MONGODB_DATABASE:-moyan}
-      - JWT_SECRET=${MOYAN_JWT_SECRET:-change-me-in-production}
+      # ⚠️ 键名与默认值都改过（§7.7）：`MOYAN_JWT_SECRET` → `AUTH_JWT_SECRET`，
+      # 并把 `:-change-me-in-production` 换成 `:?`。理由见 rehearse-backend 那段
+      # 注释与 .env.example 顶部：漏改 .env 时「带假密钥正常启动、所有 token
+      # 验不过」比启动失败难查得多。**两个后端必须读到同一个值。**
+      - JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
       - GOOGLE_CLIENT_ID=${MOYAN_GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
-      - ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}
+      - ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
       - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
       # Data collection (yt-dlp) proxy. **默认不注入代理**：本机没有本地代理
@@ -177,6 +181,8 @@ services:
       # （直接指向后端）。将来 auth 抽成独立服务时只改这一个键。
       # 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
       - PROXY_UPSTREAM_AUTH=moyan-backend
+      # 职演（Rehearse）的 API 入口，直连后端（它没有 Web 前端）。
+      - PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
@@ -191,6 +197,7 @@ services:
       - crab-web
       - moyan-web
       - moyan-admin
+      - rehearse-backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
