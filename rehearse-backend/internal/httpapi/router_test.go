@@ -11,7 +11,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/config"
+	"github.com/0x81/rehearse-backend/internal/llm"
+	"github.com/0x81/rehearse-backend/internal/material"
 	"github.com/0x81/rehearse-backend/internal/scenarios"
 	"github.com/0x81/rehearse-backend/internal/store"
 	"github.com/0x81/rehearse-backend/internal/store/storetest"
@@ -21,13 +24,52 @@ import (
 //
 // 用真实目录而不是 stub：路由层要验的恰恰是「场景数据能不能正确下发」，
 // stub 掉就把待验的东西换成了假设。
+//
+// LLM 指向一个本地 httptest 服务（`testLLM`），所以需要走模型的用例也能跑通。
 func newTestRouter(t *testing.T, st store.Store) http.Handler {
+	t.Helper()
+	return NewRouter(newTestDeps(t, st))
+}
+
+// testLLM 是一个永远返回固定内容的 OpenAI 兼容端点。
+//
+// 路由层的用例不该依赖某个具体模型的行为，只需要一个「能返回 JSON」的上游。
+func testLLM(t *testing.T) *llm.Client {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"reply\":\"ok\",\"mood\":\"neutral\"}"}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	client := llm.New()
+	// 让所有用例共用同一个上游：把地址塞进 fallback 而不是每个用例各起一个。
+	testLLMBaseURL = server.URL
+	return client
+}
+
+// testLLMBaseURL 由 testLLM 写入，newTestDeps 读取。
+var testLLMBaseURL string
+
+func newTestDeps(t *testing.T, st store.Store) Deps {
 	t.Helper()
 	catalog, err := scenarios.Load()
 	if err != nil {
 		t.Fatalf("load scenario catalog: %v", err)
 	}
-	return NewRouter(testConfig(), st, catalog)
+	client := testLLM(t)
+	fallback := config.LLMFallback{BaseURL: testLLMBaseURL, APIKey: "sk-test", Model: "test-model"}
+	quota := coach.NewQuotaService(st)
+	llmSettings := coach.NewLLMSettingsService(st, fallback)
+	return Deps{
+		Config:      testConfig(),
+		Store:       st,
+		Catalog:     catalog,
+		Coach:       coach.NewService(quota, llmSettings, catalog, client),
+		Quota:       quota,
+		LLMSettings: llmSettings,
+		OCR:         material.NewOCRService(quota, llmSettings, client),
+		Profile:     material.NewProfileService(quota, llmSettings, client),
+	}
 }
 
 var testSecret = []byte("test-secret-ascii-only")
@@ -43,8 +85,17 @@ func newDegradedStore() *storetest.Fake {
 }
 
 func testConfig() *config.Config {
-	return &config.Config{Port: config.DefaultPort, JWTSecret: testSecret}
+	return &config.Config{
+		Port:       config.DefaultPort,
+		JWTSecret:  testSecret,
+		AdminToken: testAdminToken,
+		// 白名单留空：默认不发 CORS 头（见 middleware/cors.go 的说明）。
+		AllowedOrigins: nil,
+	}
 }
+
+// testAdminToken 是测试里的管理端凭证。
+const testAdminToken = "admin-token-for-tests"
 
 func token(t *testing.T, status string) string {
 	t.Helper()

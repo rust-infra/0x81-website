@@ -19,8 +19,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0x81/rehearse-backend/internal/coach"
 	"github.com/0x81/rehearse-backend/internal/config"
 	"github.com/0x81/rehearse-backend/internal/httpapi"
+	"github.com/0x81/rehearse-backend/internal/llm"
+	"github.com/0x81/rehearse-backend/internal/material"
 	"github.com/0x81/rehearse-backend/internal/scenarios"
 	"github.com/0x81/rehearse-backend/internal/store"
 )
@@ -112,10 +115,29 @@ func run() error {
 	}
 	slog.Info("scenario catalog loaded", "count", catalog.Count())
 
+	// 装配业务服务。
+	//
+	// 依赖方向是一条线，没有环：store ← quota/settings ← coach/material ← httpapi。
+	// LLM 客户端只建一个、三处共用——它内部是一个带 300 秒超时的 http.Client，
+	// 每次请求新建一个客户端会让连接池形同虚设（而 LLM 调用是本服务最贵的一跳）。
+	llmClient := llm.New()
+	quota := coach.NewQuotaService(st)
+	llmSettings := coach.NewLLMSettingsService(st, cfg.LLMFallback)
+	coachService := coach.NewService(quota, llmSettings, catalog, llmClient)
+
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           httpapi.NewRouter(cfg, st, catalog),
+		Addr: addr,
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Config:      cfg,
+			Store:       st,
+			Catalog:     catalog,
+			Coach:       coachService,
+			Quota:       quota,
+			LLMSettings: llmSettings,
+			OCR:         material.NewOCRService(quota, llmSettings, llmClient),
+			Profile:     material.NewProfileService(quota, llmSettings, llmClient),
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		// 写超时要留够：材料解析与 LLM 调用都在这条链路上（阶段 3）。
