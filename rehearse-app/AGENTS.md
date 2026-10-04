@@ -15,9 +15,14 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 ## 跑测试
 
 ```sh
-npm ci        # ⚠️ 必须用 ci，不要用 install（见下）
-npm test      # tsc -p tsconfig.test.json && node --test .test-dist/lib/*.test.js
+npm ci             # ⚠️ 必须用 ci，不要用 install（见下）
+npm test           # tsc -p tsconfig.test.json && node --test .test-dist/lib/*.test.js
+npm run typecheck  # tsc --noEmit —— 覆盖全部 .ts/.tsx
 ```
+
+⚠️ `npm test` 只编译 `src/lib/**/*.ts`（纯逻辑那层）。**屏幕与组件（`.tsx`）不在它的
+include 里**——所以删错一个组件、或改了 props 没跟上，`npm test` 全绿也发现不了。
+改过 `src/app/` 或 `src/components/` 之后要额外跑 `npm run typecheck`。
 
 **17 个测试文件 / 75 个测试**，纯 TypeScript + Node 内置 test runner，不需要 metro / jest，
 也不需要模拟器——`lib/` 那一层是纯逻辑，改完立刻能验。
