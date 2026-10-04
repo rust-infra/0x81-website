@@ -10,7 +10,7 @@
 
    理由：墨言是「宣纸 / 神野墨」的文人气质，面向「每天背几个词」的日常；
    职演面向「一次有 deadline 的职场对话」，需要的是冷静、可信、专业。
-   两者共用同一套 token 结构（paper/card/ink/accent/border + study-* 沉浸面），
+   两者共用同一套 token 结构（paper/card/ink/accent/border + study-* 会话面），
    所以代码层可以共用 theme.ts 的形状，但色值不同。
 
    v1 **只做 light / dark 两套**，不跟系统主题、不做多套皮肤。两套的色相完全对齐
@@ -25,15 +25,24 @@
       口型与声波。结构性的容器（卡片、按钮、标签）一律中性。否则一个页面上会有
       两三个强调色在抢注意力，层级就塌了。
    填充面另有一组：`--accent-fill` / `--on-accent`（浅色主题的深蓝和深色主题的
-   浅蓝不能共用同一个填充色），以及会话页专用的 `--study-accent` 系列。
+   浅蓝不能共用同一个填充色）。
+
+   `--study-*` 是会话页那一套，**跟随主题**：浅色主题下它就是一张浅色面，深色主题下
+   是深色面。别把它当成「恒深色沉浸面」——早先那样做过，结果是浅色主题下演练流程
+   变成「浅 → 黑 → 浅」，在一次任务中间断层。
 ------------------------------------------------------------------ */
 [data-theme="light"]{
   --paper:#F4F5F7; --card:#FFFFFF; --ink:#1A1D21; --ink-light:#4A5058; --ink-muted:#676E78;
   --accent:#2F5D8C; --accent-light:#2F5D8C14; --border:#E3E6EA; --nav-bg:#FFFFFF; --nav-text:#4A5058;
   --accent-fill:#2F5D8C; --on-accent:#FFFFFF; --knob:#FFFFFF;
-  /* 会话页是深色沉浸面，浅色主题的 --accent 压上去只有 2.3:1，必须换一套。 */
-  --study-accent:#6FA3D9; --study-on-accent:#10151A;
-  --study-bg:#12161A; --study-card:#1C2228; --study-text:#E9EDF1; --study-muted:rgba(233,237,241,.62);
+  /* 会话页跟随本主题：浅色主题下它就是一张浅色面，不再做恒深色沉浸面。
+     --study-* 全部指向本主题已有的 token（paper / card / ink / ink-muted / border /
+     accent / on-accent），不引入任何新色值。深色主题在下面自己给一套深色值。 */
+  --study-accent:#2F5D8C; --study-on-accent:#FFFFFF;
+  --study-bg:#F4F5F7; --study-card:#FFFFFF; --study-text:#1A1D21; --study-muted:#676E78;
+  /* 描边单独一个 token：--study-muted 同时要当文字色，两套主题极性相反时一个值兼顾不了
+     （当文字要 #676E78，当描边就比 --border 重 4 倍）。 */
+  --study-line:#E3E6EA;
   --tag-bg:rgba(26,29,33,.06); --tag-text:#4A5058; --button-bg:#1A1D21; --button-text:#FFFFFF;
   --divider:#E3E6EA; --hover:#EDEFF2; --input-bg:#F4F5F7;
   --warn:#A8621A; --warn-bg:#A8621A12;
@@ -48,6 +57,8 @@
   --accent-fill:#4A90D9; --on-accent:#0B1014; --knob:#E9EDF1;
   --study-accent:#6FA3D9; --study-on-accent:#0B1014;
   --study-bg:#0D1114; --study-card:#171C21; --study-text:#E9EDF1; --study-muted:rgba(233,237,241,.58);
+  /* 深色下描边沿用原来的 --study-muted 取值，所以这一套的渲染与改动前逐像素一致。 */
+  --study-line:rgba(233,237,241,.58);
   --tag-bg:rgba(233,237,241,.08); --tag-text:#A8B1BA; --button-bg:#E9EDF1; --button-text:#14181C;
   --divider:#2B3138; --hover:#252B32; --input-bg:#1D2228;
   --warn:#D99A5B; --warn-bg:#D99A5B1A;
@@ -208,9 +219,11 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;
   box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
-/* ---------------- 会话页（沉浸面，用 study-* token） ---------------- */
-/* 会话页是深色沉浸面：把 accent 系列整体换成 study-accent 系列，
-   否则浅色主题的深蓝 accent 压在这个面上只有 2.3:1。一行覆盖，内部组件不用各自判断。 */
+/* ---------------- 会话页（用 study-* token） ---------------- */
+/* 会话页跟随主题：浅色主题给浅色面，深色主题给深色面，各取本主题的 study-* 值。
+   这里仍把 accent 系列整体重映射到 study-accent 系列——两套主题下它的取值恰好等于
+   本主题的 --accent，所以目前是等价的；保留这层间接是为了将来能单独调会话页的强调色，
+   不必去动每一条声明。一行覆盖，内部组件不用各自判断。 */
 .session{
   background:var(--study-bg);color:var(--study-text);
   --accent:var(--study-accent);
@@ -223,17 +236,30 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 .session .shead .t{font-size:14px;font-weight:600;color:var(--study-text)}
 .session .shead .sub{font-size:11px;color:var(--study-muted);margin-top:2px}
 .session .shead .end{
-  margin-left:auto;font-size:12px;color:var(--study-muted);border:1px solid var(--study-muted);
+  margin-left:auto;font-size:12px;color:var(--study-muted);border:1px solid var(--study-line);
   border-radius:999px;padding:5px 12px;flex:0 0 auto;
 }
 .session .sbody{flex:1;overflow-y:auto;padding:0 20px}
 .session .sbody::-webkit-scrollbar{width:0}
 
-/* 头像磁贴 */
+/* 头像磁贴：固定在顶部，不随转录滚动 */
 .avatar-tile{
   position:relative;height:236px;border-radius:20px;background:var(--study-card);
-  display:grid;place-items:center;overflow:hidden;margin-bottom:14px;
+  display:grid;place-items:center;overflow:hidden;
+  margin:0 20px 8px;flex:0 0 auto;
 }
+/* 小溪流：头像下方的状态提示条 */
+.stream{
+  flex:0 0 auto;height:26px;margin:0 20px 6px;display:flex;align-items:center;gap:8px;
+  font-size:11px;color:var(--study-muted);overflow:hidden;white-space:nowrap;
+}
+.stream .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.65}
+.state-listening .stream .dot{animation:pulse 1.9s ease-out infinite}
+.state-thinking .stream .dot{animation:blink 1.2s ease-in-out infinite}
+.state-speaking .stream .dot{opacity:1}
+/* 小溪流文字溢出时缓慢滚动 */
+.stream .marquee{display:inline-block;animation:streamMarquee 8s linear infinite}
+@keyframes streamMarquee{0%{transform:translateX(0)}100%{transform:translateX(-20%)}}
 .avatar{width:150px;height:150px;position:relative}
 .avatar svg{width:100%;height:100%;overflow:visible}
 .avatar .stroke{fill:none;stroke:var(--study-text);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
@@ -263,7 +289,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 }
 .mic-ring{
   position:absolute;right:14px;bottom:14px;width:46px;height:46px;border-radius:23px;
-  background:var(--study-card);border:1px solid var(--study-muted);display:grid;place-items:center;
+  background:var(--study-card);border:1px solid var(--study-line);display:grid;place-items:center;
   color:var(--study-text);
 }
 .mic-ring i{
@@ -278,26 +304,49 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
   transition:color .3s ease}
 .subtitle .zh{font-size:12px;line-height:1.5;color:var(--study-muted);margin-top:5px}
 .subtitle .tools{display:flex;gap:12px;margin-top:9px}
-/* 「上一条」态：只把英文降到 study-muted（13.6:1 → 6.0:1，明显变弱但仍可读）。
-   ⚠️ 中文对照**不能跟着降透明度**——它本身用的 --study-muted 只有 62% alpha，
-   再叠一层会掉到 3:1 以下（双层透明度的经典坑）。 */
+/* 「上一条」态：只把英文降到 study-muted（对 --study-bg 实测，两套主题取较差者：
+   15.5:1 → 4.7:1，明显变弱但仍达 AA）。
+   ⚠️ 中文对照**不能跟着降透明度**——深色主题的 --study-muted 只有 58% alpha，
+   再叠一层会掉到 3:1 以下（双层透明度的经典坑）。浅色主题的 --study-muted 是不透明色，
+   没有这个坑。 */
 .subtitle.past .en{color:var(--study-muted)}
 .subtitle .tools button{
   font:inherit;font-size:11px;background:none;border:none;color:var(--study-muted);
   display:flex;align-items:center;gap:4px;cursor:pointer;padding:0;
 }
 
+/* ---------------- 转录：会话页是一段对话，不是「一轮」 ----------------
+   每轮 = 一条 AI 字幕 + 一条用户消息（反馈贴在用户消息内部）。
+   新的一轮是**往下追加**，旧消息自然上滚——不做原地换字，所以不会闪。
+
+   早先的版本把会话页建模成「一轮」：每轮结束把用户消息 display:none 掉，
+   下一轮再 display:block；字幕用 swapSub() 先整块 opacity:0、等 180ms 换文字再淡回。
+   那 180ms 里字幕是真的空的，加上两处 display 硬切，一共三处跳变——就是「闪动」的来源。
+   转录结构从根上取消了这三处：只追加，不替换。 */
+.transcript{display:flex;flex-direction:column}
+.tround{display:flex;flex-direction:column}
+/* 轮与轮之间用一条分隔线 + 更大留白，让「一问一答」成组 */
+.tround + .tround{margin-top:16px;padding-top:16px;border-top:1px solid var(--study-line)}
+/* 追加时从下方轻微淡入。只动 opacity + transform，不触发重排，
+   所以不会把下面的内容顶得跳一下。 */
+.tround.enter{animation:roundIn .34s cubic-bezier(.22,.61,.36,1) both}
+@keyframes roundIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.tround.enter{animation:none}}
+/* 转录末尾留一点余量，最后一条不会贴着控制条 */
+.transcript::after{content:"";display:block;height:6px}
+
 /* 用户消息 + 贴在内的反馈面板 */
 .umsg{background:var(--study-card);border-radius:16px;padding:14px;margin-bottom:12px}
 .umsg .said{font-size:14px;line-height:1.5;color:var(--study-text);opacity:.92}
 /* interim 是「正在识别」的实时文本，用户盯着它长出来，必须可读。
-   .5 在浅色主题上只有 4.47:1，.62 两套都过。 */
+   这是给 --study-text 叠一层透明度。.62 在两套主题下都过（对 --study-card 实测：
+   浅色 4.76:1、深色 6.34:1）；再往下调就会跌破 4.5:1。 */
 .umsg .said .interim{opacity:.62}
 /* 实时识别时的光标：让「还在长」这件事一眼可见 */
 .caret{display:inline-block;width:2px;height:1em;vertical-align:-2px;margin-left:2px;
   background:var(--study-accent);animation:caret 1s step-end infinite}
 @keyframes caret{0%,100%{opacity:1}50%{opacity:0}}
-.fb{border-top:1px solid var(--study-muted);margin-top:12px;padding-top:11px}
+.fb{border-top:1px solid var(--study-line);margin-top:12px;padding-top:11px}
 .fb .fbhead{
   display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
   color:var(--study-muted);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
@@ -334,7 +383,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 
 /* 接下来可以怎么说 */
 .nextlines{
-  flex:0 0 auto;padding:11px 20px 10px;border-top:1px solid var(--study-muted);
+  flex:0 0 auto;padding:11px 20px 10px;border-top:1px solid var(--study-line);
   background:var(--study-card);
 }
 .nextlines .h{
@@ -352,16 +401,16 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 /* 底部控制条 */
 .controls{
   flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 20px 26px;
-  background:var(--study-card);border-top:1px solid var(--study-muted);
+  background:var(--study-card);border-top:1px solid var(--study-line);
 }
 .controls .mic{
   width:60px;height:60px;border-radius:30px;background:var(--accent-fill);color:var(--on-accent);
   display:grid;place-items:center;flex:0 0 auto;cursor:pointer;
 }
-.controls .mic.off{background:var(--study-card);border:1px solid var(--study-muted);color:var(--study-text)}
+.controls .mic.off{background:var(--study-card);border:1px solid var(--study-line);color:var(--study-text)}
 .controls .ic{
   width:42px;height:42px;border-radius:21px;background:var(--study-card);color:var(--study-text);
-  border:1px solid var(--study-muted);display:grid;place-items:center;flex:0 0 auto;
+  border:1px solid var(--study-line);display:grid;place-items:center;flex:0 0 auto;
 }
 .controls .ic.on{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
 .controls .spacer{flex:1}
@@ -690,47 +739,28 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
           </div>
           <div class="end">结束</div>
         </div>
+        <div class="avatar-tile">
+          <div class="avatar">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring" cx="60" cy="52" r="40"/>
+              <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
+              <circle class="stroke" cx="60" cy="52" r="29"/>
+              <path class="stroke brow" d="M45 43h9"/>
+              <path class="stroke brow" d="M66 43h9"/>
+              <circle class="eye" cx="49.5" cy="53" r="2.3"/>
+              <circle class="eye" cx="70.5" cy="53" r="2.3"/>
+              <path class="mouth" d="M53 68q7 4 14 0"/>
+              <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
+              <path class="wave" d="M104 40q9 12 0 24"/>
+              <path class="wave" d="M16 40q-9 12 0 24"/>
+            </svg>
+          </div>
+          <div class="state-label" id="demoState">正在听</div>
+          <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+        </div>
+        <div class="stream" id="demoStream"><span class="dot"></span><span class="marquee">Daniel · Staff Engineer · 技术深挖 · English (US)</span></div>
         <div class="sbody">
-          <div class="avatar-tile">
-            <div class="avatar">
-              <svg viewBox="0 0 120 120">
-                <circle class="ring" cx="60" cy="52" r="40"/>
-                <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
-                <circle class="stroke" cx="60" cy="52" r="29"/>
-                <path class="stroke brow" d="M45 43h9"/>
-                <path class="stroke brow" d="M66 43h9"/>
-                <circle class="eye" cx="49.5" cy="53" r="2.3"/>
-                <circle class="eye" cx="70.5" cy="53" r="2.3"/>
-                <path class="mouth" d="M53 68q7 4 14 0"/>
-                <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
-                <path class="wave" d="M104 40q9 12 0 24"/>
-                <path class="wave" d="M16 40q-9 12 0 24"/>
-              </svg>
-            </div>
-            <div class="state-label" id="demoState">正在听</div>
-            <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
-          </div>
-
-          <div class="subtitle" id="demoSub">
-            <div class="en" id="demoEn">So you said you led the migration. What was the hardest call you had to make, and what did you give up?</div>
-            <div class="zh" id="demoZh">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
-            <div class="tools">
-              <button id="demoReplay"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
-              <button id="demoBreak" style="color:var(--study-accent);display:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>打断</button>
-            </div>
-          </div>
-
-          <div class="umsg" id="demoMsg">
-            <div class="said" id="demoSaid"><span class="interim">We had two options, um, we can do a big bang</span><span class="caret"></span></div>
-            <div class="fb collapsed" id="demoFb">
-              <div class="fbhead" id="demoFbHead">
-                <span id="demoFbTitle">更自然的说法</span> <span class="zh" id="demoFbCount">· 2 处</span>
-                <span class="preview" id="demoFbPreview">we could either do a big-bang release…</span>
-                <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
-              </div>
-              <div class="fbbody"><div class="fbinner" id="demoFbBody"></div></div>
-            </div>
-          </div>
+          <div class="transcript" id="demoTranscript"></div>
         </div>
         <div class="nextlines" id="demoNext">
           <div class="h">接下来可以怎么说 <span class="zh">Next lines</span></div>
@@ -765,7 +795,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       </p>
     </div>
 
-    <p class="caption">4 · 会话 · 倾听（可交互）<small>麦克风音量环代表「在听」。字幕英文在上、中文对照在下——<strong>用户自己说的话不翻译</strong>。点「播放一轮」看完整状态流转：倾听 → 思考 → 反馈展开 → 说话（自动折叠）→ 回到倾听</small></p>
+    <p class="caption">4 · 会话 · 倾听（可交互）<small>麦克风音量环代表「在听」。字幕英文在上、中文对照在下——<strong>用户自己说的话不翻译</strong>。点「播放一轮」往下追加一轮：倾听 → 思考 → 反馈展开 → 说话 → 新一轮。旧消息留在转录里，随时能上滚回看</small></p>
     <div class="deltas">
       <b>进入倾听（本轮开始）</b>
       用户点麦克风 → STT 启动。上一条 AI 字幕保持 <em>100%</em>，上一轮的反馈保持<em>展开</em>——
@@ -789,47 +819,50 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
           </div>
           <div class="end">结束</div>
         </div>
+        <div class="avatar-tile">
+          <div class="avatar">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring" cx="60" cy="52" r="40"/>
+              <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
+              <circle class="stroke" cx="60" cy="52" r="29"/>
+              <path class="stroke brow" d="M45 43h9"/>
+              <path class="stroke brow" d="M66 43h9"/>
+              <circle class="eye" cx="49.5" cy="53" r="2.3"/>
+              <circle class="eye" cx="70.5" cy="53" r="2.3"/>
+              <path class="mouth" d="M53 68q7 4 14 0"/>
+              <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
+              <path class="wave" d="M104 40q9 12 0 24"/>
+              <path class="wave" d="M16 40q-9 12 0 24"/>
+            </svg>
+          </div>
+          <div class="state-label">思考中</div>
+          <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+        </div>
+        <div class="stream"><span class="dot"></span><span>Daniel · Staff Engineer · 更自然的说法 · 2 处</span></div>
         <div class="sbody">
-          <div class="avatar-tile">
-            <div class="avatar">
-              <svg viewBox="0 0 120 120">
-                <circle class="ring" cx="60" cy="52" r="40"/>
-                <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
-                <circle class="stroke" cx="60" cy="52" r="29"/>
-                <path class="stroke brow" d="M45 43h9"/>
-                <path class="stroke brow" d="M66 43h9"/>
-                <circle class="eye" cx="49.5" cy="53" r="2.3"/>
-                <circle class="eye" cx="70.5" cy="53" r="2.3"/>
-                <path class="mouth" d="M53 68q7 4 14 0"/>
-                <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
-                <path class="wave" d="M104 40q9 12 0 24"/>
-                <path class="wave" d="M16 40q-9 12 0 24"/>
-              </svg>
-            </div>
-            <div class="state-label">思考中</div>
-            <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
-          </div>
-
-          <div class="subtitle past">
-            <div class="en">So you said you led the migration. What was the hardest call…</div>
-            <div class="zh">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
-          </div>
-
-          <div class="umsg">
-            <div class="said">We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.</div>
-            <div class="fb">
-              <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
+          <div class="transcript">
+            <div class="tround">
+              <div class="subtitle past">
+                <div class="en">So you said you led the migration. What was the hardest call…</div>
+                <div class="zh">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
               </div>
-              <div class="fix">
-                <div class="wrong">we can do a big bang release</div>
-                <div class="right"><span class="arrow">→</span> we could either do a big-bang release</div>
-                <div class="why">「either … or」才能把两个选项框成一组；单说 can 听起来像在罗列，不像在比较。</div>
-              </div>
-              <div class="fix">
-                <div class="wrong">We choose slowly</div>
-                <div class="right"><span class="arrow">→</span> We went with the slower path</div>
-                <div class="why">描述过去做的决定用过去式；「slowly」修饰动作，修饰「路径」要用 slower path。</div>
+              <div class="umsg">
+                <div class="said">We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.</div>
+                <div class="fb">
+                  <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
+                  </div>
+                  <div class="fix">
+                    <div class="wrong">we can do a big bang release</div>
+                    <div class="right"><span class="arrow">→</span> we could either do a big-bang release</div>
+                    <div class="why">「either … or」才能把两个选项框成一组；单说 can 听起来像在罗列，不像在比较。</div>
+                  </div>
+                  <div class="fix">
+                    <div class="wrong">We choose slowly</div>
+                    <div class="right"><span class="arrow">→</span> We went with the slower path</div>
+                    <div class="why">描述过去做的决定用过去式；「slowly」修饰动作，修饰「路径」要用 slower path。</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -877,42 +910,51 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
           </div>
           <div class="end">结束</div>
         </div>
+        <div class="avatar-tile">
+          <div class="avatar">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring" cx="60" cy="52" r="40"/>
+              <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
+              <circle class="stroke" cx="60" cy="52" r="29"/>
+              <path class="stroke brow" d="M45 43h9"/>
+              <path class="stroke brow" d="M66 43h9"/>
+              <circle class="eye" cx="49.5" cy="53" r="2.3"/>
+              <circle class="eye" cx="70.5" cy="53" r="2.3"/>
+              <path class="mouth" d="M53 68q7 4 14 0"/>
+              <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
+              <path class="wave" d="M104 40q9 12 0 24"/>
+              <path class="wave" d="M16 40q-9 12 0 24"/>
+            </svg>
+          </div>
+          <div class="state-label">正在说</div>
+          <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+        </div>
+        <div class="stream"><span class="dot"></span><span>Daniel · Staff Engineer · 第 3 / 12 轮</span></div>
         <div class="sbody">
-          <div class="avatar-tile">
-            <div class="avatar">
-              <svg viewBox="0 0 120 120">
-                <circle class="ring" cx="60" cy="52" r="40"/>
-                <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
-                <circle class="stroke" cx="60" cy="52" r="29"/>
-                <path class="stroke brow" d="M45 43h9"/>
-                <path class="stroke brow" d="M66 43h9"/>
-                <circle class="eye" cx="49.5" cy="53" r="2.3"/>
-                <circle class="eye" cx="70.5" cy="53" r="2.3"/>
-                <path class="mouth" d="M53 68q7 4 14 0"/>
-                <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
-                <path class="wave" d="M104 40q9 12 0 24"/>
-                <path class="wave" d="M16 40q-9 12 0 24"/>
-              </svg>
+          <div class="transcript">
+            <div class="tround">
+              <div class="subtitle past">
+                <div class="en">So you said you led the migration. What was the hardest call you had to make, and what did you give up?</div>
+                <div class="zh">你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？</div>
+              </div>
+              <div class="umsg">
+                <div class="said">We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.</div>
+                <div class="fb collapsed">
+                  <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
+                    <span class="preview">we could either do a big-bang release…</span>
+                    <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex:0 0 auto"><path d="M6 15l6-6 6 6"/></svg>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="state-label">正在说</div>
-            <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
-          </div>
-
-          <div class="subtitle">
-            <div class="en">Right — but what I want to hear is the trade-off. You took the slower path, so what did you give up?</div>
-            <div class="zh">好——但我想听的是取舍。你选了慢的那条路，那你放弃了什么？</div>
-            <div class="tools">
-              <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
-              <button style="color:var(--study-accent)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>打断</button>
-            </div>
-          </div>
-
-          <div class="umsg">
-            <div class="said">We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.</div>
-            <div class="fb collapsed">
-              <div class="fbhead">更自然的说法 <span class="zh">· 2 处</span>
-                <span class="preview">we could either do a big-bang release…</span>
-                <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex:0 0 auto"><path d="M6 15l6-6 6 6"/></svg>
+            <div class="tround">
+              <div class="subtitle">
+                <div class="en">Right — but what I want to hear is the trade-off. You took the slower path, so what did you give up?</div>
+                <div class="zh">好——但我想听的是取舍。你选了慢的那条路，那你放弃了什么？</div>
+                <div class="tools">
+                  <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
+                  <button style="color:var(--study-accent)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>打断</button>
+                </div>
               </div>
             </div>
           </div>
@@ -935,11 +977,11 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         </div>
       </div>
     </div>
-    <p class="caption">6 · 会话 · 说话<small>与屏 4/5 <strong>同一轮</strong>，只是状态不同。AI 字幕换成新回复、反馈面板自动折叠成一行、麦克风此刻是「打断」。底部 Tab 里那条 <code>on</code> 是反馈模式开关</small></p>
+    <p class="caption">6 · 会话 · 说话<small>转录已追加到第二轮。上一轮的字幕变「上一条」、反馈折叠成一行；新字幕是当前教练的追问。麦克风此刻是「打断」。底部 Tab 里那条 <code>on</code> 是反馈模式开关</small></p>
     <div class="deltas">
       <b>思考 → 说话</b>
-      AI 字幕<em>换成本轮回复</em>，从 40% 淡入到 100%；旧的那条上滚。<br>
-      反馈面板<em>自动折叠成一行</em>——把注意力让给新回复，但点一下还能展开。<br>
+      新字幕<em>追加到转录</em>，旧字幕保持「上一条」态、反馈自动折叠——不是原地换字，所以不会闪。<br>
+      旧消息留在转录里，上滚就能回看。<br>
       「接下来可以怎么说」<em>换成新的</em>（讲的是下一句，不重复已出现的内容）。<br>
       麦克风变为<em>「打断」</em>：点了立刻 stop TTS 并进入倾听，这是唯一一个用户能插队的转场。
     </div>
@@ -960,49 +1002,52 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
           </div>
           <div class="end">结束</div>
         </div>
+        <div class="avatar-tile">
+          <div class="avatar">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring" cx="60" cy="52" r="40"/>
+              <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
+              <circle class="stroke" cx="60" cy="52" r="29"/>
+              <path class="stroke brow" d="M45 43h9"/>
+              <path class="stroke brow" d="M66 43h9"/>
+              <circle class="eye" cx="49.5" cy="53" r="2.3"/>
+              <circle class="eye" cx="70.5" cy="53" r="2.3"/>
+              <path class="mouth" d="M53 68q7 4 14 0"/>
+              <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
+              <path class="wave" d="M104 40q9 12 0 24"/>
+              <path class="wave" d="M16 40q-9 12 0 24"/>
+            </svg>
+          </div>
+          <div class="state-label">正在说</div>
+          <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
+        </div>
+        <div class="stream"><span class="dot"></span><span>林薇 · HRBP · 表达策略 · 2 处</span></div>
         <div class="sbody">
-          <div class="avatar-tile">
-            <div class="avatar">
-              <svg viewBox="0 0 120 120">
-                <circle class="ring" cx="60" cy="52" r="40"/>
-                <path class="stroke" d="M18 116c0-19 19-30 42-30s42 11 42 30"/>
-                <circle class="stroke" cx="60" cy="52" r="29"/>
-                <path class="stroke brow" d="M45 43h9"/>
-                <path class="stroke brow" d="M66 43h9"/>
-                <circle class="eye" cx="49.5" cy="53" r="2.3"/>
-                <circle class="eye" cx="70.5" cy="53" r="2.3"/>
-                <path class="mouth" d="M53 68q7 4 14 0"/>
-                <g class="dots"><circle cx="52" cy="53" r="2.6"/><circle cx="60" cy="53" r="2.6"/><circle cx="68" cy="53" r="2.6"/></g>
-                <path class="wave" d="M104 40q9 12 0 24"/>
-                <path class="wave" d="M16 40q-9 12 0 24"/>
-              </svg>
-            </div>
-            <div class="state-label">正在说</div>
-            <div class="mic-ring"><i></i><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg></div>
-          </div>
-
-          <div class="subtitle">
-            <div class="en">上一份工作你只待了 11 个月，为什么这么快就想走？</div>
-            <div class="tools">
-              <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
-            </div>
-          </div>
-
-          <div class="umsg">
-            <div class="said">嗯……主要是我觉得，那个，成长空间不太够了，然后团队也在调整，所以就……</div>
-            <div class="fb">
-              <div class="fbhead">表达策略 <span class="zh">· 2 处</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
+          <div class="transcript">
+            <div class="tround">
+              <div class="subtitle">
+                <div class="en">上一份工作你只待了 11 个月，为什么这么快就想走？</div>
+                <div class="tools">
+                  <button><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>
+                </div>
               </div>
-              <div class="fix">
-                <div class="wrong">嗯……那个……然后就……</div>
-                <div class="right"><span class="arrow">→</span> 去掉填充词，先说结论</div>
-                <div class="why">HR 问「为什么走」，真正想听的是<strong>你的判断</strong>。犹豫的语气会被读成「有没说出口的原因」。</div>
-              </div>
-              <div class="fix">
-                <div class="wrong">成长空间不太够了</div>
-                <div class="right"><span class="arrow">→</span> 我想做的是 X，但当时的团队重心在 Y，两边短期内对不齐</div>
-                <div class="why">说「成长空间不够」是在评价前东家；说「我想要什么、当时为什么对不齐」是在陈述事实。<strong>不贬低、可验证</strong>。</div>
+              <div class="umsg">
+                <div class="said">嗯……主要是我觉得，那个，成长空间不太够了，然后团队也在调整，所以就……</div>
+                <div class="fb">
+                  <div class="fbhead">表达策略 <span class="zh">· 2 处</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="margin-left:auto"><path d="M6 15l6-6 6 6"/></svg>
+                  </div>
+                  <div class="fix">
+                    <div class="wrong">嗯……那个……然后就……</div>
+                    <div class="right"><span class="arrow">→</span> 去掉填充词，先说结论</div>
+                    <div class="why">HR 问「为什么走」，真正想听的是<strong>你的判断</strong>。犹豫的语气会被读成「有没说出口的原因」。</div>
+                  </div>
+                  <div class="fix">
+                    <div class="wrong">成长空间不太够了</div>
+                    <div class="right"><span class="arrow">→</span> 我想做的是 X，但当时的团队重心在 Y，两边短期内对不齐</div>
+                    <div class="why">说「成长空间不够」是在评价前东家；说「我想要什么、当时为什么对不齐」是在陈述事实。<strong>不贬低、可验证</strong>。</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1654,7 +1699,7 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
             </div>
           </div>
 
-          <div class="alert" style="background:var(--study-card);border-color:var(--study-muted)">
+          <div class="alert" style="background:var(--study-card);border-color:var(--study-line)">
             <div class="ic" style="color:var(--accent)">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.2v.1"/></svg>
             </div>
@@ -1731,54 +1776,124 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
 
   // ================= 会话演示 =================
   var dPhone=$('demoPhone'), dTitle=$('demoTitle'), dRound=$('demoRound'),
-      dSub=$('demoSub'), dEn=$('demoEn'), dZh=$('demoZh'),
-      dMsg=$('demoMsg'), dSaid=$('demoSaid'), dFb=$('demoFb'),
-      dFbHead=$('demoFbHead'), dFbTitle=$('demoFbTitle'), dFbCount=$('demoFbCount'),
-      dFbPreview=$('demoFbPreview'), dFbBody=$('demoFbBody'),
+      dTranscript=$('demoTranscript'), dStream=$('demoStream'),
       dNl=$('demoNl'), dMic=$('demoMic'), dBreak=$('demoBreak'),
       dNote=$('demoNote'), dBar=document.querySelector('.demo-bar');
 
+  // 每个场景三段对话。会话页是一段转录，所以内容是 rounds[] 而不是单轮的
+  // opening / reply。第 3 轮之后没有第 4 轮——演示到这里就够看出「转录在长」。
   var SCEN = {
     en: {
       name:'English', dim:'英文纠的是语言正确性（时态、搭配、地道说法）',
-      title:'技术深挖 · English (US)', round:'第 3 / 12 轮',
-      opening:['So you said you led the migration. What was the hardest call you had to make, and what did you give up?',
-               '你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？'],
-      user:'We had two options, um, we could either do a big-bang release, or we could do it slowly. We went with the slower path.',
-      fbTitle:'更自然的说法', fbCount:'2 处',
-      fbPreview:'we could either do a big-bang release…',
-      fixes:[
-        ['we can do a big bang release','we could either do a big-bang release',
-         '「either … or」才能把两个选项框成一组；单说 can 听起来像在罗列，不像在比较。'],
-        ['We choose slowly','We went with the slower path',
-         '描述过去做的决定用过去式；「slowly」修饰动作，修饰「路径」要用 slower path。']
-      ],
-      reply:['Right — but what I want to hear is the trade-off. You took the slower path, so what did you give up?',
-             '好——但我想听的是取舍。你选了慢的那条路，那你放弃了什么？'],
-      next:[
-        ['Mainly the ability to roll back quickly. With a big bang we would have had no safe exit.',
-         '主要是快速回滚的能力——一次性上线就没有安全退路了。'],
-        ['We also would not have caught the data drift early. That alone made it worth it.',
-         '也没法那么早发现数据漂移。光这一条就值了。']
+      title:'技术深挖 · English (US)', persona:'Daniel · Staff Engineer',
+      total:12, immersive:false,
+      rounds:[
+        {
+          coach:['So you said you led the migration. What was the hardest call you had to make, and what did you give up?',
+                 '你说你主导了这次迁移。最难的那个决定是什么？你放弃了什么？'],
+          user:'We had two options, um, we can do a big bang release, or we can do it, uh, slowly. We choose slowly.',
+          fb:{ title:'更自然的说法', count:'2 处', preview:'we could either do a big-bang release…',
+            fixes:[
+              ['we can do a big bang release','we could either do a big-bang release',
+               '「either … or」才能把两个选项框成一组；单说 can 听起来像在罗列，不像在比较。'],
+              ['We choose slowly','We went with the slower path',
+               '描述过去做的决定用过去式；「slowly」修饰动作，修饰「路径」要用 slower path。']
+            ] },
+          next:[
+            ['Mainly the ability to roll back quickly. With a big bang we would have had no safe exit.',
+             '主要是快速回滚的能力——一次性上线就没有安全退路了。'],
+            ['We also would not have caught the data drift early. That alone made it worth it.',
+             '也没法那么早发现数据漂移。光这一条就值了。']
+          ]
+        },
+        {
+          coach:['Okay. And when the timeline slipped, how did you tell the stakeholders?',
+                 '好。排期往后滑的时候，你怎么跟业务方交代的？'],
+          user:'I say them the truth, we need more time. They was not happy but we cannot do faster.',
+          fb:{ title:'更自然的说法', count:'2 处', preview:'I was straight with them…',
+            fixes:[
+              ['I say them the truth','I was straight with them',
+               'say 不能直接带人作宾语，要说 say to them 或 tell them；这里更地道的说法是 be straight with someone。'],
+              ['They was not happy',"They weren't happy",
+               'they 是复数，be 动词要用 were；口语里缩写 weren\'t 更自然。']
+            ] },
+          next:[
+            ['I gave them two options instead of one date — ship the core first, or ship everything two weeks later.',
+             '我给了他们两个选项而不是一个日期——先上核心，或者整体晚两周。'],
+            ['I also brought the data showing why the estimate had moved.',
+             '我还带了数据，说明估算为什么会变。']
+          ]
+        },
+        {
+          coach:['And looking back — would you make the same call again?',
+                 '回头看——你还会做同样的决定吗？'],
+          user:'Yes, I think so. But next time I will, um, I will write down the assumption first, so we can check it early.',
+          fb:{ title:'更自然的说法', count:'2 处', preview:"next time I'd write it down…",
+            fixes:[
+              ["next time I will, um, I will write down","next time I'd write it down",
+               '重复的 I will 加上填充词 um，会让对方以为你在犹豫；用 I\'d 更简洁也更确定。'],
+              ['so we can check it early','so we could catch it early',
+               '描述当时设想的做法用 could；catch 比 check 更能表达「及早发现并拦住」。']
+            ] },
+          next:[
+            ["The main thing I'd change is making the assumptions explicit on day one.",
+             '我唯一会改的，是第一天就把假设写清楚。'],
+            ['We spent two weeks on something we could have ruled out in an hour.',
+             '我们花了两周做的事，本来一小时就能排除。']
+          ]
+        }
       ]
     },
     zh: {
       name:'中文', dim:'中文纠的是表达策略（不贬低、可验证、先说结论）',
-      title:'HR 初筛 · 中文', round:'第 5 / 8 轮 · 沉浸模式',
-      opening:['上一份工作你只待了 11 个月，为什么这么快就想走？',''],
-      user:'嗯……主要是我觉得，那个，成长空间不太够了，然后团队也在调整，所以就……',
-      fbTitle:'表达策略', fbCount:'2 处',
-      fbPreview:'去掉填充词，先说结论…',
-      fixes:[
-        ['嗯……那个……然后就……','去掉填充词，先说结论',
-         'HR 问「为什么走」，真正想听的是你的判断。犹豫的语气会被读成「有没说出口的原因」。'],
-        ['成长空间不太够了','我想做的是 X，但当时的团队重心在 Y，两边短期内对不齐',
-         '说「成长空间不够」是在评价前东家；说「我想要什么、当时为什么对不齐」是在陈述事实。不贬低、可验证。']
-      ],
-      reply:['我更想知道的是你当时的判断标准。团队重心变了，那你想做的方向是什么？',''],
-      next:[
-        ['我在上一份工作负责的是支付链路的稳定性，这个方向我还想继续做深。',
-         '先给「我想做什么」，再解释为什么当时对不齐。']
+      title:'HR 初筛 · 中文', persona:'林薇 · HRBP',
+      total:8, immersive:true,   // 中文场景即沉浸模式：全程不出现反馈面板
+      rounds:[
+        {
+          coach:['上一份工作你只待了 11 个月，为什么这么快就想走？',''],
+          user:'嗯……主要是我觉得，那个，成长空间不太够了，然后团队也在调整，所以就……',
+          fb:{ title:'表达策略', count:'2 处', preview:'去掉填充词，先说结论…',
+            fixes:[
+              ['嗯……那个……然后就……','去掉填充词，先说结论',
+               'HR 问「为什么走」，真正想听的是你的判断。犹豫的语气会被读成「有没说出口的原因」。'],
+              ['成长空间不太够了','我想做的是 X，但当时的团队重心在 Y，两边短期内对不齐',
+               '说「成长空间不够」是在评价前东家；说「我想要什么、当时为什么对不齐」是在陈述事实。不贬低、可验证。']
+            ] },
+          next:[
+            ['我在上一份工作负责的是支付链路的稳定性，这个方向我还想继续做深。',
+             '先给「我想做什么」，再解释为什么当时对不齐。']
+          ]
+        },
+        {
+          coach:['那你当时有没有跟主管提过？',''],
+          user:'提过一次吧，但他好像没太当回事，后来我也就没再说了。',
+          fb:{ title:'表达策略', count:'2 处', preview:'提过，而且我带了具体的例子…',
+            fixes:[
+              ['提过一次吧','提过，而且我带了具体的例子',
+               '「吧」会让对方怀疑你到底提没提；要么确定地说提过，要么说清为什么没提。'],
+              ['他好像没太当回事','当时我们没谈拢优先级',
+               '「没当回事」是在猜对方的动机，你无从证实；说「没谈拢」是描述事实，也把责任摊平。']
+            ] },
+          next:[
+            ['我当时的判断是，团队要先保交付，我这个诉求排在后面。',
+             '把「他不在意」换成「当时的优先级是这样」，既真实也不贬低人。']
+          ]
+        },
+        {
+          coach:['如果现在回头看，你会怎么处理这件事？',''],
+          user:'可能会早点说，然后……嗯，就是会更直接一点吧。',
+          fb:{ title:'表达策略', count:'2 处', preview:'我会在第三个月就提…',
+            fixes:[
+              ['可能会早点说','我会在第三个月就提，而不是等到年底',
+               '「早点」没有刻度，听的人不知道你到底学到了什么；给一个具体的时间点。'],
+              ['就是会更直接一点吧','我会直接说「我想做 X，需要什么支持」',
+               '「更直接」是形容词不是动作；把你要说的那句话本身说出来。']
+            ] },
+          next:[
+            ['我后来学会的是：诉求要具体到「要什么、什么时候要、不给会怎样」。',
+             '把复盘落到一句可复用的方法上，而不是一个形容词。']
+          ]
+        }
       ]
     }
   };
@@ -1786,111 +1901,216 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
   var lang = 'en';
   var S = function(){ return SCEN[lang]; };
   var gen = 0;              // 世代号：任何打断都 ++，旧的流程走到下一步就自行退出
-  var nextIdx = 0;
+  var roundIdx = 0;         // 当前播到第几轮
+  var nextLineIdx = 0;      // 「接下来」轮换索引
 
   function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
   function setNote(t){ if (dNote) dNote.textContent = t; }
-
-  async function swapSub(enText, zhText){
-    dSub.style.opacity = '0';
-    await wait(180);
-    dEn.textContent = enText;
-    dZh.textContent = zhText;
-    dZh.style.display = zhText ? '' : 'none';   // 中文场景没有「对照」这一行
-    dSub.style.opacity = '1';
+  function esc(t){ var d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+  function scrollBody(){
+    var sb = dTranscript && dTranscript.closest('.sbody');
+    if (sb) sb.scrollTop = sb.scrollHeight;
   }
 
-  function renderFb(){
-    var s = S();
-    dFbTitle.textContent = s.fbTitle;
-    dFbCount.textContent = '· ' + s.fbCount;
-    dFbPreview.textContent = s.fbPreview;
-    dFbBody.innerHTML = s.fixes.map(function(f){
-      return '<div class="fix"><div class="wrong">' + f[0] + '</div>' +
-             '<div class="right"><span class="arrow">→</span> ' + f[1] + '</div>' +
-             '<div class="why">' + f[2] + '</div></div>';
-    }).join('');
+  // --- 转录 DOM 操作 ---
+
+  // 追加一轮：教练字幕 + 空用户消息
+  function appendRound(enText, zhText){
+    var tr = document.createElement('div');
+    tr.className = 'tround enter';
+    tr.innerHTML =
+      '<div class="subtitle">' +
+        '<div class="en">' + esc(enText) + '</div>' +
+        (zhText ? '<div class="zh">' + esc(zhText) + '</div>' : '') +
+        '<div class="tools">' +
+          '<button class="replay-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg>重听</button>' +
+          '<button class="break-btn" style="color:var(--study-accent);display:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>打断</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="umsg"><div class="said"><span class="interim"></span><span class="caret"></span></div></div>';
+    dTranscript.appendChild(tr);
+    scrollBody();
+    return tr;
   }
 
-  function renderNext(){
-    var list = S().next;
-    var n = list[nextIdx % list.length];
-    nextIdx++;
-    dNl.innerHTML = n[0] + (n[1] ? '<span class="zh">' + n[1] + '</span>' : '');
+  // 在当前最后一轮里填入 interim 文本
+  function setCurrentInterim(text){
+    var last = dTranscript.lastElementChild;
+    if (!last) return;
+    var said = last.querySelector('.said');
+    if (!said) return;
+    said.innerHTML = '<span class="interim">' + esc(text.slice(0, 34)) + '</span><span class="caret"></span>';
   }
 
-  function typeInto(el, text, my){
+  // 在当前最后一轮里做打字动画
+  function typeIntoCurrent(text, my){
     return new Promise(function(res){
+      var last = dTranscript.lastElementChild;
+      if (!last) { res(); return; }
+      var said = last.querySelector('.said');
+      if (!said) { res(); return; }
+      said.innerHTML = '<span class="interim"></span><span class="caret"></span>';
+      var span = said.firstChild;
       var i = 0;
-      el.innerHTML = '<span class="interim"></span><span class="caret"></span>';
-      var span = el.firstChild;
       var t = setInterval(function(){
         if (my !== gen) { clearInterval(t); res(); return; }
         i = Math.min(i + 2, text.length);
         span.textContent = text.slice(0, i);
+        scrollBody();
         if (i >= text.length) { clearInterval(t); res(); }
       }, 36);
     });
   }
 
-  // --- 一轮的四个步骤，拆开是为了让麦克风点击能从中途接上 ---
+  // 冻结当前用户消息（去掉 interim + 光标）
+  function freezeCurrent(){
+    var last = dTranscript.lastElementChild;
+    if (!last) return;
+    var said = last.querySelector('.said');
+    if (!said) return;
+    var interim = said.querySelector('.interim');
+    said.textContent = interim ? interim.textContent : '';
+  }
+
+  // 把当前轮的字幕标为「上一条」
+  function markCurrentPast(){
+    var last = dTranscript.lastElementChild;
+    if (!last) return;
+    var sub = last.querySelector('.subtitle');
+    if (sub) sub.classList.add('past');
+  }
+
+  // 在当前轮展开反馈
+  function expandFb(fb){
+    var last = dTranscript.lastElementChild;
+    if (!last) return;
+    var umsg = last.querySelector('.umsg');
+    if (!umsg) return;
+    var said = umsg.querySelector('.said');
+    var html = '<div class="fb">' +
+      '<div class="fbhead">' + esc(fb.title) + ' <span class="zh">' + esc(fb.count) + '</span>' +
+        '<span class="preview">' + esc(fb.preview) + '</span>' +
+        '<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>' +
+      '</div>' +
+      '<div class="fbbody"><div class="fbinner">' +
+        fb.fixes.map(function(f){
+          return '<div class="fix"><div class="wrong">' + esc(f[0]) + '</div>' +
+                 '<div class="right"><span class="arrow">→</span> ' + esc(f[1]) + '</div>' +
+                 '<div class="why">' + esc(f[2]) + '</div></div>';
+        }).join('') +
+      '</div></div>' +
+    '</div>';
+    umsg.innerHTML = '';
+    if (said) umsg.appendChild(said);
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    var fbEl = wrap.firstChild;
+    umsg.appendChild(fbEl);
+    fbEl.querySelector('.fbhead').addEventListener('click', function(){
+      fbEl.classList.toggle('collapsed');
+      setNote(fbEl.classList.contains('collapsed')
+        ? '反馈折叠成一行预览——把注意力让给新回复，点标题可再展开。'
+        : '反馈展开——它评价的就是这条消息，所以贴在气泡内部而不是单独一块。');
+    });
+  }
+
+  // 折叠前一轮的反馈
+  function collapsePrevFb(){
+    var rounds = dTranscript.querySelectorAll('.tround');
+    if (rounds.length < 2) return;
+    var fb = rounds[rounds.length - 2].querySelector('.fb');
+    if (fb) fb.classList.add('collapsed');
+  }
+
+  function renderNext(list){
+    var n = list[nextLineIdx % list.length];
+    nextLineIdx++;
+    dNl.innerHTML = esc(n[0]) + (n[1] ? '<span class="zh">' + esc(n[1]) + '</span>' : '');
+  }
+
+  function updateStream(){
+    if (!dStream) return;
+    var s = S();
+    var r = s.rounds[roundIdx] || s.rounds[0];
+    var parts = [s.persona];
+    if (r && r.fb && !s.immersive) parts.push(r.fb.title + ' · ' + r.fb.count);
+    parts.push('第 ' + (roundIdx + 1) + ' / ' + s.total + ' 轮');
+    dStream.innerHTML = '<span class="dot"></span><span class="marquee">' + esc(parts.join(' · ')) + '</span>';
+  }
+
+  // --- 核心流程 ---
 
   function resetToStart(){
+    if (!dTranscript) return;
+    dTranscript.innerHTML = '';
+    roundIdx = 0;
+    nextLineIdx = 0;
     var s = S();
-    dMsg.style.display = 'block';
-    dFb.classList.add('collapsed');
-    dSub.classList.remove('past');
-    dSaid.innerHTML = '<span class="interim">' + s.user.slice(0, 34) + '</span><span class="caret"></span>';
-    dNl.innerHTML = s.next[0][0] + (s.next[0][1] ? '<span class="zh">' + s.next[0][1] + '</span>' : '');
+    var r = s.rounds[0];
+    if (!r) return;
+    appendRound(r.coach[0], r.coach[1]);
+    setCurrentInterim(r.user);
+    renderNext(r.next);
+    updateStream();
     setState('listening');
-  }
-
-  function showUserFinal(){
-    dSaid.innerHTML = S().user;    // 去掉 interim 与光标 = 冻结成 final
-  }
-
-  async function afterUserSpoke(my){
-    showUserFinal();
-    setState('thinking');
-    dSub.classList.add('past');
-    setNote('「说完了」→ 气泡冻结成 final，AI 字幕淡到「上一条」态，麦克风禁用。');
-    await wait(1300); if (my !== gen) return;
-
-    renderFb();
-    dFb.classList.remove('collapsed');
-    setNote('响应到达 → 反馈面板展开。它是在这一刻才出现的，不是用户说完就有。');
-    await wait(1900); if (my !== gen) return;
-
-    await stepSpeaking(my);
-  }
-
-  async function stepSpeaking(my){
-    setState('speaking');
-    dSub.classList.remove('past');
-    await swapSub(S().reply[0], S().reply[1]);
-    if (my !== gen) return;
-
-    dFb.classList.add('collapsed');
-    nextIdx = 0;
-    renderNext();
-    setNote('说话中 → 反馈自动折叠成一行（点标题可展开），「接下来」换成新的。点麦克风可以打断。');
-    await wait(3200); if (my !== gen) return;
-
-    setState('listening');
-    await swapSub(S().opening[0], S().opening[1]);
-    if (my !== gen) return;
-    dMsg.style.display = 'none';
-    setNote('一轮结束，回到倾听。按「播放一轮」再来一次。');
+    setNote('倾听中 → 气泡显示实时 interim（浅色 + 光标）。');
   }
 
   async function playTurn(){
     var my = ++gen;
-    resetToStart();
+    var s = S();
+    var r = s.rounds[roundIdx];
+    if (!r) { setNote('没有更多轮次了。'); return; }
+
+    // 空 transcript 时先初始化
+    if (!dTranscript.children.length) {
+      resetToStart();
+      await wait(300); if (my !== gen) return;
+    }
+
     setNote('倾听中 → 气泡里的字是实时识别出来的（interim，浅色 + 光标）。');
-    await typeInto(dSaid, S().user, my);
+    await typeIntoCurrent(r.user, my);
     if (my !== gen) return;
     await wait(600); if (my !== gen) return;
-    await afterUserSpoke(my);
+
+    // 用户说完 → 思考
+    freezeCurrent();
+    setState('thinking');
+    markCurrentPast();
+    setNote('「说完了」→ 气泡冻结成 final，AI 字幕淡到「上一条」态，麦克风禁用。');
+    await wait(1300); if (my !== gen) return;
+
+    // 反馈展开（沉浸模式跳过）
+    if (!s.immersive && r.fb) {
+      expandFb(r.fb);
+      setNote('响应到达 → 反馈面板展开。它是在这一刻才出现的，不是用户说完就有。');
+      await wait(1900); if (my !== gen) return;
+    } else {
+      await wait(600); if (my !== gen) return;
+    }
+
+    // 教练说话 → 追加新一轮
+    roundIdx++;
+    if (roundIdx >= s.rounds.length) {
+      setNote('三轮结束。点「播放一轮」从头开始。');
+      setState('listening');
+      return;
+    }
+
+    setState('speaking');
+    var nextR = s.rounds[roundIdx];
+    appendRound(nextR.coach[0], nextR.coach[1]);
+    collapsePrevFb();
+    renderNext(nextR.next);
+    updateStream();
+    setNote('说话中 → 反馈自动折叠成一行（点标题可展开），「接下来」换成新的。点麦克风可以打断。');
+    await wait(3200); if (my !== gen) return;
+
+    // 回到倾听
+    setState('listening');
+    setCurrentInterim(nextR.user);
+    updateStream();
+    setNote('新一轮开始。按「播放一轮」继续。');
   }
 
   // --- 麦克风：倾听态＝说完了，说话态＝打断 ---
@@ -1900,28 +2120,63 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
         var my = ++gen;
         setState('listening');
         setNote('打断 → 立刻停止朗读并开始听你说。这是唯一一个用户能插队的转场。');
-        swapSub(S().opening[0], S().opening[1]);
-        dMsg.style.display = 'none';
       } else if (demoCur === 'listening') {
         var my = ++gen;
-        afterUserSpoke(my);
+        var s = S();
+        var r = s.rounds[roundIdx];
+        if (!r) return;
+        // 跳过识别，直接显示 final 并进入 thinking
+        var last = dTranscript.lastElementChild;
+        if (last) {
+          var said = last.querySelector('.said');
+          if (said) said.textContent = r.user;
+        }
+        setState('thinking');
+        markCurrentPast();
+        setNote('「说完了」→ 跳过识别，直接进入思考。');
+        wait(800).then(function(){
+          if (my !== gen) return;
+          if (!s.immersive && r.fb) {
+            expandFb(r.fb);
+            wait(1200).then(function(){
+              if (my !== gen) return;
+              roundIdx++;
+              if (roundIdx >= s.rounds.length) { setState('listening'); updateStream(); return; }
+              setState('speaking');
+              var nr = s.rounds[roundIdx];
+              appendRound(nr.coach[0], nr.coach[1]);
+              collapsePrevFb();
+              renderNext(nr.next);
+              updateStream();
+              wait(2500).then(function(){
+                if (my !== gen) return;
+                setState('listening');
+                setCurrentInterim(nr.user);
+              });
+            });
+          } else {
+            wait(600).then(function(){
+              if (my !== gen) return;
+              roundIdx++;
+              if (roundIdx >= s.rounds.length) { setState('listening'); updateStream(); return; }
+              setState('speaking');
+              var nr = s.rounds[roundIdx];
+              appendRound(nr.coach[0], nr.coach[1]);
+              collapsePrevFb();
+              renderNext(nr.next);
+              updateStream();
+              wait(2500).then(function(){
+                if (my !== gen) return;
+                setState('listening');
+                setCurrentInterim(nr.user);
+              });
+            });
+          }
+        });
       }
     });
   }
   if (dBreak) dBreak.addEventListener('click', function(){ dMic.click(); });
-  if ($('demoReplay')) $('demoReplay').addEventListener('click', function(){
-    setNote('重听 → 再播一遍 AI 这句话。');
-  });
-
-  // --- 反馈面板折叠（点标题）---
-  if (dFbHead) {
-    dFbHead.addEventListener('click', function(){
-      dFb.classList.toggle('collapsed');
-      setNote(dFb.classList.contains('collapsed')
-        ? '反馈折叠成一行预览——把注意力让给新回复，点标题可再展开。'
-        : '反馈展开——它评价的就是这条消息，所以贴在气泡内部而不是单独一块。');
-    });
-  }
 
   // --- 控制条 ---
   if (dBar) {
@@ -1937,34 +2192,49 @@ button.tab[aria-pressed="true"]{background:#1A1D21;border-color:#1A1D21;color:#f
       } else if (act === 'state') {
         var target = btn.dataset.state;
         my = ++gen;
+        var s = S();
+        var r = s.rounds[roundIdx] || s.rounds[0];
         if (target === 'listening') {
           resetToStart();
           setNote('倾听 → 气泡显示实时 interim（浅色 + 光标）。');
         } else if (target === 'thinking') {
-          showUserFinal();
+          if (!dTranscript.children.length) resetToStart();
+          freezeCurrent();
           setState('thinking');
-          dSub.classList.add('past');
+          markCurrentPast();
           setNote('思考 → 气泡冻结、字幕变弱、麦克风禁用。反馈还没到。');
         } else {
-          showUserFinal();
-          renderFb();
-          dFb.classList.remove('collapsed');
-          stepSpeaking(my);
+          if (!dTranscript.children.length) resetToStart();
+          freezeCurrent();
+          if (!s.immersive && r.fb) expandFb(r.fb);
+          // 再追加一轮作为「正在说」
+          roundIdx = Math.min(roundIdx + 1, s.rounds.length - 1);
+          var nr = s.rounds[roundIdx];
+          appendRound(nr.coach[0], nr.coach[1]);
+          collapsePrevFb();
+          renderNext(nr.next);
+          setState('speaking');
+          setNote('说话中 → 新字幕已追加，反馈自动折叠。');
         }
 
       } else if (act === 'fb') {
-        dFb.classList.toggle('collapsed');
-        setNote(dFb.classList.contains('collapsed') ? '反馈已折叠成一行。' : '反馈已展开。');
+        var rounds = dTranscript.querySelectorAll('.tround');
+        var lastFb = rounds.length ? rounds[rounds.length - 1].querySelector('.fb') : null;
+        if (lastFb) {
+          lastFb.classList.toggle('collapsed');
+          setNote(lastFb.classList.contains('collapsed') ? '反馈已折叠成一行。' : '反馈已展开。');
+        }
 
       } else if (act === 'next') {
-        renderNext();
+        var cr = S().rounds[roundIdx] || S().rounds[0];
+        if (cr && cr.next) renderNext(cr.next);
         setNote('「接下来可以怎么说」讲的是下一句，不重复已出现过的内容。');
 
       } else if (act === 'lang') {
         lang = (lang === 'en') ? 'zh' : 'en';
         var s = S();
         dTitle.textContent = s.title;
-        dRound.textContent = s.round;
+        dRound.textContent = '第 1 / ' + s.total + ' 轮';
         btn.textContent = (lang === 'en') ? '切中文场景' : '切回英文场景';
         ++gen;
         resetToStart();
