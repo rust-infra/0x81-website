@@ -29,9 +29,10 @@ import { useTheme } from '../../lib/theme-context';
 import { serif } from '../../lib/ui';
 
 const CATEGORY_LABEL = {
+  interview: 'coachCategoryInterview',
+  pitch: 'coachCategoryPitch',
+  hard_talk: 'coachCategoryHardTalk',
   daily: 'coachCategoryDaily',
-  engineering: 'coachCategoryEngineering',
-  high_stakes: 'coachCategoryHighStakes',
 } as const;
 
 const SCENARIO_ORDER: Record<string, number> = {
@@ -205,7 +206,7 @@ export default function CoachScreen() {
                     icon={SCENARIO_ICONS[scenario.id] ?? 'chat'}
                     title={scenario.title}
                     subtitle={scenario.description}
-                    meta={`${scenario.persona.locale} · ${t('coachTurns', {
+                    meta={`${scenario.persona.accent ?? scenario.language} · ${t('coachTurns', {
                       count: scenario.max_turns,
                     })}`}
                     badge={scenario.id === 'standup_update' ? t('coachRecommended') : undefined}
@@ -225,7 +226,7 @@ export default function CoachScreen() {
                 icon={SCENARIO_ICONS[scenario.id] ?? 'chat'}
                 title={scenario.title}
                 subtitle={scenario.description}
-                meta={`${scenario.persona.locale} · ${t('coachTurns', {
+                meta={`${scenario.persona.accent ?? scenario.language} · ${t('coachTurns', {
                   count: scenario.max_turns,
                 })}`}
                 onPress={() => (available ? start(scenario) : undefined)}

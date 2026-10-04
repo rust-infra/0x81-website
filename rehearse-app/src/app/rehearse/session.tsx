@@ -60,8 +60,8 @@ import type {
   CoachExpression,
   CoachScenario,
   CoachSessionDraft,
-  InterviewContext,
-  InterviewKind,
+  MaterialContext,
+  MaterialKind,
 } from '../../lib/rehearse-types';
 import { useI18n } from '../../lib/i18n';
 import { getSpeechSettings, speak, stopSpeaking } from '../../lib/speech';
@@ -96,7 +96,7 @@ function scenarioSttHints(scenario: CoachScenario): string[] {
     scenario.persona.name,
     scenario.persona.role,
     ...scenario.focus_points,
-    ...(scenario.opening_next_lines ?? []).map((line) => line.en),
+    ...(scenario.opening_next_lines ?? []).map((line) => line.text),
   ];
 }
 
@@ -186,11 +186,11 @@ const Messages = memo(function Messages({
                             {t('coachUsedSuggestion')}
                           </Text>
                           <Text style={[styles.messageText, { color: c.studyText }]}>
-                            {turn.matchedSuggestion.en}
+                            {turn.matchedSuggestion.text}
                           </Text>
-                          {turn.matchedSuggestion.zh ? (
+                          {turn.matchedSuggestion.translation ? (
                             <Text style={[styles.messageZh, { color: c.studyMuted }]}>
-                              {turn.matchedSuggestion.zh}
+                              {turn.matchedSuggestion.translation}
                             </Text>
                           ) : null}
                         </View>
@@ -461,7 +461,7 @@ export default function CoachSessionScreen() {
               id: newTurnId(),
               role: 'coach',
               content: found.opening_line,
-              contentZh: found.opening_line_zh?.trim() || undefined,
+              contentZh: found.opening_line_translation?.trim() || undefined,
               // 开场白也带上配套推荐语：第一句就要能照着说。
               nextLines: found.opening_next_lines ?? [],
             },
@@ -565,9 +565,9 @@ export default function CoachSessionScreen() {
       if (!scenario || !text.trim()) return;
       const settings = await getSpeechSettings();
       await speak(text, {
-        language: scenario.persona.locale,
+        language: scenario.language,
         voiceId:
-          scenario.persona.locale === 'zh-CN'
+          scenario.language === 'zh-CN'
             ? settings.speech_zh_voice
             : settings.speech_voice,
       });
@@ -575,9 +575,9 @@ export default function CoachSessionScreen() {
     [scenario]
   );
 
-  const interview = (): InterviewContext | undefined => {
+  const material = (): MaterialContext | undefined => {
     if (!params.interviewKind || !params.profile) return undefined;
-    const kind: InterviewKind | 'resume_job' =
+    const kind: MaterialKind | 'resume_job' =
       params.interviewKind === 'job' || params.interviewKind === 'resume_job'
         ? params.interviewKind
         : 'resume';
@@ -636,9 +636,9 @@ export default function CoachSessionScreen() {
           history: wireHistory(requestHistory),
           user_text: text,
           completed_turns: turnIndex,
-          coach_mode: mode,
-          locale: lang,
-          interview: interview(),
+          mode,
+          language: scenario.language,
+          material: material(),
         },
         request.controller.signal
       );
@@ -663,7 +663,7 @@ export default function CoachSessionScreen() {
           id: newTurnId(),
           role: 'coach',
           content: response.reply,
-          contentZh: response.reply_zh?.trim() || undefined,
+          contentZh: response.reply_translation?.trim() || undefined,
           // 推荐语跟着这条回复走：之后它在列表里变成旧卡时，仍能看到当时的建议。
           nextLines,
         })
@@ -1113,7 +1113,7 @@ export default function CoachSessionScreen() {
                 {scenario.persona.name}
               </Text>
               <Text numberOfLines={1} style={[styles.coachRole, { color: c.studyMuted }]}>
-                {scenario.persona.role} · {scenario.persona.locale}
+                {scenario.persona.role} · {scenario.persona.accent ?? scenario.language}
               </Text>
             </View>
             <View style={styles.coachMeta}>

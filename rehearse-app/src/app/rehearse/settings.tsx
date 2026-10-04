@@ -8,7 +8,7 @@ import {
   loadCoachPrefs,
   saveCoachPrefs,
 } from '../../lib/rehearse-storage';
-import type { CoachLocale, CoachMode, CoachPrefs } from '../../lib/rehearse-types';
+import type { CoachLanguage, CoachMode, CoachPrefs } from '../../lib/rehearse-types';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
@@ -75,7 +75,7 @@ export default function CoachSettingsScreen() {
               </View>
             </View>
             <View style={styles.chips}>
-              {(['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'] as CoachLocale[]).map((locale) => (
+              {(['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'] as CoachLanguage[]).map((locale) => (
                 <Pressable
                   key={locale}
                   onPress={() => update({ accentPreference: locale })}

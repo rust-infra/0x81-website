@@ -11,9 +11,10 @@ const scenario = (id: string, category: CoachScenario['category']): CoachScenari
   id,
   source: 'preset',
   category,
+  language: 'en-US',
   title: id,
   description: id,
-  persona: { name: 'A', role: 'Engineer', locale: 'en-US', tone: 'friendly' },
+  persona: { name: 'A', role: 'Engineer', accent: null, tone: 'friendly' },
   setting: 'meeting',
   opening_line: 'Hi',
   focus_points: [],
@@ -31,16 +32,18 @@ const quota = (patch: Partial<CoachQuotaStatus> = {}): CoachQuotaStatus => ({
   ...patch,
 });
 
-test('groups scenarios in the fixed daily, engineering, high-stakes order', () => {
+test('groups scenarios in the fixed interview, pitch, hard-talk, daily order', () => {
   const groups = groupScenarios([
-    scenario('high', 'high_stakes'),
     scenario('daily', 'daily'),
-    scenario('eng', 'engineering'),
+    scenario('hard', 'hard_talk'),
+    scenario('pitch', 'pitch'),
+    scenario('interview', 'interview'),
   ]);
   assert.deepEqual(groups.map((group) => group.category), [
+    'interview',
+    'pitch',
+    'hard_talk',
     'daily',
-    'engineering',
-    'high_stakes',
   ]);
 });
 

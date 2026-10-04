@@ -35,8 +35,8 @@ function draft(overrides: Partial<CoachSessionDraft> = {}): CoachSessionDraft {
 }
 
 test('recommendations stay on the reply that produced them', () => {
-  const opening = { en: 'Any blockers?', zh: '有卡点吗？' };
-  const followUp = { en: 'I am waiting on review.', zh: '我在等评审。' };
+  const opening = { text: 'Any blockers?', translation: '有卡点吗？' };
+  const followUp = { text: 'I am waiting on review.', translation: '我在等评审。' };
   const history: SessionTurn[] = [
     { id: 'c1', role: 'coach', content: 'Morning!', nextLines: [opening] },
     { id: 'u1', role: 'user', content: 'It is on track.' },
@@ -56,7 +56,7 @@ test('latestNextLines tolerates a reply without recommendations', () => {
   assert.deepEqual(latestNextLines([{ role: 'user', content: 'hi' }]), []);
   assert.deepEqual(
     latestNextLines([
-      { role: 'coach', content: 'a', nextLines: [{ en: 'x', zh: 'x' }] },
+      { role: 'coach', content: 'a', nextLines: [{ text: 'x', translation: 'x' }] },
       { role: 'coach', content: 'b' },
     ]),
     []
@@ -65,7 +65,7 @@ test('latestNextLines tolerates a reply without recommendations', () => {
 
 test('suggestions to a reply are local-only and never sent upstream', () => {
   const history: SessionTurn[] = [
-    { role: 'coach', content: 'Morning!', nextLines: [{ en: 'Any blockers?', zh: '有卡点吗？' }] },
+    { role: 'coach', content: 'Morning!', nextLines: [{ text: 'Any blockers?', translation: '有卡点吗？' }] },
   ];
   assert.deepEqual(wireHistory(history), [{ role: 'coach', content: 'Morning!' }]);
 });
@@ -159,14 +159,14 @@ test('rejects structurally invalid draft metadata', () => {
 });
 
 test('matches a suggested line immediately, ignoring case and punctuation only', () => {
-  const line = { en: "I'll pick up the next ticket.", zh: '我来接下一个工单。' };
+  const line = { text: "I'll pick up the next ticket.", translation: '我来接下一个工单。' };
   assert.equal(matchNextLine("i'll pick up the next ticket", [line]), line);
   assert.equal(matchNextLine("I'll pick up the ticket", [line]), undefined);
   assert.equal(matchNextLine('', [line]), undefined);
 });
 
 test('matched suggestion is attached locally and stripped from API history', () => {
-  const suggestion = { en: 'Give me an hour.', zh: '给我一小时。' };
+  const suggestion = { text: 'Give me an hour.', translation: '给我一小时。' };
   const history: SessionTurn[] = [{
     id: 'turn-1',
     role: 'user',
@@ -250,18 +250,18 @@ test('filters next lines that duplicate feedback or each other', () => {
   const feedback = {
     corrections: [{ original: 'We finish it', corrected: 'We finished it', explanation_zh: '' }],
     better_phrasing: { original: 'today do UI', natural: 'I am on the UI today', note_zh: '' },
-    expressions: [{ en: 'No worries, we have all been there.', zh: '没事，我们都经历过。' }],
+    expressions: [{ text: 'No worries, we have all been there.', translation: '没事，我们都经历过。' }],
   };
   const lines = [
-    { en: 'No worries we have all been there', zh: '没事，我们都经历过。' },
-    { en: 'I am on the UI today.', zh: '我今天在做 UI。' },
-    { en: 'We finished it.', zh: '我们完成了。' },
-    { en: 'What is blocking you?', zh: '什么卡住你了？' },
-    { en: 'WHAT IS BLOCKING YOU', zh: '重复项' },
+    { text: 'No worries we have all been there', translation: '没事，我们都经历过。' },
+    { text: 'I am on the UI today.', translation: '我今天在做 UI。' },
+    { text: 'We finished it.', translation: '我们完成了。' },
+    { text: 'What is blocking you?', translation: '什么卡住你了？' },
+    { text: 'WHAT IS BLOCKING YOU', translation: '重复项' },
   ];
 
   assert.deepEqual(filterNextLines(lines, feedback, 'Nice work.'), [
-    { en: 'What is blocking you?', zh: '什么卡住你了？' },
+    { text: 'What is blocking you?', translation: '什么卡住你了？' },
   ]);
 });
 

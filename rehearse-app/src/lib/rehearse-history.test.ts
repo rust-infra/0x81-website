@@ -38,10 +38,11 @@ test('resolves stored history titles in the current language', () => {
       {
         id: 'standup_update',
         source: 'preset',
-        category: 'engineering',
+        category: 'daily',
+        language: 'en-US',
         title: 'Daily Standup',
         description: '',
-        persona: { name: 'Alex', role: 'Tech Lead', locale: 'en-US', tone: 'friendly' },
+        persona: { name: 'Alex', role: 'Tech Lead', accent: null, tone: 'friendly' },
         setting: 'meeting',
         opening_line: '',
         focus_points: [],

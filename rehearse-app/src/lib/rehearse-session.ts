@@ -67,7 +67,7 @@ export function matchNextLine(
 ): CoachExpression | undefined {
   const spoken = normalizeSuggestedText(spokenText);
   if (!spoken) return undefined;
-  return lines.find((line) => normalizeSuggestedText(line.en) === spoken);
+  return lines.find((line) => normalizeSuggestedText(line.text) === spoken);
 }
 
 /** The upstream payload is `{ role, content }` only. */
@@ -102,7 +102,7 @@ export function latestFeedbackTurnIndex(history: SessionTurn[]): number {
 
 function feedbackBlockedTexts(feedback: CoachFeedback | null | undefined): string[] {
   if (!feedback) return [];
-  const blocked = feedback.expressions.map((expression) => expression.en);
+  const blocked = feedback.expressions.map((expression) => expression.text);
   feedback.corrections.forEach((correction) => {
     blocked.push(correction.original, correction.corrected);
   });
@@ -126,12 +126,12 @@ export function filterNextLines(
   const seen = new Set<string>();
   const out: CoachExpression[] = [];
   for (const line of lines) {
-    const en = line.en.trim();
-    const zh = line.zh.trim();
-    const normalized = normalizeSuggestedText(en);
-    if (!en || !normalized || blocked.has(normalized) || seen.has(normalized)) continue;
+    const text = line.text.trim();
+    const translation = line.translation.trim();
+    const normalized = normalizeSuggestedText(text);
+    if (!text || !normalized || blocked.has(normalized) || seen.has(normalized)) continue;
     seen.add(normalized);
-    out.push({ en, zh });
+    out.push({ text, translation });
     if (out.length === 2) break;
   }
   return out;

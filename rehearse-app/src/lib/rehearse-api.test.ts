@@ -6,10 +6,11 @@ import type { CoachScenario } from './rehearse-types';
 const scenario: CoachScenario = {
   id: 'standup_update',
   source: 'preset',
-  category: 'engineering',
+  category: 'daily',
+  language: 'en-US',
   title: 'Daily Standup',
   description: 'Progress',
-  persona: { name: 'Alex', role: 'Tech Lead', locale: 'en-US', tone: 'friendly' },
+  persona: { name: 'Alex', role: 'Tech Lead', accent: null, tone: 'friendly' },
   setting: 'meeting',
   opening_line: 'Morning!',
   focus_points: ['progress'],
@@ -53,8 +54,8 @@ test('coach api uses the exact quota and turn paths', async () => {
     history: [],
     user_text: 'Hello',
     completed_turns: 2,
-    coach_mode: 'feedback',
-    locale: 'zh-CN',
+    mode: 'feedback',
+    language: 'zh-CN',
   }, controller.signal);
 
   assert.equal(calls[0]?.path, '/api/rehearse/quota');

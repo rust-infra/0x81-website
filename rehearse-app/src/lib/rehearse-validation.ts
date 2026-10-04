@@ -1,7 +1,7 @@
 import type {
   CoachCategory,
   CoachDifficulty,
-  CoachLocale,
+  CoachLanguage,
   CoachScenario,
   CoachSetting,
   CoachTone,
@@ -15,14 +15,14 @@ export interface CoachScenarioErrors {
   opening_line?: string;
   focus_points?: string;
   category?: string;
-  locale?: string;
+  language?: string;
   tone?: string;
   setting?: string;
   difficulty?: string;
 }
 
-const CATEGORIES: CoachCategory[] = ['daily', 'engineering', 'high_stakes'];
-const LOCALES: CoachLocale[] = ['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'];
+const CATEGORIES: CoachCategory[] = ['interview', 'pitch', 'hard_talk', 'daily'];
+const LANGUAGES: CoachLanguage[] = ['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'];
 const TONES: CoachTone[] = ['friendly', 'neutral', 'direct', 'challenging'];
 const SETTINGS: CoachSetting[] = ['meeting', 'one_on_one', 'coffee_chat', 'phone_call'];
 const DIFFICULTIES: CoachDifficulty[] = ['easy', 'core', 'challenge'];
@@ -44,7 +44,11 @@ export function normalizeCoachScenario(
     errors.focus_points = 'focus_points';
   }
   if (!CATEGORIES.includes(input.category)) errors.category = 'category';
-  if (!LOCALES.includes(input.persona.locale)) errors.locale = 'locale';
+  if (!LANGUAGES.includes(input.language)) errors.language = 'language';
+  // 口音可选；一旦指定就必须是合法枚举（§4.2，accent 只影响英文 TTS 音色）。
+  if (input.persona.accent != null && !LANGUAGES.includes(input.persona.accent)) {
+    errors.language = 'language';
+  }
   if (!TONES.includes(input.persona.tone)) errors.tone = 'tone';
   if (!SETTINGS.includes(input.setting)) errors.setting = 'setting';
   if (!DIFFICULTIES.includes(input.difficulty)) errors.difficulty = 'difficulty';
@@ -75,17 +79,29 @@ export function scenarioFromTemplate(
     : null;
 }
 
+/**
+ * 本地模板的族按 §5.2 的旧→新映射重判：
+ *   incident_sync / scope_deadline 旧 high_stakes → hard_talk（§5.2 明确）
+ *   cross_timezone_handoff 旧 engineering 不在 §5.2 表内——它的目的是「日常协作
+ *     里的交接」，没有高压对抗成分，归 daily 最贴切。
+ *   growth_1on1 旧 daily 不在 §5.2 表内——它对应表里的 one_on_one（「反馈与成长
+ *     诉求本质是高压对话」），因此按 one_on_one 的处置归 hard_talk。
+ *
+ * language 取旧 `persona.locale` 的值：迁移无损，STT/TTS 行为不变；`accent` 置 null
+ * 表示用默认音色（与后端预置场景数据一致）。
+ */
 export const TEMPLATES: CoachScenario[] = [
   {
     id: 'incident_sync',
     source: 'custom',
-    category: 'high_stakes',
+    category: 'hard_talk',
+    language: 'en-US',
     title: '线上故障同步',
     description: '向上级和美国同事同步影响、进展与下一步',
-    persona: { name: 'Sam', role: 'SRE', locale: 'en-US', tone: 'direct' },
+    persona: { name: 'Sam', role: 'SRE', accent: null, tone: 'direct' },
     setting: 'meeting',
     opening_line: 'What do you know about the incident so far?',
-    opening_line_zh: "目前这个故障你了解到什么程度了？",
+    opening_line_translation: "目前这个故障你了解到什么程度了？",
     focus_points: ['先说影响', '区分已知未知', '给出更新节奏'],
     difficulty: 'challenge',
     max_turns: 12,
@@ -93,13 +109,14 @@ export const TEMPLATES: CoachScenario[] = [
   {
     id: 'scope_deadline',
     source: 'custom',
-    category: 'high_stakes',
+    category: 'hard_talk',
+    language: 'en-US',
     title: '需求与排期',
     description: '谈范围、优先级和不合理的 deadline',
-    persona: { name: 'Jordan', role: 'Product Manager', locale: 'en-US', tone: 'neutral' },
+    persona: { name: 'Jordan', role: 'Product Manager', accent: null, tone: 'neutral' },
     setting: 'meeting',
     opening_line: 'Can we commit to this date?',
-    opening_line_zh: "这个日期我们能定下来吗？",
+    opening_line_translation: "这个日期我们能定下来吗？",
     focus_points: ['说明取舍', '提出选项', '确认优先级'],
     difficulty: 'challenge',
     max_turns: 12,
@@ -107,13 +124,14 @@ export const TEMPLATES: CoachScenario[] = [
   {
     id: 'cross_timezone_handoff',
     source: 'custom',
-    category: 'engineering',
+    category: 'daily',
+    language: 'en-AU',
     title: '跨时区交接',
     description: '把背景、当前状态和下一步交接给不同时区的同事',
-    persona: { name: 'Emma', role: 'Teammate', locale: 'en-AU', tone: 'friendly' },
+    persona: { name: 'Emma', role: 'Teammate', accent: null, tone: 'friendly' },
     setting: 'meeting',
     opening_line: 'Hey, can you give me the handoff?',
-    opening_line_zh: "嘿，能把交接内容给我吗？",
+    opening_line_translation: "嘿，能把交接内容给我吗？",
     focus_points: ['先给背景', '说清当前状态', '留下明确问题'],
     difficulty: 'core',
     max_turns: 10,
@@ -121,13 +139,14 @@ export const TEMPLATES: CoachScenario[] = [
   {
     id: 'growth_1on1',
     source: 'custom',
-    category: 'daily',
+    category: 'hard_talk',
+    language: 'en-GB',
     title: '主管 1:1 · 成长诉求',
     description: '和主管谈 workload、反馈和发展机会',
-    persona: { name: 'Morgan', role: 'Engineering Manager', locale: 'en-GB', tone: 'friendly' },
+    persona: { name: 'Morgan', role: 'Engineering Manager', accent: null, tone: 'friendly' },
     setting: 'one_on_one',
     opening_line: 'How are things going lately?',
-    opening_line_zh: "最近过得怎么样？",
+    opening_line_translation: "最近过得怎么样？",
     focus_points: ['表达现状', '给具体例子', '提出诉求'],
     difficulty: 'core',
     max_turns: 10,
@@ -139,13 +158,14 @@ export const TEMPLATES_EN: CoachScenario[] = [
   {
     id: 'incident_sync',
     source: 'custom',
-    category: 'high_stakes',
+    category: 'hard_talk',
+    language: 'en-US',
     title: 'Incident Update',
     description: 'Brief leadership and US teammates on impact, progress and next steps',
-    persona: { name: 'Sam', role: 'SRE', locale: 'en-US', tone: 'direct' },
+    persona: { name: 'Sam', role: 'SRE', accent: null, tone: 'direct' },
     setting: 'meeting',
     opening_line: 'What do you know about the incident so far?',
-    opening_line_zh: "目前这个故障你了解到什么程度了？",
+    opening_line_translation: "目前这个故障你了解到什么程度了？",
     focus_points: ['Lead with impact', 'Separate knowns and unknowns', 'Set an update cadence'],
     difficulty: 'challenge',
     max_turns: 12,
@@ -153,13 +173,14 @@ export const TEMPLATES_EN: CoachScenario[] = [
   {
     id: 'scope_deadline',
     source: 'custom',
-    category: 'high_stakes',
+    category: 'hard_talk',
+    language: 'en-US',
     title: 'Scope & Deadline',
     description: 'Discuss scope, priority and an unrealistic deadline',
-    persona: { name: 'Jordan', role: 'Product Manager', locale: 'en-US', tone: 'neutral' },
+    persona: { name: 'Jordan', role: 'Product Manager', accent: null, tone: 'neutral' },
     setting: 'meeting',
     opening_line: 'Can we commit to this date?',
-    opening_line_zh: "这个日期我们能定下来吗？",
+    opening_line_translation: "这个日期我们能定下来吗？",
     focus_points: ['Explain trade-offs', 'Offer options', 'Confirm priority'],
     difficulty: 'challenge',
     max_turns: 12,
@@ -167,13 +188,14 @@ export const TEMPLATES_EN: CoachScenario[] = [
   {
     id: 'cross_timezone_handoff',
     source: 'custom',
-    category: 'engineering',
+    category: 'daily',
+    language: 'en-AU',
     title: 'Cross-timezone Handoff',
     description: 'Hand off context, current state and next steps across time zones',
-    persona: { name: 'Emma', role: 'Teammate', locale: 'en-AU', tone: 'friendly' },
+    persona: { name: 'Emma', role: 'Teammate', accent: null, tone: 'friendly' },
     setting: 'meeting',
     opening_line: 'Hey, can you give me the handoff?',
-    opening_line_zh: "嘿，能把交接内容给我吗？",
+    opening_line_translation: "嘿，能把交接内容给我吗？",
     focus_points: ['Give context first', 'State the current status', 'Leave a clear question'],
     difficulty: 'core',
     max_turns: 10,
@@ -181,13 +203,14 @@ export const TEMPLATES_EN: CoachScenario[] = [
   {
     id: 'growth_1on1',
     source: 'custom',
-    category: 'daily',
+    category: 'hard_talk',
+    language: 'en-GB',
     title: 'Manager 1:1 · Growth',
     description: 'Discuss workload, feedback and growth with your manager',
-    persona: { name: 'Morgan', role: 'Engineering Manager', locale: 'en-GB', tone: 'friendly' },
+    persona: { name: 'Morgan', role: 'Engineering Manager', accent: null, tone: 'friendly' },
     setting: 'one_on_one',
     opening_line: 'How are things going lately?',
-    opening_line_zh: "最近过得怎么样？",
+    opening_line_translation: "最近过得怎么样？",
     focus_points: ['Describe the current state', 'Give a concrete example', 'Make a clear request'],
     difficulty: 'core',
     max_turns: 10,

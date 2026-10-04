@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachGlyph, CoachHeader, PrimaryButton } from '../../../components/rehearse/CoachUi';
 import { listCoachScenarios } from '../../../lib/rehearse-api-runtime';
 import { saveInterviewProfile } from '../../../lib/rehearse-storage';
-import type { CoachScenario, InterviewKind } from '../../../lib/rehearse-types';
+import type { CoachScenario, MaterialKind } from '../../../lib/rehearse-types';
 import { useI18n } from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme-context';
 import { useToast } from '../../../lib/toast';
@@ -17,7 +17,7 @@ export default function InterviewProfileScreen() {
     interviewerId?: string;
     source?: string;
   }>();
-  const kind: InterviewKind = rawKind === 'job' ? 'job' : 'resume';
+  const kind: MaterialKind = rawKind === 'job' ? 'job' : 'resume';
   const router = useRouter();
   const { t, lang } = useI18n();
   const { theme } = useTheme();
@@ -131,7 +131,7 @@ export default function InterviewProfileScreen() {
               {t('coachInterviewerFooter', {
                 name: interviewer.persona.name,
                 role: interviewer.persona.role,
-                locale: interviewer.persona.locale,
+                locale: interviewer.persona.accent ?? interviewer.language,
               })}
             </Text>
           ) : null}

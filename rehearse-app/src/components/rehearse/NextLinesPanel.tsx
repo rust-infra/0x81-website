@@ -60,10 +60,10 @@ export function NextLinesPanel({
       {open ? (
         <View style={styles.lines}>
           {shown.map((line) => (
-            <Pressable key={line.en} accessibilityRole="button" onPress={() => onSpeak(line.en)} style={[styles.line, { backgroundColor: c.inputBg }]}>
+            <Pressable key={line.text} accessibilityRole="button" onPress={() => onSpeak(line.text)} style={[styles.line, { backgroundColor: c.inputBg }]}>
               <View style={styles.lineText}>
-                <Text style={[styles.en, { color: c.ink }]}>{line.en}</Text>
-                {line.zh ? <Text style={[styles.zh, { color: c.inkLight }]}>{line.zh}</Text> : null}
+                <Text style={[styles.text, { color: c.ink }]}>{line.text}</Text>
+                {line.translation ? <Text style={[styles.translation, { color: c.inkLight }]}>{line.translation}</Text> : null}
               </View>
               <CoachGlyph name="mic" color={c.inkLight} size={14} />
             </Pressable>
@@ -72,7 +72,7 @@ export function NextLinesPanel({
       ) : (
         // 折叠状态下预览行也要能点开 —— 用户点的是那张卡，而不是那一行小标题。
         <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)}>
-          <Text numberOfLines={1} style={[styles.preview, { color: c.studyMuted }]}>{shown[0].en}</Text>
+          <Text numberOfLines={1} style={[styles.preview, { color: c.studyMuted }]}>{shown[0].text}</Text>
         </Pressable>
       )}
     </View>
@@ -89,6 +89,6 @@ const styles = StyleSheet.create({
   lines: { marginTop: 10, gap: 8 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 },
   lineText: { flex: 1, minWidth: 0 },
-  en: { fontSize: 13.5, lineHeight: 20, fontWeight: '600' },
-  zh: { fontSize: 11.5, lineHeight: 17, marginTop: 2 },
+  text: { fontSize: 13.5, lineHeight: 20, fontWeight: '600' },
+  translation: { fontSize: 11.5, lineHeight: 17, marginTop: 2 },
 });

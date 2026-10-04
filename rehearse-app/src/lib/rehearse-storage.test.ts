@@ -19,10 +19,11 @@ function memoryStore() {
 const scenario = (id: string): CoachScenario => ({
   id,
   source: 'custom',
-  category: 'engineering',
+  category: 'hard_talk',
+  language: 'en-US',
   title: 'Incident sync',
   description: 'Practice incident updates',
-  persona: { name: 'Sam', role: 'SRE', locale: 'en-US', tone: 'direct' },
+  persona: { name: 'Sam', role: 'SRE', accent: null, tone: 'direct' },
   setting: 'meeting',
   opening_line: 'What do you know so far?',
   focus_points: ['impact'],
@@ -101,7 +102,7 @@ test('session draft round-trips and is cleared when the session ends', async () 
   await storage.saveSessionDraft({
     scenarioId: 'standup_update',
     history: [
-      { role: 'coach', content: 'Morning!', nextLines: [{ en: 'Any blockers?', zh: '有卡点吗？' }] },
+      { role: 'coach', content: 'Morning!', nextLines: [{ text: 'Any blockers?', translation: '有卡点吗？' }] },
       { role: 'user', content: 'It is on track.', id: 'turn_1' },
     ],
     turnIndex: 1,
@@ -115,7 +116,7 @@ test('session draft round-trips and is cleared when the session ends', async () 
   assert.equal(loaded?.history.length, 2);
   // 仅本地字段要跟着草稿一起留存，恢复后气泡/纠错/推荐语才能原样回来。
   assert.equal((loaded?.history[1] as { id?: string })?.id, 'turn_1');
-  assert.equal(loaded?.history[0]?.nextLines?.[0]?.en, 'Any blockers?');
+  assert.equal(loaded?.history[0]?.nextLines?.[0]?.text, 'Any blockers?');
 
   await storage.clearSessionDraft();
   assert.equal(await storage.loadSessionDraft(), null);

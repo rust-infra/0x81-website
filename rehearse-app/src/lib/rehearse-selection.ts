@@ -4,7 +4,8 @@ import type {
   CoachScenario,
 } from './rehearse-types';
 
-const CATEGORY_ORDER: CoachCategory[] = ['daily', 'engineering', 'high_stakes'];
+/** §5.1 的族顺序，UI 的族分组按它排。 */
+const CATEGORY_ORDER: CoachCategory[] = ['interview', 'pitch', 'hard_talk', 'daily'];
 
 export interface CoachScenarioGroup {
   category: CoachCategory;

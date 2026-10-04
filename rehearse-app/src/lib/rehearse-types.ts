@@ -1,28 +1,39 @@
-export type CoachLocale = 'en-US' | 'en-GB' | 'en-IN' | 'en-AU' | 'zh-CN';
+/**
+ * 演练语言 / TTS 口音的共用枚举（§4.2）。旧类型名 `CoachLocale` 把语言和口音
+ * 混成一个概念，改名后两者正交：顶层 `language` 决定说什么语言，`persona.accent`
+ * 只影响英文时的音色。枚举里没有裸的 `en`——这些值都是 locale，`en-IN` 表示
+ * 「印度英语」，沿用上游的数据形态。
+ */
+export type CoachLanguage = 'en-US' | 'en-GB' | 'en-IN' | 'en-AU' | 'zh-CN';
 export type CoachTone = 'friendly' | 'neutral' | 'direct' | 'challenging';
 export type CoachSetting = 'meeting' | 'one_on_one' | 'coffee_chat' | 'phone_call';
 export type CoachDifficulty = 'easy' | 'core' | 'challenge';
-export type CoachCategory = 'daily' | 'engineering' | 'high_stakes';
+/** 场景族，按「演练目的」分（§5.1）：旧值 `engineering` / `high_stakes` 已删除。 */
+export type CoachCategory = 'interview' | 'pitch' | 'hard_talk' | 'daily';
 export type CoachMode = 'feedback' | 'immersion';
 export type CoachMood = 'neutral' | 'friendly' | 'curious' | 'encouraging' | 'concerned';
-export type InterviewKind = 'resume' | 'job';
+/** 材料种类（原 `InterviewKind`）。v1 只保留 resume / job（§5.3）。 */
+export type MaterialKind = 'resume' | 'job';
 
 export interface CoachScenario {
   id: string;
   source: 'preset' | 'custom';
   category: CoachCategory;
+  /** 场景的默认演练语言，用户开始前可改（§5.4）。 */
+  language: CoachLanguage;
   title: string;
   description: string;
   persona: {
     name: string;
     role: string;
-    locale: CoachLocale;
+    /** 仅 language 为英文时生效的 TTS 口音；null 表示不指定、用默认音色（§4.2）。 */
+    accent?: CoachLanguage | null;
     tone: CoachTone;
   };
   setting: CoachSetting;
   opening_line: string;
-  /** 开场白的展示用中文对照（预置场景有，自定义场景暂缺）。 */
-  opening_line_zh?: string;
+  /** 开场白的对照（原 `opening_line_zh`）；中文场景为空——与 `reply_translation` 同一套规则。 */
+  opening_line_translation?: string;
   /** 首句对应的推荐表达，由场景目录预置，加载场景时立即展示。 */
   opening_next_lines?: CoachExpression[];
   focus_points: string[];
@@ -44,8 +55,9 @@ export interface CoachQuotaStatus {
   llm_configured: boolean;
 }
 
-export interface InterviewContext {
-  kind: InterviewKind | 'resume_job';
+/** 挂载的材料（原 `InterviewContext`，§7.6 改名）。 */
+export interface MaterialContext {
+  kind: MaterialKind | 'resume_job';
   profile: string;
 }
 
@@ -61,9 +73,15 @@ export interface CoachBetterPhrasing {
   note_zh?: string;
 }
 
+/**
+ * 推荐表达。字段名是 text / translation 而不是 en / zh——中文演练时「本来的语言」
+ * 是中文，en/zh 会装错东西（§4.3）。
+ */
 export interface CoachExpression {
-  en: string;
-  zh: string;
+  /** 目标语言的原句（英文演练时是英文，中文演练时是中文）。 */
+  text: string;
+  /** 对照；中文演练时通常为空——学习者不需要中文→中文。 */
+  translation: string;
 }
 
 export interface CoachFeedback {
@@ -78,15 +96,18 @@ export interface CoachTurnRequest {
   history: CoachTurn[];
   user_text: string;
   completed_turns?: number;
-  coach_mode?: CoachMode;
-  locale?: string;
-  interview?: InterviewContext;
+  /** 原 `coach_mode`（§7.6 改名），枚举不变。 */
+  mode?: CoachMode;
+  /** 覆盖场景的默认演练语言，用户可在会话中切（§5.4）。 */
+  language?: CoachLanguage;
+  /** 挂载的材料（原 `interview`，§7.6 改名）。 */
+  material?: MaterialContext;
 }
 
 export interface CoachTurnResponse {
   reply: string;
-  /** `reply` 的中文翻译，展示在回复下方（后端新加，可能缺失）。 */
-  reply_zh?: string;
+  /** `reply` 的对照翻译（原 `reply_zh`）；中文演练时为 null（§4.3）。 */
+  reply_translation: string | null;
   mood: CoachMood;
   turn_index: number;
   limit_reached: boolean;
@@ -99,8 +120,10 @@ export interface CoachSummaryRequest {
   scenario: CoachScenario;
   scenario_id?: string;
   history: CoachTurn[];
-  locale?: string;
-  interview?: InterviewContext;
+  /** 决定 strengths / improvements / expressions 用哪种语言写。 */
+  language?: CoachLanguage;
+  /** 挂载的材料（原 `interview`，§7.6 改名）。 */
+  material?: MaterialContext;
 }
 
 export interface InterviewFeedback {
@@ -133,12 +156,12 @@ export interface InterviewTextResult {
 }
 
 export interface InterviewProfileRequest {
-  kind: InterviewKind;
+  kind: MaterialKind;
   text: string;
 }
 
 export interface InterviewProfileResponse {
-  kind: InterviewKind;
+  kind: MaterialKind;
   profile: string;
 }
 
@@ -191,13 +214,14 @@ export interface CoachSessionDraft {
 
 export interface InterviewProfileRecord {
   id: string;
-  kind: InterviewKind | 'resume_job';
+  kind: MaterialKind | 'resume_job';
   profile: string;
   updatedAt: string;
 }
 
 export interface CoachPrefs {
   defaultMode: CoachMode;
-  accentPreference: CoachLocale;
+  /** TTS 口音偏好（原 `CoachLocale`，§4.2）。 */
+  accentPreference: CoachLanguage;
   autoPlay: boolean;
 }

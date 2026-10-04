@@ -16,8 +16,8 @@ import type {
   CoachScenario,
   CoachSummaryResponse,
   CoachTurn,
-  InterviewContext,
-  InterviewKind,
+  MaterialContext,
+  MaterialKind,
 } from '../../lib/rehearse-types';
 import { useI18n } from '../../lib/i18n';
 import { getSpeechSettings, speak } from '../../lib/speech';
@@ -64,9 +64,10 @@ export default function CoachSummaryScreen() {
               id: record.scenarioId,
               source: 'custom',
               category: 'daily',
+              language: 'en-US',
               title: record.scenarioTitle,
               description: '',
-              persona: { name: 'Coach', role: 'Coach', locale: 'en-US', tone: 'friendly' },
+              persona: { name: 'Coach', role: 'Coach', accent: null, tone: 'friendly' },
               setting: 'meeting',
               opening_line: '',
               focus_points: [],
@@ -97,12 +98,12 @@ export default function CoachSummaryScreen() {
         setLoading(false);
         return;
       }
-      let interview: InterviewContext | undefined;
+      let material: MaterialContext | undefined;
       if (params.interviewKind && params.profile) {
-        interview = {
+        material = {
           kind: (params.interviewKind === 'job' || params.interviewKind === 'resume_job'
             ? params.interviewKind
-            : 'resume') as InterviewKind | 'resume_job',
+            : 'resume') as MaterialKind | 'resume_job',
           profile: params.profile,
         };
       }
@@ -111,8 +112,8 @@ export default function CoachSummaryScreen() {
           scenario: current,
           scenario_id: current.source === 'preset' ? current.id : undefined,
           history,
-          locale: lang,
-          interview,
+          language: current.language,
+          material,
         });
         setSummary(result);
       } catch {
@@ -126,9 +127,9 @@ export default function CoachSummaryScreen() {
   const play = async (text: string) => {
     const settings = await getSpeechSettings();
     await speak(text, {
-      language: scenario?.persona.locale ?? 'en-US',
+      language: scenario?.language ?? 'en-US',
       voiceId:
-        scenario?.persona.locale === 'zh-CN'
+        scenario?.language === 'zh-CN'
           ? settings.speech_zh_voice
           : settings.speech_voice,
     });
@@ -232,18 +233,18 @@ export default function CoachSummaryScreen() {
             <SummaryPanel title={isInterview ? t('coachPhrasesToAdd') : t('coachExpressions')}>
               {summary.expressions.map((expression) => (
                 <View
-                  key={expression.en}
+                  key={expression.text}
                   style={[styles.phrase, { backgroundColor: c.inputBg, borderColor: c.border }]}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: c.ink, fontSize: 13, fontWeight: '500' }}>
-                      {expression.en}
+                      {expression.text}
                     </Text>
                     <Text style={{ color: c.inkMuted, fontSize: 11.5, marginTop: 2 }}>
-                      {expression.zh}
+                      {expression.translation}
                     </Text>
                   </View>
-                  <Pressable onPress={() => void play(expression.en)} style={styles.phraseReplay}>
+                  <Pressable onPress={() => void play(expression.text)} style={styles.phraseReplay}>
                     <CoachGlyph name="mic" color={c.inkLight} size={15} />
                     <Text style={{ color: c.inkLight, fontSize: 11 }}>{t('coachReplay')}</Text>
                   </Pressable>

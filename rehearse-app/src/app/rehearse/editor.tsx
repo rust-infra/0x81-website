@@ -20,7 +20,7 @@ import {
 import type {
   CoachCategory,
   CoachDifficulty,
-  CoachLocale,
+  CoachLanguage,
   CoachScenario,
   CoachSetting,
   CoachTone,
@@ -39,10 +39,11 @@ function newScenario(): CoachScenario {
   return {
     id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     source: 'custom',
-    category: 'engineering',
+    category: 'daily',
+    language: 'en-US',
     title: '',
     description: '',
-    persona: { name: 'Alex', role: 'Teammate', locale: 'en-US', tone: 'friendly' },
+    persona: { name: 'Alex', role: 'Teammate', accent: null, tone: 'friendly' },
     setting: 'meeting',
     opening_line: '',
     focus_points: [],
@@ -113,9 +114,10 @@ export default function CoachEditorScreen() {
   };
 
   const categoryOptions = [
+    { value: 'interview', label: t('coachCategoryInterview') },
+    { value: 'pitch', label: t('coachCategoryPitch') },
+    { value: 'hard_talk', label: t('coachCategoryHardTalk') },
     { value: 'daily', label: t('coachCategoryDaily') },
-    { value: 'engineering', label: t('coachCategoryEngineering') },
-    { value: 'high_stakes', label: t('coachCategoryHighStakes') },
   ];
   const toneOptions = [
     { value: 'friendly', label: t('coachToneFriendly') },
@@ -215,7 +217,7 @@ export default function CoachEditorScreen() {
               <CoachRow
                 title={t('coachPersonaSummary')}
                 subtitle={`${scenario.persona.name} · ${scenario.persona.role}`}
-                meta={`${scenario.persona.locale} · ${toneOptions.find((item) => item.value === scenario.persona.tone)?.label ?? scenario.persona.tone}`}
+                meta={`${scenario.persona.accent ?? scenario.language} · ${toneOptions.find((item) => item.value === scenario.persona.tone)?.label ?? scenario.persona.tone}`}
               />
               <CoachRow
                 title={t('coachOpeningLine')}
@@ -289,7 +291,7 @@ export default function CoachEditorScreen() {
             apply({
               ...scenario,
               opening_line: value,
-              opening_line_zh: undefined,
+              opening_line_translation: undefined,
               opening_next_lines: undefined,
             })
           }
@@ -312,14 +314,12 @@ export default function CoachEditorScreen() {
           onSelect={(value) => apply({ ...scenario, category: value as CoachCategory })}
         />
         <Selector
-          label={t('coachLocale')}
+          label={t('coachLanguage')}
           options={['en-US', 'en-GB', 'en-IN', 'en-AU', 'zh-CN'].map((value) => ({ value, label: value }))}
-          selected={scenario.persona.locale}
-          onSelect={(value) =>
-            apply({ ...scenario, persona: { ...scenario.persona, locale: value as CoachLocale } })
-          }
+          selected={scenario.language}
+          onSelect={(value) => apply({ ...scenario, language: value as CoachLanguage })}
         />
-        {scenario.persona.locale === 'zh-CN' ? (
+        {scenario.language === 'zh-CN' ? (
           <Text style={[styles.hint, { color: c.inkMuted }]}>{t('coachAccentHint')}</Text>
         ) : null}
         <Selector

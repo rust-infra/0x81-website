@@ -98,7 +98,7 @@ export default function InterviewEntryScreen() {
                 selected={isSelected}
                 title={interviewer.title}
                 subtitle={interviewer.description}
-                meta={`${interviewer.persona.name} · ${interviewer.persona.locale}`}
+                meta={`${interviewer.persona.name} · ${interviewer.persona.accent ?? interviewer.language}`}
                 badge={isSelected ? t('coachSelected') : undefined}
                 onPress={() => setSelected(interviewer.id)}
               />

@@ -72,11 +72,11 @@ export function FeedbackBody({
           ) : null}
           {feedback.expressions.slice(0, 2).map((expression) => (
             <Pressable
-              key={expression.en}
-              onPress={() => onSpeak(expression.en)}
+              key={expression.text}
+              onPress={() => onSpeak(expression.text)}
               style={[styles.chip, { backgroundColor: c.inputBg }]}
             >
-              <Text style={{ color: c.inkLight, fontSize: 10.5 }}>{expression.en}</Text>
+              <Text style={{ color: c.inkLight, fontSize: 10.5 }}>{expression.text}</Text>
             </Pressable>
           ))}
         </View>
