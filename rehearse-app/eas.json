@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "API_URL": "https://rehearse.0x81.uk",
+        "AUTH_URL": "https://auth.0x81.uk"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
