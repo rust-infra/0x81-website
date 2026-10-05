@@ -125,6 +125,11 @@ services:
     # 设计：docs/superpowers/specs/2026-10-02-rehearse-design.md
     build:
       context: ./rehearse-backend
+      # 构建期要拉 Go 模块。默认的 proxy.golang.org 在本机超时，所以留一个
+      # 可覆盖的口子：`GOPROXY=https://goproxy.cn,direct docker compose build`。
+      # 不设就用 Dockerfile 里的默认值。
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     ports:
       - "4324:4324"
     environment:

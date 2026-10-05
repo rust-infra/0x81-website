@@ -14,6 +14,12 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /src
 
+# ⚠️ GOPROXY 必须是可覆盖的：默认的 `proxy.golang.org` 在部分网络下（含本机）
+# 会超时，构建卡在 `go mod download` 上，而报错只是一句 context deadline exceeded。
+# 不传就用官方默认值，CI 不用管。
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
 # 先只拷 go.mod / go.sum：依赖没变时这一层命中缓存，改代码不用重下依赖。
 COPY go.mod go.sum ./
 RUN go mod download
