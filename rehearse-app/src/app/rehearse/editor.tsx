@@ -110,7 +110,7 @@ export default function CoachEditorScreen() {
     }
     await saveCustomScenario(result.scenario);
     toast(t('saved'));
-    router.replace('/(tabs)/coach');
+    router.replace('/(tabs)/rehearse');
   };
 
   const categoryOptions = [
@@ -143,7 +143,7 @@ export default function CoachEditorScreen() {
     if (!ok) return;
     await deleteCustomScenario(scenarioId);
     toast(t('saved'));
-    router.replace('/(tabs)/coach');
+    router.replace('/(tabs)/rehearse');
   };
 
   return (

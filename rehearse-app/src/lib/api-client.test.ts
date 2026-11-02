@@ -49,3 +49,48 @@ test('apiRequestWithDeps preserves structured 429 details', async () => {
     assert.equal((error.details as { limit?: number }).limit, 2);
   }
 });
+
+test('apiRequestWithDeps notifies on 401 so the app can drop a stale token', async () => {
+  let notified = 0;
+  try {
+    await apiRequestWithDeps('/quota', {}, {
+      baseUrl: 'http://example.test',
+      getToken: async () => 'expired-jwt',
+      onUnauthorized: () => {
+        notified += 1;
+      },
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({ success: false, error: { code: 401, message: 'Account is not active' } }),
+          { status: 401 }
+        )) as typeof fetch,
+    });
+    assert.fail('expected ApiError');
+  } catch (error) {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.status, 401);
+  }
+  assert.equal(notified, 1);
+});
+
+test('apiRequestWithDeps leaves other failures alone', async () => {
+  let notified = 0;
+  try {
+    await apiRequestWithDeps('/quota', {}, {
+      baseUrl: 'http://example.test',
+      getToken: async () => 'jwt',
+      onUnauthorized: () => {
+        notified += 1;
+      },
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ success: false, error: { code: 500, message: 'boom' } }), {
+          status: 500,
+        })) as typeof fetch,
+    });
+    assert.fail('expected ApiError');
+  } catch (error) {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.status, 500);
+  }
+  assert.equal(notified, 0);
+});

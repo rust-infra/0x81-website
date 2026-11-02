@@ -10,6 +10,13 @@ export interface ApiClientDeps {
   baseUrl: string;
   getToken: () => Promise<string | null>;
   fetchImpl?: typeof fetch;
+  /**
+   * 服务端回了 401 时通知上层清掉凭证。
+   *
+   * 没有这条时，token 过期或被吊销的用户会停在一个「已登录」的空壳里：
+   * 每个请求都失败，页面不会退回登录页，只能自己去设置里退出。
+   */
+  onUnauthorized?: () => void;
 }
 
 export async function apiRequestWithDeps<T>(
@@ -37,6 +44,7 @@ export async function apiRequestWithDeps<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401) deps.onUnauthorized?.();
     const body = await res.json().catch(() => ({}));
     const error = body?.error ?? {};
     throw new ApiError(

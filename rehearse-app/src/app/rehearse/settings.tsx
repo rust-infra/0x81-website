@@ -4,9 +4,9 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CoachGroup, CoachHeader, SectionLabel } from '../../components/rehearse/CoachUi';
 import {
-  DEFAULT_COACH_PREFS,
-  loadCoachPrefs,
-  saveCoachPrefs,
+  DEFAULT_REHEARSE_PREFS,
+  loadRehearsePrefs,
+  saveRehearsePrefs,
 } from '../../lib/rehearse-storage';
 import type { CoachLanguage, CoachMode, CoachPrefs } from '../../lib/rehearse-types';
 import { useI18n } from '../../lib/i18n';
@@ -19,16 +19,16 @@ export default function CoachSettingsScreen() {
   const { theme } = useTheme();
   const toast = useToast();
   const c = theme.colors;
-  const [prefs, setPrefs] = useState<CoachPrefs>(DEFAULT_COACH_PREFS);
+  const [prefs, setPrefs] = useState<CoachPrefs>(DEFAULT_REHEARSE_PREFS);
 
   useEffect(() => {
-    void loadCoachPrefs().then(setPrefs);
+    void loadRehearsePrefs().then(setPrefs);
   }, []);
 
   const update = (patch: Partial<CoachPrefs>) => {
     const next = { ...prefs, ...patch };
     setPrefs(next);
-    void saveCoachPrefs(next).then(() => toast(t('saved')));
+    void saveRehearsePrefs(next).then(() => toast(t('saved')));
   };
 
   return (
@@ -107,7 +107,7 @@ export default function CoachSettingsScreen() {
             />
           </View>
 
-          <Pressable onPress={() => router.push('/rehearse/interview')} style={styles.row}>
+          <Pressable onPress={() => router.push('/rehearse/material')} style={styles.row}>
             <View style={styles.rowText}>
               <Text style={[styles.rowTitle, { color: c.ink }]}>{t('coachMaterials')}</Text>
               <Text style={[styles.rowDesc, { color: c.inkMuted }]}>

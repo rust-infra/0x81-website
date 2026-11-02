@@ -10,7 +10,7 @@ import {
 } from '../../components/rehearse/CoachUi';
 import { listCoachScenarios, postCoachSummary } from '../../lib/rehearse-api-runtime';
 import { summaryRecordFromSession } from '../../lib/rehearse-history';
-import { loadCustomScenarios, saveCoachHistory } from '../../lib/rehearse-storage';
+import { loadCustomScenarios, saveRehearseHistory } from '../../lib/rehearse-storage';
 import type {
   CoachHistoryRecord,
   CoachScenario,
@@ -147,12 +147,12 @@ export default function CoachSummaryScreen() {
       },
       summary
     );
-    await saveCoachHistory(record);
+    await saveRehearseHistory(record);
     setSaved(true);
   };
 
   const isInterview = !!summary?.interview_feedback || !!params.interviewKind;
-  const sceneLabel = (scenario?.id ?? 'coach').replace(/_/g, ' ').toUpperCase();
+  const sceneLabel = (scenario?.id ?? 'rehearse').replace(/_/g, ' ').toUpperCase();
   const duration = `${Math.floor(durationSeconds / 60)}:${String(durationSeconds % 60).padStart(2, '0')}`;
 
   return (
@@ -270,7 +270,7 @@ export default function CoachSummaryScreen() {
             />
             <SecondaryButton
               label={t('coachChangeScenario')}
-              onPress={() => router.replace('/(tabs)/coach')}
+              onPress={() => router.replace('/(tabs)/rehearse')}
             />
             <Pressable disabled={saved} onPress={() => void save()} style={styles.saveLink}>
               <Text style={{ color: saved ? c.inkMuted : c.accent, fontWeight: '600' }}>

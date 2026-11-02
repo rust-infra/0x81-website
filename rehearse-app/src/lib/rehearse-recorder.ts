@@ -47,6 +47,18 @@ export async function readRecordingBase64(uri: string): Promise<{
   audioBase64: string;
   mimeType: string;
 }> {
+  // Web 的录音器给的是 `blob:` URL，expo-file-system 的 File 不认它
+  // （`this.validatePath is not a function`）。blob/data URL 直接 fetch，
+  // 顺带用响应头里的类型——blob URL 的路径里没有扩展名，按扩展名猜会得到 m4a。
+  if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+    const response = await fetch(uri);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const headerType = response.headers.get('content-type')?.split(';')[0]?.trim();
+    return {
+      audioBase64: bytesToBase64(bytes),
+      mimeType: headerType || 'audio/webm',
+    };
+  }
   const { File } = await import('expo-file-system');
   const bytes = new Uint8Array(await new File(uri).arrayBuffer());
   return {

@@ -14,9 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Group, SectionLabel } from '../../components/Group';
 import Segmented from '../../components/Segmented';
-import { fetchUserSettings, saveUserSettings } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
+import { getSyncedSettings, putSyncedSettings } from '../../lib/rehearse-api-runtime';
+import { applySyncedSettings, buildSyncedSettings } from '../../lib/rehearse-sync';
 import {
   clearAudioCache,
   getSpeechSettings,
@@ -36,10 +37,8 @@ import {
 } from '../../lib/voices';
 
 const THEME_TEXT: Record<string, { label: string; description: string }> = {
-  xuanzhi: { label: 'themeXuanzhi', description: 'themeXuanzhiDesc' },
-  shenyemo: { label: 'themeShenyemo', description: 'themeShenyemoDesc' },
-  dailan: { label: 'themeDailan', description: 'themeDailanDesc' },
-  fense: { label: 'themeFense', description: 'themeFenseDesc' },
+  light: { label: 'themeLight', description: 'themeLightDesc' },
+  dark: { label: 'themeDark', description: 'themeDarkDesc' },
 };
 
 // 分段控件用短标签：完整名（"ElevenLabs AI Voice"）在半宽按钮里放不下。
@@ -73,17 +72,62 @@ export default function SettingsScreen() {
   const c = theme.colors;
   const [speech, setSpeech] = useState<SpeechSettings | null>(null);
   const [voicePicker, setVoicePicker] = useState<'en' | 'zh' | null>(null);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [systemVoices, setSystemVoices] = useState<VoiceOption[]>([]);
   const skippedFirstFocus = useRef(false);
+  // 最新一份语音设置。事件处理器闭包里的 `speech` 可能是上一次渲染的，
+  // 连续两次改动（比如连点两个开关）会丢掉前一次。
+  const speechRef = useRef<SpeechSettings | null>(null);
+  // 本次进入设置页后用户改过设置。远端文档可能是改动之前的快照，
+  // 这时再套用会把刚改的那一项冲掉。
+  const editedRef = useRef(false);
+  // 上传队列只保留「还有一份没发」这一个事实。文档在**发送那一刻**才从
+  // 上面几个 ref 组装，所以连续改动合并成最后一次，且服务端最终拿到的是最新状态。
+  const pendingPushRef = useRef(false);
+  const pushingRef = useRef(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem('settings_last_sync')
-      .then((v) => {
-        if (v) setLastSync(new Date(v));
-      })
-      .catch(() => {});
-  }, []);
+  // 排队上传读的是发送时的值，不是排队时的闭包。处理器改完状态要同步写这里，
+  // 因为 setState 触发的重渲染发生在 push 之后。
+  const themeNameRef = useRef(themeName);
+  const langRef = useRef(lang);
+  themeNameRef.current = themeName;
+  langRef.current = lang;
+
+  // 本机上次成功同步时服务端给的 updated_at。远端不比它新就不覆盖本机——
+  // 两台设备各自改设置时，后写的那台赢（设计稿 §7.5.1）。
+  //
+  // 键按用户分开：同一台设备换账号登录时，上一个账号的同步时间不能拿来
+  // 压住新账号的远端设置（本机的主题/语音是设备级的，会带过来）。
+  const syncedAtKey = `rehearse_settings_synced_at:${user?.id ?? 'anonymous'}`;
+
+  const flushSettings = useCallback(async () => {
+    if (pushingRef.current) return;
+    pushingRef.current = true;
+    try {
+      while (pendingPushRef.current) {
+        pendingPushRef.current = false;
+        const speech = speechRef.current;
+        if (!speech) break;
+        const doc = buildSyncedSettings(themeNameRef.current, langRef.current, speech);
+        const saved = await putSyncedSettings(doc);
+        if (saved?.updated_at) {
+          await AsyncStorage.setItem(syncedAtKey, saved.updated_at);
+        }
+      }
+      editedRef.current = false;
+    } catch {
+      // 离线：本机设置仍然生效，下一次改动会重新入队
+    } finally {
+      pushingRef.current = false;
+    }
+  }, [syncedAtKey]);
+
+  const applySpeech = useCallback((next: SpeechSettings, persist = true) => {
+    speechRef.current = next;
+    setSpeech(next);
+    if (persist) void saveSpeechSettings(next);
+    // 加载完成前就点了主题/语言时，那一份还压在队列里。
+    if (pendingPushRef.current) void flushSettings();
+  }, [flushSettings]);
 
   useEffect(() => {
     if (speech?.provider === 'webspeech') {
@@ -98,8 +142,8 @@ export default function SettingsScreen() {
         skippedFirstFocus.current = true;
         return;
       }
-      void getSpeechSettings().then(setSpeech);
-    }, [])
+      void getSpeechSettings().then((next) => applySpeech(next, false));
+    }, [applySpeech])
   );
 
   const currentVoiceValue = (zh: boolean): string => {
@@ -129,11 +173,9 @@ export default function SettingsScreen() {
   };
 
   const updateSpeech = (patch: Partial<SpeechSettings>) => {
-    setSpeech((prev) => {
-      const next = { ...(prev || {}), ...patch };
-      void saveSpeechSettings(next);
-      return next;
-    });
+    const next = { ...(speechRef.current || {}), ...patch };
+    applySpeech(next);
+    void pushSettings();
   };
 
   const pickVoice = (option: VoiceOption) => {
@@ -176,102 +218,57 @@ export default function SettingsScreen() {
 
   const handleReset = async () => {
     const defaults = await resetSpeechSettings();
-    setSpeech(defaults);
+    applySpeech(defaults, false);
+    void pushSettings();
     toast(t('saved'));
   };
 
+  // 本地先生效，再用远端「更新的那一份」覆盖。离线或服务端不可达时保持本机设置。
   const loadSettings = useCallback(async () => {
     const local = await getSpeechSettings();
-    setSpeech(local);
+    applySpeech(local, false);
     try {
-      const remote = await fetchUserSettings();
-      if (remote.language) setLang(remote.language as LangKey);
-      // 仅当本机从未设置过主题/语音时才套用云端，避免覆盖用户刚点的选择
-      const [themeStored, speechStored] = await Promise.all([
-        AsyncStorage.getItem('app_theme'),
-        AsyncStorage.getItem('speech_settings'),
-      ]);
-      if (!themeStored && remote.theme && themes.some((t) => t.name === remote.theme)) {
+      const remote = await getSyncedSettings();
+      // 请求在飞的时候用户可能已经改了设置，这时远端是旧快照。
+      if (editedRef.current) return;
+      const remoteAt = remote?.updated_at;
+      if (!remoteAt) return;
+      const syncedAt = await AsyncStorage.getItem(syncedAtKey);
+      if (syncedAt && remoteAt <= syncedAt) return;
+
+      if (remote.theme && themes.some((th) => th.name === remote.theme)) {
         setTheme(remote.theme as typeof themes[number]['name']);
       }
-      if (!speechStored && (remote.speech_provider || remote.speech_speed != null || remote.auto_play != null)) {
-        const merged: SpeechSettings = {
-          ...local,
-          provider: (remote.speech_provider as SpeechSettings['provider']) || local.provider,
-          speech_voice: remote.speech_voice || local.speech_voice,
-          speech_zh_voice: remote.speech_zh_voice || local.speech_zh_voice,
-          speech_model: remote.speech_model || local.speech_model,
-          speech_speed: remote.speech_speed ?? local.speech_speed,
-          auto_play: remote.auto_play ?? local.auto_play,
-        };
-        setSpeech(merged);
-        await saveSpeechSettings(merged);
+      if (remote.language === 'zh-CN' || remote.language === 'en') {
+        setLang(remote.language);
       }
+      if (remote.speech) {
+        applySpeech(applySyncedSettings(remote, local));
+      }
+      await AsyncStorage.setItem(syncedAtKey, remoteAt);
     } catch {
-      // 后端不可达时静默
+      // 离线：本机设置照常可用，下次进入本页再试
     }
-  }, [setTheme, themes, setLang]);
+  }, [applySpeech, setTheme, themes, setLang, syncedAtKey]);
 
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
 
-  const syncToBackend = async () => {
-    try {
-      const s = speech || (await getSpeechSettings());
-      await saveUserSettings({
-        theme: themeName,
-        language: lang,
-        speech_provider: s.provider,
-        speech_voice: s.speech_voice,
-        speech_zh_voice: s.speech_zh_voice,
-        speech_model: s.speech_model,
-        speech_speed: s.speech_speed,
-        auto_play: s.auto_play,
-      });
-      const now = new Date();
-      setLastSync(now);
-      AsyncStorage.setItem('settings_last_sync', now.toISOString()).catch(() => {});
-      toast(t('synced'));
-    } catch (err) {
-      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const downloadSettings = async () => {
-    try {
-      const remote = await fetchUserSettings();
-      if (remote.language) setLang(remote.language as LangKey);
-      if (remote.theme && themes.some((t) => t.name === remote.theme)) {
-        setTheme(remote.theme as typeof themes[number]['name']);
-      }
-      if (speech) {
-        const merged: SpeechSettings = {
-          ...speech,
-          provider: (remote.speech_provider as SpeechSettings['provider']) || speech.provider,
-          speech_voice: remote.speech_voice || speech.speech_voice,
-          speech_zh_voice: remote.speech_zh_voice || speech.speech_zh_voice,
-          speech_model: remote.speech_model || speech.speech_model,
-          speech_speed: remote.speech_speed ?? speech.speech_speed,
-          auto_play: remote.auto_play ?? speech.auto_play,
-        };
-        setSpeech(merged);
-        await saveSpeechSettings(merged);
-      }
-      toast(t('restored'));
-    } catch (err) {
-      toast(`${t('syncFailed')}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+  // 每次本地改动后全量上传。凭据字段在 buildSyncedSettings 里被剔除（§7.5.1）。
+  // 只入队、不并发：同时发两份全量文档时，先发的若后到，服务端会留下旧的一份。
+  // 失败不打扰用户：本机设置已经生效，下一次改动会重新入队。
+  const pushSettings = useCallback(() => {
+    editedRef.current = true;
+    pendingPushRef.current = true;
+    void flushSettings();
+  }, [flushSettings]);
 
   const changeLanguage = async (next: LangKey) => {
+    langRef.current = next;
     setLang(next);
-    try {
-      await saveUserSettings({ language: next });
-      toast(t('saved'));
-    } catch {
-      // 后端不可达时仅本地生效
-    }
+    void pushSettings();
+    toast(t('saved'));
   };
 
   const speed = speech?.speech_speed ?? 0.9;
@@ -322,7 +319,11 @@ export default function SettingsScreen() {
                   <Pressable
                     key={th.name}
                     style={styles.swatchItem}
-                    onPress={() => setTheme(th.name)}
+                    onPress={() => {
+                      themeNameRef.current = th.name;
+                      setTheme(th.name);
+                      void pushSettings();
+                    }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                   >
@@ -530,24 +531,6 @@ export default function SettingsScreen() {
 
         <SectionLabel>{t('actionsLabel')}</SectionLabel>
         <View style={styles.footerRow}>
-          <Pressable
-            style={[styles.footerBtn, { backgroundColor: c.buttonBg, borderColor: c.buttonBg }]}
-            onPress={syncToBackend}
-          >
-            <Text numberOfLines={1} style={{ color: c.buttonText, fontSize: 13 }}>
-              {t('uploadSettings')}
-            </Text>
-          </Pressable>
-          <Pressable style={[styles.footerBtn, { borderColor: c.border }]} onPress={downloadSettings}>
-            <Text numberOfLines={1} style={{ color: c.accent, fontSize: 13 }}>
-              {t('downloadSettings')}
-            </Text>
-          </Pressable>
-        </View>
-        <Text style={[styles.footerCaption, { color: c.inkMuted }]}>
-          {t('lastSync')}: {lastSync ? lastSync.toLocaleString() : t('never')}
-        </Text>
-        <View style={styles.footerRow}>
           <Pressable style={styles.footerTextBtn} onPress={handleClearCache}>
             <Text numberOfLines={1} style={{ color: c.accent, fontSize: 13 }}>
               {t('clearCache')}
@@ -616,7 +599,8 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { paddingBottom: 48 },
+  // 与 rehearse / history 两个 Tab 对齐：浮动 Tab 栏约 90pt，48 会盖住最后一组。
+  body: { paddingBottom: 150 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -685,16 +669,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 16, fontWeight: '600' },
   footerRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  footerBtn: {
-    flex: 1,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   footerTextBtn: { flex: 1, paddingVertical: 8, alignItems: 'center' },
-  footerCaption: { fontSize: 12, marginTop: 12 },
   mask: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 24,

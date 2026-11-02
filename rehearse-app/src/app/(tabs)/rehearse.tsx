@@ -19,13 +19,14 @@ import {
   shouldShowCoachInitialLoading,
 } from '../../lib/rehearse-selection';
 import {
-  loadCoachHistory,
+  loadRehearseHistory,
   loadCustomScenarios,
   saveCustomScenario,
 } from '../../lib/rehearse-storage';
 import type { CoachHistoryRecord, CoachQuotaStatus, CoachScenario } from '../../lib/rehearse-types';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
+import { useToast } from '../../lib/toast';
 import { serif } from '../../lib/ui';
 
 const CATEGORY_LABEL = {
@@ -64,6 +65,7 @@ export default function CoachScreen() {
   const router = useRouter();
   const { t, lang } = useI18n();
   const { theme } = useTheme();
+  const toast = useToast();
   const c = theme.colors;
   const [quota, setQuota] = useState<CoachQuotaStatus | null>(null);
   const [presets, setPresets] = useState<CoachScenario[]>([]);
@@ -82,7 +84,7 @@ export default function CoachScreen() {
         getCoachQuota(),
         listCoachScenarios(lang),
         loadCustomScenarios(),
-        loadCoachHistory(),
+        loadRehearseHistory(),
       ]);
     if (requestId !== loadRequestRef.current) return;
 
@@ -111,7 +113,12 @@ export default function CoachScreen() {
   const start = (scenario: CoachScenario) => {
     if (!quota) return;
     const check = canStartCoach({ quota, scenario });
-    if (!check.ok) return;
+    if (!check.ok) {
+      // 不能静默 return：用户点了没反应会以为 App 卡住。
+      // LLM 未配置是**新装环境的默认状态**，必须给出可执行的解释。
+      toast(t(check.reason === 'llm' ? 'coachUnavailableLLM' : 'coachQuotaTitle'));
+      return;
+    }
     router.push({
       pathname: '/rehearse/session',
       params: { scenarioId: scenario.id, source: scenario.source },
@@ -130,15 +137,17 @@ export default function CoachScreen() {
   };
 
   const startReason = quota ? canStartCoach({ quota, scenario: presets[0] }) : null;
-  const available = !!quota && !!startReason?.ok;
+  // ⚠️ `canStartCoach` 回答的是「能不能**开始一次演练**」，不是「能不能**看这个页面**」。
+  // 早先把它当成页面级开关，导致 LLM 没配（新装环境的默认状态）时整页被
+  // UnavailableState 替换 —— 连 14 个预置场景和「AI 面试官」入口都看不到。
+  // 现在页面级只保留「加载失败」，其余原因降级成一条横幅 + 点击时的 toast。
+  const blockedReason: 'quota' | 'llm' | null =
+    quota && startReason && !startReason.ok ? startReason.reason : null;
+  const available = !!quota && !blockedReason;
   const groups = groupScenarios(
     presets.filter((scenario) => !scenario.id.startsWith('interview_'))
   );
-  const unavailableKind = loadError
-    ? 'network'
-    : quota && startReason && !startReason.ok
-      ? startReason.reason
-      : null;
+  const unavailableKind = loadError ? 'network' : null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.paper }]} edges={['top']}>
@@ -172,9 +181,21 @@ export default function CoachScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
 
+          {/* 不可用的原因只影响「开始」，不影响「看」——所以是一条横幅，不是整页空态。 */}
+          {blockedReason === 'llm' ? (
+            <View style={[styles.notice, { backgroundColor: c.accentLight }]}>
+              <Text style={[styles.noticeTitle, { color: c.accent }]}>
+                {t('coachUnavailableLLM')}
+              </Text>
+              <Text style={[styles.noticeDesc, { color: c.inkMuted }]}>
+                {t('coachUnavailableLLMDesc')}
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/rehearse/interview')}
+            onPress={() => router.push('/rehearse/material')}
             style={[styles.entry, { backgroundColor: c.card, borderColor: c.border }]}
           >
             <View style={[styles.entryIcon, { backgroundColor: c.accentLight }]}>
@@ -308,6 +329,9 @@ const styles = StyleSheet.create({
   quotaStrong: { fontSize: 13, fontWeight: '700' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { paddingHorizontal: 20, paddingBottom: 150 },
+  notice: { borderRadius: 16, padding: 14, marginBottom: 14 },
+  noticeTitle: { fontSize: 13, fontWeight: '700' },
+  noticeDesc: { fontSize: 12, lineHeight: 18, marginTop: 6 },
   entry: {
     flexDirection: 'row',
     alignItems: 'center',

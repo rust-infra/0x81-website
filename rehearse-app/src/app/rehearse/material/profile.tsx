@@ -79,17 +79,21 @@ export default function InterviewProfileScreen() {
         }
       />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <View style={[styles.notice, { backgroundColor: c.card, borderLeftColor: c.accent }]}>
-          <View style={styles.noticeTitleRow}>
-            <CoachGlyph name="check" color={c.accent} size={17} />
-            <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12.5 }}>
-              {t('coachProfileGenerated')}
+        {/* 只有真的有内容时才说「已生成」。直接进这一页（或生成失败）时正文是空的，
+            却告诉用户「已从你的简历生成档案」，会和下面禁用的「开始面试」自相矛盾。 */}
+        {profile.trim() ? (
+          <View style={[styles.notice, { backgroundColor: c.card, borderLeftColor: c.accent }]}>
+            <View style={styles.noticeTitleRow}>
+              <CoachGlyph name="check" color={c.accent} size={17} />
+              <Text style={{ color: c.accent, fontWeight: '700', fontSize: 12.5 }}>
+                {t('coachProfileGenerated')}
+              </Text>
+            </View>
+            <Text style={{ color: c.ink, fontSize: 14, lineHeight: 22, marginTop: 9 }}>
+              {t('coachProfileUseOnly')}
             </Text>
           </View>
-          <Text style={{ color: c.ink, fontSize: 14, lineHeight: 22, marginTop: 9 }}>
-            {t('coachProfileUseOnly')}
-          </Text>
-        </View>
+        ) : null}
         <TextInput
           value={profile}
           onChangeText={setProfile}

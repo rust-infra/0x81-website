@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
   type ReactNode,
 } from 'react';
-import { TOKEN_KEY } from './api';
+import { setUnauthorizedHandler, TOKEN_KEY } from './api';
 import type { User } from './types';
 
 const USER_KEY = 'rehearse_user';
@@ -58,11 +59,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(nextUser);
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
     setToken(null);
     setUser(null);
-  };
+  }, []);
+
+  // token 过期或被吊销时，服务端回 401，请求层从这里把状态清掉，
+  // 根路由随即退回登录页。没有这条，用户会卡在「已登录但每个请求都失败」。
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      void signOut();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [signOut]);
 
   return (
     <AuthContext.Provider value={{ token, user, ready, signIn, signOut }}>

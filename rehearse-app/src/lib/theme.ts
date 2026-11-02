@@ -1,10 +1,22 @@
-// 主题配置（数据与 moyan-web 一致；RN 无 DOM，只保留数据与类型）
+// 主题配置。
+//
+// ⚠️ 2026-10-18：从墨言继承来的 4 套皮肤（宣纸白 / 深夜墨 / 黛蓝 / 藕粉）**已删除**，
+// 只保留 light / dark 两套。依据是设计稿 `design/index.html` 顶部的约定：
+//
+//   职演有自己的配色，**不沿用墨言的水墨体系**。v1 只做 light / dark 两套，
+//   不跟系统主题、不做多套皮肤。两套的色相完全对齐（强调色都是 210°），
+//   只有明暗和饱和度的差别。
+//
+// 色值直接对齐设计稿的 `[data-theme="light"]` / `[data-theme="dark"]` 变量，
+// 不再用墨言那套米白 + 墨红。理由写在设计稿里：职演面向「一次有 deadline 的
+// 职场对话」，需要冷静、可信、专业；水墨是墨言的文人气质。
+//
+// 两条 token 语义规则（设计稿里踩过才写下来的）：
+//   1. `buttonBg` / `tagBg` 是**中性**灰阶，两套主题下都不能沾强调色；
+//   2. 强调色只给「正在进行 / 需要注意」的东西（麦克风、倒计时、进度、会话页），
+//      结构性容器一律中性。
 
-export type ThemeName =
-  | 'xuanzhi'
-  | 'shenyemo'
-  | 'dailan'
-  | 'fense';
+export type ThemeName = 'light' | 'dark';
 
 export interface ThemeColors {
   paper: string;
@@ -42,127 +54,93 @@ export interface Theme {
 
 export const THEMES: Theme[] = [
   {
-    name: 'xuanzhi',
-    label: '宣纸白',
-    description: '温润米白，经典水墨',
-    preview: '#F7F5F0',
+    name: 'light',
+    label: '浅色',
+    description: '冷静清晰，适合白天',
+    preview: '#F4F5F7',
     colors: {
-      paper: '#F7F5F0',
-      paperGradient: '#F7F5F0',
+      paper: '#F4F5F7',
+      paperGradient: '#F4F5F7',
       card: '#FFFFFF',
-      ink: '#2B2B2B',
-      inkLight: '#5A5A5A',
-      inkMuted: '#757575',
-      accent: '#8C3B3B',
-      accentLight: '#8C3B3B18',
-      border: '#E8E4D9',
+      ink: '#1A1D21',
+      inkLight: '#4A5058',
+      inkMuted: '#676E78',
+      accent: '#2F5D8C',
+      accentLight: '#2F5D8C14',
+      border: '#E3E6EA',
       navBg: '#FFFFFF',
-      navText: '#5A5A5A',
-      studyBg: '#F7F5F0',
-      studyCard: '#FFFFFF',
-      studyText: '#2B2B2B',
-      studyMuted: 'rgba(43, 43, 43, 0.65)',
-      progressBar: '#8C3B3B',
-      tagBg: 'rgba(43, 43, 43, 0.08)',
-      tagText: '#5A5A5A',
-      buttonBg: '#2B2B2B',
+      navText: '#4A5058',
+      // 会话面**跟随主题**（设计稿 2026-10-18「会话页浅色面」）：
+      // 浅色主题下它就是一张浅色面，取值全部来自本主题已有的 token，
+      // 不发明新色值。早先两套主题下 `study-*` 都是深色，主题开关在会话页
+      // 近乎空转，而且「浅 → 黑 → 浅」把一次任务切成三段。
+      studyBg: '#F4F5F7', // = paper
+      studyCard: '#FFFFFF', // = card
+      studyText: '#1A1D21', // = ink
+      studyMuted: '#676E78', // = inkMuted
+      progressBar: '#2F5D8C',
+      tagBg: 'rgba(26,29,33,.06)',
+      tagText: '#4A5058',
+      buttonBg: '#1A1D21',
       buttonText: '#FFFFFF',
-      divider: '#E8E4D9',
-      hoverBg: '#F0EDE6',
-      inputBg: '#F7F5F0',
+      divider: '#E3E6EA',
+      hoverBg: '#EBEDF0',
+      inputBg: '#F4F5F7',
     },
   },
   {
-    name: 'shenyemo',
-    label: '深夜墨',
-    description: '浓墨深邃，护目不扰',
-    preview: '#1C1C1E',
+    name: 'dark',
+    label: '深色',
+    description: '夜间护眼，同一套设计',
+    preview: '#14181C',
     colors: {
-      paper: '#1C1C1E',
-      paperGradient: '#1C1C1E',
-      card: '#2C2C2E',
-      ink: '#E8E4DC',
-      inkLight: '#A09A92',
-      inkMuted: '#96928E',
-      accent: '#C07060',
-      accentLight: '#C0706020',
-      border: '#3A3A3C',
-      navBg: '#2C2C2E',
-      navText: '#A09A92',
-      studyBg: '#121214',
-      studyCard: '#1C1C1E',
-      studyText: '#E8E4DC',
-      studyMuted: 'rgba(232, 228, 220, 0.53)',
-      progressBar: '#C07060',
-      tagBg: 'rgba(232, 228, 220, 0.08)',
-      tagText: '#A09A92',
-      buttonBg: '#E8E4DC',
-      buttonText: '#1C1C1E',
-      divider: '#3A3A3C',
-      hoverBg: '#363638',
-      inputBg: '#2C2C2E',
-    },
-  },
-  {
-    name: 'dailan',
-    label: '黛蓝',
-    description: '墨蓝沉稳，科技雅致',
-    preview: '#F0F2F5',
-    colors: {
-      paper: '#F0F2F5',
-      paperGradient: '#F0F2F5',
-      card: '#FFFFFF',
-      ink: '#1A2538',
-      inkLight: '#4A5B74',
-      inkMuted: '#7A8BA4',
-      accent: '#3B5A7A',
-      accentLight: '#3B5A7A18',
-      border: '#D4D8E0',
-      navBg: '#FFFFFF',
-      navText: '#4A5B74',
-      studyBg: '#F0F2F5',
-      studyCard: '#FFFFFF',
-      studyText: '#1A2538',
-      studyMuted: 'rgba(26, 37, 56, 0.55)',
-      progressBar: '#3B5A7A',
-      tagBg: 'rgba(59, 90, 122, 0.08)',
-      tagText: '#4A5B74',
-      buttonBg: '#1A2538',
-      buttonText: '#FFFFFF',
-      divider: '#D4D8E0',
-      hoverBg: '#E4E7ED',
-      inputBg: '#F0F2F5',
-    },
-  },
-  {
-    name: 'fense',
-    label: '藕粉',
-    description: '柔粉温润，清新脱俗',
-    preview: '#FAF2F0',
-    colors: {
-      paper: '#FAF2F0',
-      paperGradient: '#FAF2F0',
-      card: '#FFFFFF',
-      ink: '#3A2228',
-      inkLight: '#6B4A54',
-      inkMuted: '#9B7A84',
-      accent: '#8C4A5A',
-      accentLight: '#8C4A5A18',
-      border: '#E8D8D8',
-      navBg: '#FFFFFF',
-      navText: '#6B4A54',
-      studyBg: '#FAF2F0',
-      studyCard: '#FFFFFF',
-      studyText: '#3A2228',
-      studyMuted: 'rgba(58, 34, 40, 0.55)',
-      progressBar: '#8C4A5A',
-      tagBg: 'rgba(140, 74, 90, 0.08)',
-      tagText: '#6B4A54',
-      buttonBg: '#3A2228',
-      buttonText: '#FFFFFF',
-      divider: '#E8D8D8',
-      hoverBg: '#F0E4E0',
-      inputBg: '#FAF2F0',
+      paper: '#14181C',
+      paperGradient: '#14181C',
+      card: '#1D2228',
+      ink: '#E9EDF1',
+      inkLight: '#A8B1BA',
+      inkMuted: '#8B949D',
+      // 深色下 accent 是浅蓝，只能当文字/描边色；填充面另用更深的 buttonBg。
+      accent: '#6FA3D9',
+      accentLight: '#6FA3D920',
+      border: '#2B3138',
+      navBg: '#1D2228',
+      navText: '#A8B1BA',
+      studyBg: '#0D1114',
+      studyCard: '#171C21',
+      studyText: '#E9EDF1',
+      studyMuted: 'rgba(233,237,241,.58)',
+      progressBar: '#6FA3D9',
+      tagBg: 'rgba(233,237,241,.08)',
+      tagText: '#A8B1BA',
+      buttonBg: '#E9EDF1',
+      buttonText: '#14181C',
+      divider: '#2B3138',
+      hoverBg: '#232A31',
+      inputBg: '#1D2228',
     },
   },
 ];
+
+/**
+ * 把旧版本存下来的主题名映射到新名字。
+ *
+ * 老版本有 4 套（`xuanzhi` / `shenyemo` / `dailan` / `fense`）。用户本地
+ * `app_theme` 里可能还存着这些值；直接丢弃会让升级后主题「跳回默认」，
+ * 所以按明暗归类迁移，而不是当成非法值。
+ */
+export function migrateThemeName(saved: string | null | undefined): ThemeName | null {
+  switch (saved) {
+    case 'light':
+    case 'dark':
+      return saved;
+    case 'xuanzhi':
+    case 'dailan':
+    case 'fense':
+      return 'light';
+    case 'shenyemo':
+      return 'dark';
+    default:
+      return null;
+  }
+}

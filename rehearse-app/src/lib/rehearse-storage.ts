@@ -13,15 +13,15 @@ export interface KeyValueStore {
 }
 
 const KEYS = {
-  scenarios: 'coach_custom_scenarios_v1',
-  history: 'coach_history_v1',
-  profiles: 'coach_interview_profiles_v1',
-  prefs: 'coach_prefs_v1',
+  scenarios: 'rehearse_custom_scenarios_v1',
+  history: 'rehearse_history_v1',
+  profiles: 'rehearse_interview_profiles_v1',
+  prefs: 'rehearse_prefs_v1',
   /** 进行中的会话草稿：只有一份（同一时刻只在一个场景里练）。 */
-  draft: 'coach_session_draft_v1',
+  draft: 'rehearse_session_draft_v1',
 } as const;
 
-export const DEFAULT_COACH_PREFS: CoachPrefs = {
+export const DEFAULT_REHEARSE_PREFS: CoachPrefs = {
   defaultMode: 'feedback',
   accentPreference: 'en-US',
   autoPlay: true,
@@ -49,7 +49,7 @@ async function writeJson<T>(
   await store.setItem(key, JSON.stringify(value));
 }
 
-export function createCoachStorage(store: KeyValueStore) {
+export function createRehearseStorage(store: KeyValueStore) {
   let draftMutationTail: Promise<void> = Promise.resolve();
 
   function enqueueDraftMutation<T>(task: () => Promise<T>): Promise<T> {
@@ -79,7 +79,7 @@ export function createCoachStorage(store: KeyValueStore) {
       await writeJson(store, KEYS.scenarios, next);
     },
 
-    async loadCoachHistory(): Promise<CoachHistoryRecord[]> {
+    async loadRehearseHistory(): Promise<CoachHistoryRecord[]> {
       const value = await readJson<unknown>(store, KEYS.history, []);
       if (!Array.isArray(value)) return [];
       return (value as CoachHistoryRecord[]).sort((a, b) =>
@@ -87,20 +87,20 @@ export function createCoachStorage(store: KeyValueStore) {
       );
     },
 
-    async saveCoachHistory(record: CoachHistoryRecord): Promise<void> {
-      const list = await this.loadCoachHistory();
+    async saveRehearseHistory(record: CoachHistoryRecord): Promise<void> {
+      const list = await this.loadRehearseHistory();
       const next = list.filter((item) => item.id !== record.id);
       next.push(record);
       next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       await writeJson(store, KEYS.history, next);
     },
 
-    async deleteCoachHistory(id: string): Promise<void> {
-      const next = (await this.loadCoachHistory()).filter((item) => item.id !== id);
+    async deleteRehearseHistory(id: string): Promise<void> {
+      const next = (await this.loadRehearseHistory()).filter((item) => item.id !== id);
       await writeJson(store, KEYS.history, next);
     },
 
-    async clearCoachHistory(): Promise<void> {
+    async clearRehearseHistory(): Promise<void> {
       await store.removeItem(KEYS.history);
     },
 
@@ -125,14 +125,14 @@ export function createCoachStorage(store: KeyValueStore) {
       await writeJson(store, KEYS.profiles, next);
     },
 
-    async loadCoachPrefs(): Promise<CoachPrefs> {
+    async loadRehearsePrefs(): Promise<CoachPrefs> {
       return {
-        ...DEFAULT_COACH_PREFS,
+        ...DEFAULT_REHEARSE_PREFS,
         ...(await readJson<Partial<CoachPrefs>>(store, KEYS.prefs, {})),
       };
     },
 
-    async saveCoachPrefs(prefs: CoachPrefs): Promise<void> {
+    async saveRehearsePrefs(prefs: CoachPrefs): Promise<void> {
       await writeJson(store, KEYS.prefs, prefs);
     },
 
@@ -160,11 +160,11 @@ async function defaultStore(): Promise<KeyValueStore> {
   return AsyncStorage as unknown as KeyValueStore;
 }
 
-let defaultStoragePromise: Promise<ReturnType<typeof createCoachStorage>> | null = null;
+let defaultStoragePromise: Promise<ReturnType<typeof createRehearseStorage>> | null = null;
 
 async function defaultStorage() {
   if (!defaultStoragePromise) {
-    defaultStoragePromise = defaultStore().then((store) => createCoachStorage(store));
+    defaultStoragePromise = defaultStore().then((store) => createRehearseStorage(store));
   }
   return defaultStoragePromise;
 }
@@ -175,23 +175,23 @@ export const saveCustomScenario = async (scenario: CoachScenario) =>
   (await defaultStorage()).saveCustomScenario(scenario);
 export const deleteCustomScenario = async (id: string) =>
   (await defaultStorage()).deleteCustomScenario(id);
-export const loadCoachHistory = async () =>
-  (await defaultStorage()).loadCoachHistory();
-export const saveCoachHistory = async (record: CoachHistoryRecord) =>
-  (await defaultStorage()).saveCoachHistory(record);
-export const deleteCoachHistory = async (id: string) =>
-  (await defaultStorage()).deleteCoachHistory(id);
-export const clearCoachHistory = async () =>
-  (await defaultStorage()).clearCoachHistory();
+export const loadRehearseHistory = async () =>
+  (await defaultStorage()).loadRehearseHistory();
+export const saveRehearseHistory = async (record: CoachHistoryRecord) =>
+  (await defaultStorage()).saveRehearseHistory(record);
+export const deleteRehearseHistory = async (id: string) =>
+  (await defaultStorage()).deleteRehearseHistory(id);
+export const clearRehearseHistory = async () =>
+  (await defaultStorage()).clearRehearseHistory();
 export const loadInterviewProfiles = async () =>
   (await defaultStorage()).loadInterviewProfiles();
 export const saveInterviewProfile = async (record: InterviewProfileRecord) =>
   (await defaultStorage()).saveInterviewProfile(record);
 export const deleteInterviewProfile = async (id: string) =>
   (await defaultStorage()).deleteInterviewProfile(id);
-export const loadCoachPrefs = async () => (await defaultStorage()).loadCoachPrefs();
-export const saveCoachPrefs = async (prefs: CoachPrefs) =>
-  (await defaultStorage()).saveCoachPrefs(prefs);
+export const loadRehearsePrefs = async () => (await defaultStorage()).loadRehearsePrefs();
+export const saveRehearsePrefs = async (prefs: CoachPrefs) =>
+  (await defaultStorage()).saveRehearsePrefs(prefs);
 export const loadSessionDraft = async () => (await defaultStorage()).loadSessionDraft();
 export const saveSessionDraft = async (draft: CoachSessionDraft) =>
   (await defaultStorage()).saveSessionDraft(draft);

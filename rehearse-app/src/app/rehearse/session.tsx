@@ -51,7 +51,7 @@ import {
 } from '../../lib/rehearse-session';
 import {
   clearSessionDraft,
-  loadCoachPrefs,
+  loadRehearsePrefs,
   loadCustomScenarios,
   loadSessionDraft,
   saveSessionDraft,
@@ -307,6 +307,14 @@ interface TurnErrorState {
   status?: number;
 }
 
+/**
+ * 按住说话的最短时长：低于它视为误触，取消本次录音、不转写不提交。
+ *
+ * 阈值取 0.6s——足够滤掉「想点键盘却蹭到麦克风」的误触，又不至于让
+ * 「按住就说一个词」的短输入被误伤。
+ */
+const MIN_HOLD_MS = 600;
+
 interface CoachSttConfig {
   provider: 'system' | 'google-cloud' | 'gemini';
   apiKey: string;
@@ -392,6 +400,9 @@ export default function CoachSessionScreen() {
   const sttStartSeqRef = useRef(0);
   const sttStartingRef = useRef(false);
   const cloudRecordingRef = useRef(false);
+  /** 按住说话：这次按下的时刻，与「抬起发生在录音真正开始之前」的标记。 */
+  const holdStartRef = useRef(0);
+  const releaseQueuedRef = useRef(false);
   /** 录音器已经 prepare 过（在录，或录完待停止）—— 决定 stop 到底该不该调。 */
   const recorderArmedRef = useRef(false);
   const mountedRef = useRef(true);
@@ -476,7 +487,7 @@ export default function CoachSessionScreen() {
   }, [lang, params.scenarioId]);
 
   useEffect(() => {
-    void Promise.all([loadCoachPrefs(), getSpeechSettings()])
+    void Promise.all([loadRehearsePrefs(), getSpeechSettings()])
       .then(([prefs, speech]) => {
         setAutoPlay(prefs.autoPlay);
         setSttConfig({
@@ -603,6 +614,9 @@ export default function CoachSessionScreen() {
     const text = (override ?? input).trim();
     if (!text) return;
     if (pendingRetryText && text !== pendingRetryText) return;
+    // 用键盘或建议直接发送时，正在进行的识别要作废：stop() 之后它还会送一次
+    // 最终结果，不推进 seq 就会再提交一轮。
+    sttStartSeqRef.current += 1;
     sttRef.current?.stop();
     sttRef.current = null;
     setInput('');
@@ -807,28 +821,8 @@ export default function CoachSessionScreen() {
     }
   };
 
-  const toggleCloudMic = async () => {
-    if (sttStartingRef.current || transcribing) return;
-    if (cloudRecordingRef.current) {
-      await stopCloudRecording(true);
-      return;
-    }
-    await startCloudRecording();
-  };
-
-  const toggleMic = async () => {
-    if (!scenario || limitReached || startingMic || sttStartingRef.current) return;
-    if (sttConfig.provider !== 'system') {
-      await toggleCloudMic();
-      return;
-    }
-    if (session.state === 'listening') {
-      sttStartSeqRef.current += 1;
-      sttRef.current?.stop();
-      sttRef.current = null;
-      dispatch({ type: 'STOP_LISTENING' });
-      return;
-    }
+  const startSystemListening = async () => {
+    if (!scenario) return;
     if (turnGate.active()) {
       cancelActiveTurn(false);
       setTurnError(null);
@@ -844,8 +838,13 @@ export default function CoachSessionScreen() {
       const nextSession = await startListening(
         sttLocaleFor(sttConfig.languageCode),
         {
-          onInterim: (text) => setInput(text),
+          onInterim: (text) => {
+            if (startSeq !== sttStartSeqRef.current) return;
+            setInput(text);
+          },
           onFinal: (text) => {
+            // 松手后 stop() 的最终结果可能晚于下一次开始录音才到，丢掉过期的。
+            if (startSeq !== sttStartSeqRef.current) return;
             setInput(text);
             sttRef.current = null;
             dispatch({ type: 'STOP_LISTENING' });
@@ -853,6 +852,7 @@ export default function CoachSessionScreen() {
           },
           onVolume: onVolumeSample,
           onError: (message) => {
+            if (startSeq !== sttStartSeqRef.current) return;
             sttRef.current = null;
             dispatch({ type: 'RESET' });
             if (/not-allowed|permission|denied/i.test(message)) {
@@ -863,6 +863,7 @@ export default function CoachSessionScreen() {
             }
           },
           onEnd: () => {
+            if (startSeq !== sttStartSeqRef.current) return;
             sttRef.current = null;
             dispatch({ type: 'STOP_LISTENING' });
           },
@@ -891,6 +892,66 @@ export default function CoachSessionScreen() {
     }
   };
 
+  // 按住说话：按下开始录音，抬起结束。抬起就是「说完了」的信号，
+  // 不需要用户再猜要不要点第二次。
+  const startVoiceInput = async () => {
+    if (!scenario || limitReached || startingMic || sttStartingRef.current || transcribing) return;
+    holdStartRef.current = Date.now();
+    releaseQueuedRef.current = false;
+    if (sttConfig.provider !== 'system') {
+      await startCloudRecording();
+    } else {
+      await startSystemListening();
+    }
+    // 抬起发生在录音真正开始之前（权限弹窗、启动耗时）→ 直接取消，
+    // 不转写：用户的话还没开始说。
+    if (releaseQueuedRef.current) await cancelVoiceInput();
+  };
+
+  const cancelVoiceInput = async () => {
+    if (sttConfig.provider !== 'system') {
+      await stopCloudRecording(false);
+      return;
+    }
+    sttStartSeqRef.current += 1;
+    sttRef.current?.abort();
+    sttRef.current = null;
+    dispatch({ type: 'RESET' });
+  };
+
+  const finishVoiceInput = async () => {
+    // 启动还在半路（权限弹窗、准备录音）：记下「已抬起」，等启动完成再取消。
+    if (startingMic || sttStartingRef.current) {
+      releaseQueuedRef.current = true;
+      return;
+    }
+    const heldMs = Date.now() - holdStartRef.current;
+    if (sttConfig.provider !== 'system') {
+      if (!cloudRecordingRef.current) return;
+      if (heldMs < MIN_HOLD_MS) {
+        await stopCloudRecording(false);
+        toast(t('coachHoldTooShort'));
+        return;
+      }
+      await stopCloudRecording(true);
+      return;
+    }
+    if (session.state !== 'listening') {
+      releaseQueuedRef.current = true;
+      return;
+    }
+    if (heldMs < MIN_HOLD_MS) {
+      await cancelVoiceInput();
+      toast(t('coachHoldTooShort'));
+      return;
+    }
+    // stop() 让识别器产出最终结果，onFinal 里提交——与松开的语义一致。
+    // 这里**不**推进 startSeq：推进了会把这次自己的最终结果当成过期的丢掉。
+    sttRef.current?.stop();
+    sttRef.current = null;
+    dispatch({ type: 'STOP_LISTENING' });
+  };
+
   useEffect(() => {
     if (!exitMode || finishedRef.current) return;
     finishedRef.current = true;
@@ -911,7 +972,7 @@ export default function CoachSessionScreen() {
       await clearSessionDraft().catch(() => undefined);
       if (!mountedRef.current) return;
       if (exitMode === 'discard') {
-        router.replace('/(tabs)/coach');
+        router.replace('/(tabs)/rehearse');
         return;
       }
       router.replace({
@@ -955,7 +1016,7 @@ export default function CoachSessionScreen() {
       sttRef.current = null;
       setStartingMic(false);
       if (router.canGoBack()) router.back();
-      else router.replace('/(tabs)/coach');
+      else router.replace('/(tabs)/rehearse');
       return;
     }
     setShowEnd(true);
@@ -1357,7 +1418,8 @@ export default function CoachSessionScreen() {
                     accessibilityLabel="coach-mic"
                     accessibilityRole="button"
                     disabled={limitReached || startingMic || transcribing || !!pendingRetryText}
-                    onPress={() => void toggleMic()}
+                    onPressIn={() => void startVoiceInput()}
+                    onPressOut={() => void finishVoiceInput()}
                     style={[
                       styles.mic,
                       {
@@ -1384,11 +1446,13 @@ export default function CoachSessionScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.controlHint, { color: c.studyMuted }]}>
-                {isInterview
-                  ? t('coachInterviewEndHint')
-                  : sttConfig.provider !== 'system'
-                    ? t('cloudInfrastructureHint')
-                    : t('coachVoiceControlHint')}
+                {session.state === 'listening'
+                  ? t('coachReleaseToSend')
+                  : isInterview
+                    ? t('coachInterviewEndHint')
+                    : sttConfig.provider !== 'system'
+                      ? t('cloudInfrastructureHint')
+                      : t('coachVoiceControlHint')}
               </Text>
             </>
           )}

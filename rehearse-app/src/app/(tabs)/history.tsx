@@ -6,8 +6,8 @@ import { CoachGroup, CoachHeader, CoachRow, SectionLabel } from '../../component
 import { listCoachScenarios } from '../../lib/rehearse-api-runtime';
 import { resolveScenarioTitle } from '../../lib/rehearse-history';
 import {
-  deleteCoachHistory,
-  loadCoachHistory,
+  deleteRehearseHistory,
+  loadRehearseHistory,
   loadCustomScenarios,
 } from '../../lib/rehearse-storage';
 import type { CoachHistoryRecord, CoachScenario } from '../../lib/rehearse-types';
@@ -29,7 +29,7 @@ export default function CoachHistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       void Promise.all([
-        loadCoachHistory(),
+        loadRehearseHistory(),
         listCoachScenarios(lang).catch(() => []),
         loadCustomScenarios(),
       ]).then(([history, presets, custom]) => {
@@ -43,7 +43,7 @@ export default function CoachHistoryScreen() {
     const title = resolveScenarioTitle(record.scenarioId, record.scenarioTitle, scenarios);
     const ok = await confirmAsync(t('coachDelete'), title);
     if (!ok) return;
-    await deleteCoachHistory(record.id);
+    await deleteRehearseHistory(record.id);
     setRecords((items) => items.filter((item) => item.id !== record.id));
   };
 
@@ -193,7 +193,8 @@ function HistoryRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  // 浮动 Tab 栏是绝对定位的（约 58 + safe-area + 14），留白小于它就会盖住最后一行。
+  body: { paddingHorizontal: 20, paddingBottom: 150 },
   filters: { flexDirection: 'row', gap: 7, marginTop: 4 },
   filter: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   empty: {

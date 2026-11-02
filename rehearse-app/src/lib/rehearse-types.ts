@@ -225,3 +225,40 @@ export interface CoachPrefs {
   accentPreference: CoachLanguage;
   autoPlay: boolean;
 }
+
+/**
+ * 跨设备同步的设置文档（`GET|PUT /api/rehearse/settings`）。
+ *
+ * `speech` 里**不含任何凭据**：Google / ElevenLabs / 阿里云 / Gemini 的 key
+ * 与服务账号 JSON 只存在本机（设计稿 §10）。服务端也会拒绝带凭据的文档。
+ */
+export interface SyncedSpeechSettings {
+  provider?: string;
+  sttProvider?: string;
+  speech_voice?: string;
+  speech_zh_voice?: string;
+  speech_speed?: number;
+  auto_play?: boolean;
+  cacheEnabled?: boolean;
+  googleVoice?: string;
+  googleZhVoice?: string;
+  googleLanguage?: string;
+  elevenLabsVoiceId?: string;
+  elevenLabsZhVoiceId?: string;
+  elevenLabsModel?: string;
+  aliyunVoice?: string;
+  aliyunModel?: string;
+  googleCloudProjectId?: string;
+  googleCloudLocation?: string;
+  googleCloudSttModel?: string;
+  googleCloudRecognizer?: string;
+  geminiSttModel?: string;
+}
+
+export interface SyncedUserSettings {
+  theme?: string;
+  language?: string;
+  speech?: SyncedSpeechSettings;
+  /** 服务端生成（RFC3339 UTC），客户端用它判断远端是否比本机新。 */
+  updated_at?: string;
+}

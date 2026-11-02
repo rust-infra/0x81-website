@@ -67,7 +67,15 @@ export function createSttAdapter(module: SpeechModuleLike) {
       }
 
       let cleaned = false;
-      const cleanup = () => subscriptions.forEach((subscription) => subscription.remove());
+      // stop() 之后可能等不到 end（模块异常、被系统掐断），兜底收尾用。
+      let stopTimer: ReturnType<typeof setTimeout> | null = null;
+      const cleanup = () => {
+        if (stopTimer) {
+          clearTimeout(stopTimer);
+          stopTimer = null;
+        }
+        subscriptions.forEach((subscription) => subscription.remove());
+      };
       const finish = (callback: () => void) => {
         if (cleaned) return;
         cleaned = true;
@@ -119,8 +127,10 @@ export function createSttAdapter(module: SpeechModuleLike) {
       return {
         stop: () => {
           if (cleaned) return;
-          cleaned = true;
-          cleanup();
+          // ⚠️ 不能先摘监听：最终结果是 `stop()` **之后**才派发的，
+          // 先 cleanup 会把这次结果丢掉——按住说话松开后消息发不出去就是这么来的。
+          // 清理交给 result / end / error 里的 finish()；3 秒兜底防止事件不到。
+          stopTimer = setTimeout(() => finish(() => callbacks.onEnd()), 3000);
           module.stop();
         },
         abort: () => {

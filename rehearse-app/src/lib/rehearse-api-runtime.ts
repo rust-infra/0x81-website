@@ -9,3 +9,5 @@ export const postCoachTurn = coachApi.turn;
 export const postCoachSummary = coachApi.summary;
 export const extractInterviewText = coachApi.extractInterviewText;
 export const postInterviewProfile = coachApi.profile;
+export const getSyncedSettings = coachApi.getSettings;
+export const putSyncedSettings = coachApi.putSettings;

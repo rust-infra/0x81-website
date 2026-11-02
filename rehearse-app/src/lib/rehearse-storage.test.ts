@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCoachStorage } from './rehearse-storage';
+import { createRehearseStorage } from './rehearse-storage';
 import type { CoachHistoryRecord, CoachScenario } from './rehearse-types';
 
 function memoryStore() {
@@ -49,32 +49,32 @@ const history = (id: string, scenarioId: string): CoachHistoryRecord => ({
 });
 
 test('custom scenario CRUD keeps history when a scenario is deleted', async () => {
-  const storage = createCoachStorage(memoryStore());
+  const storage = createRehearseStorage(memoryStore());
   await storage.saveCustomScenario(scenario('s1'));
   await storage.saveCustomScenario(scenario('s2'));
   assert.equal((await storage.loadCustomScenarios()).length, 2);
 
-  await storage.saveCoachHistory(history('h1', 's1'));
+  await storage.saveRehearseHistory(history('h1', 's1'));
   await storage.deleteCustomScenario('s1');
 
   assert.deepEqual((await storage.loadCustomScenarios()).map((item) => item.id), ['s2']);
-  assert.equal((await storage.loadCoachHistory()).length, 1);
+  assert.equal((await storage.loadRehearseHistory()).length, 1);
 });
 
 test('history is sorted by updatedAt and can be deleted individually', async () => {
-  const storage = createCoachStorage(memoryStore());
+  const storage = createRehearseStorage(memoryStore());
   const older = history('older', 's1');
   const newer = { ...history('newer', 's1'), updatedAt: '2026-09-28T00:00:00Z' };
-  await storage.saveCoachHistory(older);
-  await storage.saveCoachHistory(newer);
+  await storage.saveRehearseHistory(older);
+  await storage.saveRehearseHistory(newer);
 
-  assert.deepEqual((await storage.loadCoachHistory()).map((item) => item.id), ['newer', 'older']);
-  await storage.deleteCoachHistory('newer');
-  assert.deepEqual((await storage.loadCoachHistory()).map((item) => item.id), ['older']);
+  assert.deepEqual((await storage.loadRehearseHistory()).map((item) => item.id), ['newer', 'older']);
+  await storage.deleteRehearseHistory('newer');
+  assert.deepEqual((await storage.loadRehearseHistory()).map((item) => item.id), ['older']);
 });
 
 test('interview profiles are structured and contain no raw source field', async () => {
-  const storage = createCoachStorage(memoryStore());
+  const storage = createRehearseStorage(memoryStore());
   await storage.saveInterviewProfile({
     id: 'p1',
     kind: 'resume',
@@ -90,13 +90,13 @@ test('interview profiles are structured and contain no raw source field', async 
 
 test('corrupt JSON falls back without throwing', async () => {
   const store = memoryStore();
-  await store.setItem('coach_custom_scenarios_v1', '{broken');
-  const storage = createCoachStorage(store);
+  await store.setItem('rehearse_custom_scenarios_v1', '{broken');
+  const storage = createRehearseStorage(store);
   assert.deepEqual(await storage.loadCustomScenarios(), []);
 });
 
 test('session draft round-trips and is cleared when the session ends', async () => {
-  const storage = createCoachStorage(memoryStore());
+  const storage = createRehearseStorage(memoryStore());
   assert.equal(await storage.loadSessionDraft(), null);
 
   await storage.saveSessionDraft({
@@ -124,8 +124,8 @@ test('session draft round-trips and is cleared when the session ends', async () 
 
 test('a corrupt session draft reads as null instead of breaking restore', async () => {
   const store = memoryStore();
-  await store.setItem('coach_session_draft_v1', '{broken');
-  const storage = createCoachStorage(store);
+  await store.setItem('rehearse_session_draft_v1', '{broken');
+  const storage = createRehearseStorage(store);
   assert.equal(await storage.loadSessionDraft(), null);
 });
 
@@ -145,7 +145,7 @@ test('session draft clears are serialized after pending saves', async () => {
       events.push('clear');
     },
   };
-  const storage = createCoachStorage(store);
+  const storage = createRehearseStorage(store);
 
   const save = storage.saveSessionDraft({
     scenarioId: 'standup_update',

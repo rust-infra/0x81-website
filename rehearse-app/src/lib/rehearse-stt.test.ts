@@ -155,3 +155,66 @@ test('maps UI and Chinese-accent locales to supported STT locales', () => {
   assert.equal(sttLocaleFor('zh-CN'), 'en-US');
   assert.equal(sttLocaleFor('en'), 'en-US');
 });
+
+/**
+ * 真实的 iOS 模块在 `stop()` **之后**才派发最终结果。若 stop 先把监听摘掉，
+ * 这次结果就丢了——按住说话松开后消息发不出去，正是这个原因。
+ */
+function stopDeliversFinalModule() {
+  const listeners = new Map<string, { alive: boolean; fn: (event: unknown) => void }>();
+  const module: SpeechModuleLike = {
+    requestPermissionsAsync: async () => ({ granted: true }),
+    start: () => {},
+    stop: () => {
+      const result = listeners.get('result');
+      if (result?.alive) {
+        result.fn({ isFinal: true, results: [{ transcript: 'done speaking' }] });
+      }
+      const end = listeners.get('end');
+      if (end?.alive) end.fn({});
+    },
+    abort: () => {},
+    addListener: (event, listener) => {
+      const entry = { alive: true, fn: listener };
+      listeners.set(event, entry);
+      return {
+        remove: () => {
+          entry.alive = false;
+        },
+      };
+    },
+  };
+  return module;
+}
+
+test('stop keeps listening long enough to deliver the final transcript', async () => {
+  const module = stopDeliversFinalModule();
+  const finals: string[] = [];
+  const adapter = createSttAdapter(module);
+  const session = await adapter.start('en-US', {
+    onInterim: () => {},
+    onFinal: (text) => finals.push(text),
+    onVolume: () => {},
+    onError: () => {},
+    onEnd: () => {},
+  });
+
+  session.stop();
+  assert.deepEqual(finals, ['done speaking'], 'stop() 之后到达的最终结果必须被送达');
+});
+
+test('abort drops the transcript instead of delivering it', async () => {
+  const module = stopDeliversFinalModule();
+  const finals: string[] = [];
+  const adapter = createSttAdapter(module);
+  const session = await adapter.start('en-US', {
+    onInterim: () => {},
+    onFinal: (text) => finals.push(text),
+    onVolume: () => {},
+    onError: () => {},
+    onEnd: () => {},
+  });
+
+  session.abort();
+  assert.deepEqual(finals, [], 'abort() 不应把结果送上来');
+});

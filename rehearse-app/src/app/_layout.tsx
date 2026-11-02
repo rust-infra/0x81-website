@@ -33,6 +33,9 @@ function RootNavigator() {
           contentStyle: { backgroundColor: theme.colors.paper },
         }}
       >
+        {/* 根路由：把 `/` 分到演练 Tab 或登录页（见 index.tsx）。
+            放在两棵守卫之外——它是入口，任何时候都必须存在。 */}
+        <Stack.Screen name="index" />
         {/* 登录后才挂载业务路由。`Stack.Protected` 是 expo-router 的守卫：
             未登录时这些路由**不存在**，深链也进不去——比在页面里各写一遍
             「没 token 就跳登录」可靠。 */}

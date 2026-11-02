@@ -6,9 +6,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { THEMES, type Theme, type ThemeName } from './theme';
+import { migrateThemeName, THEMES, type Theme, type ThemeName } from './theme';
 
 const THEME_KEY = 'app_theme';
+const DEFAULT_THEME: ThemeName = 'light';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -19,20 +20,23 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: THEMES[0],
-  themeName: 'xuanzhi',
+  themeName: DEFAULT_THEME,
   setTheme: () => {},
   themes: THEMES,
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeName, setThemeName] = useState<ThemeName>('xuanzhi');
+  const [themeName, setThemeName] = useState<ThemeName>(DEFAULT_THEME);
 
   useEffect(() => {
     AsyncStorage.getItem(THEME_KEY)
       .then((saved) => {
-        if (saved && THEMES.some((t) => t.name === saved)) {
-          setThemeName(saved as ThemeName);
+        // 老版本存的是 4 套皮肤的名字，迁移成 light/dark 而不是丢弃。
+        const migrated = migrateThemeName(saved);
+        if (migrated && migrated !== saved) {
+          AsyncStorage.setItem(THEME_KEY, migrated).catch(() => {});
         }
+        if (migrated) setThemeName(migrated);
       })
       .catch(() => {});
   }, []);

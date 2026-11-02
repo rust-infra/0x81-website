@@ -20,7 +20,6 @@ import type {
   StudyQueue,
   UpdateCardRequest,
   UpdateDeckRequest,
-  UserSettings,
   User,
   UpsertCardProgressRequest,
 } from './types';
@@ -35,6 +34,16 @@ const API_BASE = getApiBase();
 const AUTH_BASE = getAuthBase();
 export const TOKEN_KEY = 'rehearse_token';
 
+/**
+ * 401 的全局出口。`AuthProvider` 在挂载时注册，收到 401 就清凭证、
+ * 让根路由把人送回登录页。放在模块级是因为请求层不是 React 组件。
+ */
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
 async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
@@ -46,6 +55,7 @@ export async function apiRequest<T>(
   return apiRequestWithDeps<T>(path, options, {
     baseUrl: API_BASE,
     getToken,
+    onUnauthorized: () => unauthorizedHandler?.(),
   });
 }
 async function publicGet<T>(path: string): Promise<T> {
@@ -161,19 +171,6 @@ export async function createReviewLog(
   return apiRequest<ReviewLog>('/api/review-logs', {
     method: 'POST',
     body: JSON.stringify(body),
-  });
-}
-
-export async function fetchUserSettings(): Promise<UserSettings> {
-  return apiRequest<UserSettings>('/api/settings');
-}
-
-export async function saveUserSettings(
-  settings: UserSettings
-): Promise<UserSettings> {
-  return apiRequest<UserSettings>('/api/settings', {
-    method: 'PUT',
-    body: JSON.stringify({ settings }),
   });
 }
 
