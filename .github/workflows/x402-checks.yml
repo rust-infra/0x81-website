@@ -1,0 +1,52 @@
+name: x402 Checks
+
+# x402-gateway 的门禁：fmt → clippy -D warnings → test → release build。
+# 路径过滤与 rust-checks.yml 一致；如果把它设成 required check，记得去掉 paths。
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "x402-gateway/**"
+      - ".github/workflows/x402-checks.yml"
+  pull_request:
+    paths:
+      - "x402-gateway/**"
+      - ".github/workflows/x402-checks.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  x402-gateway:
+    name: x402-gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: x402-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: x402-gateway
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- --deny warnings
+
+      - name: Test
+        run: cargo test --all-targets
+
+      - name: Build (release)
+        run: cargo build --release
