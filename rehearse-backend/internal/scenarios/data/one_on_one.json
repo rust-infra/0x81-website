@@ -1,0 +1,85 @@
+{
+  "id": "one_on_one",
+  "category": "hard_talk",
+  "language": "en-AU",
+  "difficulty": "core",
+  "max_turns": 10,
+  "persona": {
+    "name": "Morgan",
+    "role": "Engineering Manager",
+    "accent": null,
+    "tone": "friendly"
+  },
+  "setting": "one_on_one",
+  "title": {
+    "zh": "和主管 1:1",
+    "en": "One-on-One"
+  },
+  "description": {
+    "zh": "聊工作量、反馈和成长诉求",
+    "en": "Discuss workload, feedback, and growth"
+  },
+  "focus_points": {
+    "zh": [
+      "表达真实状态",
+      "给具体例子",
+      "提出诉求"
+    ],
+    "en": [
+      "be honest",
+      "give concrete examples",
+      "make a request"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "How's everything going lately? Anything on your mind?",
+        "translation": "最近一切都还好吗？有什么心事？"
+      },
+      "next_lines": [
+        {
+          "text": "I'd like to talk about my workload.",
+          "translation": "我想聊聊我的工作量。"
+        },
+        {
+          "text": "I want feedback on what to focus on next.",
+          "translation": "我想听听你对下一步重点的建议。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "So, how are you doing? Anything you want to talk through?",
+        "translation": "怎么样，最近还好吗？有什么想聊的？"
+      },
+      "next_lines": [
+        {
+          "text": "I've been feeling stretched since the migration.",
+          "translation": "接手迁移之后我一直有点吃不消。"
+        },
+        {
+          "text": "Could we talk about how to rebalance my priorities?",
+          "translation": "我们能聊聊怎么重新平衡优先级吗？"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Let's start with you. How's the workload feeling these days?",
+        "translation": "从你开始吧。最近工作量感觉怎么样？"
+      },
+      "next_lines": [
+        {
+          "text": "The workload has been heavy since we took on the migration.",
+          "translation": "接手迁移之后，工作量一直比较大。"
+        },
+        {
+          "text": "I'd like to rebalance one of my projects.",
+          "translation": "我想调整一下其中一个项目的投入。"
+        }
+      ]
+    }
+  ],
+  "guidance": "温和地追问细节，例如 \"Can you give me an example?\"。用户抱怨但不提诉求时，                   引导他说出具体想要什么（换项目、减负载、要反馈）。"
+}

@@ -4,7 +4,8 @@
 // 登录入口是 `auth.0x81.uk`（由认证服务提供），Rehearse 只消费它签出的 JWT。
 //
 // 存储（§7.3）：自己的托管 Postgres（Supabase，只当 PG 用），
-// 与墨言不共享任何表。
+// 与墨言不共享任何表。**也支持 SQLite**（§7.3.5，单机自托管 / 本地开发），
+// 由 `DATABASE_URL` 的 scheme 选择——见 `store.Open`。
 package main
 
 import (
@@ -81,6 +82,18 @@ func run() error {
 		Level: parseLevel(cfg.LogLevel),
 	})))
 
+	// DATABASE_URL 没设 → 走内置默认 SQLite。这是「本地不起 PG」的必要条件，
+	// 但默认值的代价见 config.DefaultDatabaseURL：线上漏配会从**启动失败**
+	// 变成**静默跑在单副本 SQLite 上**。所以这里必须吵一次，而且要吵得可执行
+	// ——说清该设成什么、为什么。
+	if cfg.DatabaseURLDefaulted {
+		slog.Warn("DATABASE_URL not set; using the built-in SQLite default",
+			"dsn", cfg.DatabaseURL,
+			"single_replica_only", true,
+			"fix", "set DATABASE_URL=postgres://…:6543/postgres?sslmode=require (Supabase pooler)",
+			"see", "design §7.3.5 / config.DefaultDatabaseURL")
+	}
+
 	// gin 默认是 debug 模式：启动时把整张路由表打到 stdout，且每个请求都做
 	// 额外检查。生产要 release——路由表属于内部结构，没必要出现在容器日志里。
 	// 排查路由问题时用 `GIN_MODE=debug` 覆盖。
@@ -88,23 +101,31 @@ func run() error {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// 连库：**惰性**的，`pgxpool` 不会在创建时真连（见下面的启动探测）。
+	// 连库：按 `DATABASE_URL` 的 scheme 选后端（postgres:// 或 sqlite:）。
+	//
+	// Postgres 侧是**惰性**的，`pgxpool` 不会在创建时真连；SQLite 侧会真开
+	// 一次连接（`sql.Open` 不建连接，所以那里显式 Ping 了一次）——本地文件
+	// 打不开属于配置错误，早失败比晚失败好。
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	st, err := store.Connect(ctx, cfg.DatabaseURL)
+	backend, err := store.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
-		// 走到这里说明 DSN 本身有问题（格式、pooler 模式），不是「库没起来」——
-		// 那是配置错误，必须吵。
+		// 走到这里说明 DSN 本身有问题（格式、后端判断、pooler 模式、
+		// SQLite 文件打不开），不是「库暂时没起来」——那是配置错误，必须吵。
 		return fmt.Errorf("connect database: %w", err)
 	}
-	defer st.Close()
+	defer backend.Close()
+
+	st := backend.Store
+	slog.Info("storage backend", "dialect", backend.Dialect)
 
 	// 启动探测：连不上**不退出**，只记一条 error。
 	//
 	// 为什么不像配置错误那样直接退：
 	//   · `pgxpool` 是惰性连接，创建成功不代表库可用；不探的话问题会推迟到
-	//     第一个请求才暴露
+	//     第一个请求才暴露（SQLite 侧在建连时已经探过，这里通常是 no-op，
+	//     但保留它让两个后端走同一条启动路径）
 	//   · 但也不该退——配了 `restart: unless-stopped` 的话，库短暂不可用会变成
 	//     崩溃循环，而 §13 要的是**降级运行**：`/health` 明确报错、业务接口
 	//     返回可判定的错误码，而不是超时挂住
@@ -138,14 +159,16 @@ func run() error {
 	server := &http.Server{
 		Addr: addr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Config:      cfg,
-			Store:       st,
-			Catalog:     catalog,
-			Coach:       coachService,
-			Quota:       quota,
-			LLMSettings: llmSettings,
-			OCR:         material.NewOCRService(quota, llmSettings, llmClient),
-			Profile:     material.NewProfileService(quota, llmSettings, llmClient),
+			Config:             cfg,
+			Dialect:            backend.Dialect,
+			DatabaseURLDefault: cfg.DatabaseURLDefaulted,
+			Store:              st,
+			Catalog:            catalog,
+			Coach:              coachService,
+			Quota:              quota,
+			LLMSettings:        llmSettings,
+			OCR:                material.NewOCRService(quota, llmSettings, llmClient),
+			Profile:            material.NewProfileService(quota, llmSettings, llmClient),
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

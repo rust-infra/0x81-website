@@ -64,7 +64,10 @@ func newTestDeps(t *testing.T, st store.Store) Deps {
 	quota := coach.NewQuotaService(st)
 	llmSettings := coach.NewLLMSettingsService(st, fallback)
 	return Deps{
-		Config:      testConfig(),
+		Config: testConfig(),
+		// 测试用内存 SQLite：Deps.Dialect 会进 /health，留空会让响应里
+		// 出现 `"dialect":""`，那不是任何真实运行形态。
+		Dialect:     store.DialectSQLite,
 		Store:       st,
 		Catalog:     catalog,
 		Coach:       coach.NewService(quota, llmSettings, catalog, client),
@@ -130,6 +133,21 @@ func TestHealth_DoesNotRequireAuth(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "status（body=%s）", body)
 	require.Contains(t, body, `"status":"ok"`, "health body")
 	require.Contains(t, body, `"database":"ok"`, "health body")
+	// 跑在哪个库、是不是默认值，必须是可 curl 出来的事实（§7.3.5）。
+	require.Contains(t, body, `"dialect":"sqlite"`, "health body")
+	require.Contains(t, body, `"database_defaulted":false`, "health body")
+}
+
+// 「生产跑在默认 SQLite 上」是默认值方案最大的风险：单副本、没有托管备份。
+// 所以 `/health` 必须把它标出来，而不是只写一行启动日志。
+func TestHealth_ReportsDefaultedDatabase(t *testing.T) {
+	deps := newTestDeps(t, newStore())
+	deps.DatabaseURLDefault = true
+	router := NewRouter(deps)
+
+	status, body := do(t, router, http.MethodGet, "/health", "")
+	require.Equal(t, http.StatusOK, status, "status（body=%s）", body)
+	require.Contains(t, body, `"database_defaulted":true`, "health body 没标出默认库")
 }
 
 // DB 不可用时必须明确报错。§7.3 换成独立托管 PG 之后它是唯一外部依赖，
@@ -172,7 +190,9 @@ func TestEveryUserRouteRequiresAuth(t *testing.T) {
 
 	// 数量对不上说明路由表变了。新端点也要走上面那条断言——
 	// 顺手把数字改掉是**有意的**动作，不是可以忽略的噪音。
-	require.Equal(t, 8, checked, "用户端点数量变了（%d），确认新端点确实在验签子树下", checked)
+	// 10 = whoami / scenarios / quota / turn / scenario:draft / material:profile /
+	//      summary / material:text / settings GET / settings PUT。
+	require.Equal(t, 10, checked, "用户端点数量变了（%d），确认新端点确实在验签子树下", checked)
 
 	// ⚠️ 路由匹配先于中间件：gin（与 Rust/axum 原版一致）先匹配路由，未匹配的
 	// 路径走 NoRoute，组上的 RequireAuth **根本不会执行**。所以「子树下任意路径

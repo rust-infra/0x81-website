@@ -160,3 +160,62 @@ func TestSettingsConfigured(t *testing.T) {
 	assert.True(t, (Settings{BaseURL: "a", APIKey: "b", Model: "c"}).Configured(), "三项齐全应当算已配置")
 	assert.False(t, (Settings{BaseURL: "a", APIKey: "b"}).Configured(), "缺 model 不算已配置")
 }
+
+// rewriteTransport 把请求改投到本地测试服务器。
+//
+// 用途：`opencodeHeaders` 是拿 `settings.BaseURL` 判断的，所以要断言
+// 「发往 OpenCode 网关时确实带了那三个头」，必须让 BaseURL 保持 opencode 的
+// 形状、同时把流量引到 httptest——不能真的发网络请求。
+type rewriteTransport struct{ target string }
+
+func (t rewriteTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r.URL.Scheme = "http"
+	r.URL.Host = strings.TrimPrefix(t.target, "http://")
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+// OpenCode 网关要 `x-opencode-session` 才路由（缺了回 400 MissingSessionID），
+// 而普通 OpenAI-compatible 端点不该收到这三个自定义头。
+// 对照 Rust 的 `llm_client.rs:824-840`。
+func TestChatJSON_OpencodeHeadersOnlyForOpencodeGateway(t *testing.T) {
+	for name, tc := range map[string]struct {
+		baseURL string
+		want    bool
+	}{
+		"opencode 网关":  {"https://opencode.ai/zen/go/v1", true},
+		"匹配大小写不敏感":     {"https://OpenCode.AI/zen/go/v1", true},
+		"普通 OpenAI 端点": {"https://api.openai.com/v1", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var got http.Header
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Clone()
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+			}))
+			defer server.Close()
+
+			client := &Client{http: &http.Client{Transport: rewriteTransport{server.URL}}}
+			settings := Settings{BaseURL: tc.baseURL, APIKey: "sk-test", Model: "m"}
+			_, err := client.ChatJSON(context.Background(), settings, "s", "u", 100)
+			require.NoError(t, err, "不该报错")
+
+			for _, header := range []string{"x-opencode-session", "x-opencode-request", "x-opencode-client"} {
+				if tc.want {
+					assert.NotEmpty(t, got.Get(header), "%s 缺失", header)
+					continue
+				}
+				assert.Empty(t, got.Get(header), "%s 不该出现在非 OpenCode 端点上", header)
+			}
+			if !tc.want {
+				return
+			}
+			assert.Equal(t, "rehearse-backend", got.Get("x-opencode-client"), "client 标识")
+			// Rust 用 `Uuid::new_v4().simple()`：32 位十六进制、不带连字符。
+			assert.Regexp(t, `^[0-9a-f]{32}$`, got.Get("x-opencode-session"), "session id 形状")
+			assert.Regexp(t, `^[0-9a-f]{32}$`, got.Get("x-opencode-request"), "request id 形状")
+			// 两个 id 必须是各自独立的随机值，不能是同一个。
+			assert.NotEqual(t, got.Get("x-opencode-session"), got.Get("x-opencode-request"),
+				"session 与 request id 不该相同")
+		})
+	}
+}

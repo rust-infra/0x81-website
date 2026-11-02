@@ -28,8 +28,13 @@ COPY . .
 
 # CGO_ENABLED=0 是硬要求（§7.2）：一旦引入 cgo，静态二进制、scratch 镜像、
 # 「一条 docker build 出成品」这三条收益全部消失。
+#
+# ⚠️ SQLite 后端（§7.3.5）也守这条：驱动是 `modernc.org/sqlite`（纯 Go，
+# 自带移植版 SQLite），**不是** `mattn/go-sqlite3`。代价是二进制大几 MB，
+# 换来的是这一行不用改。
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/rehearse ./cmd/rehearse && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate && \
+    mkdir -p /out/data
 
 FROM scratch
 
@@ -45,8 +50,25 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build /out/rehearse /rehearse
 COPY --from=build /out/migrate /migrate
 
-# 非 root 运行。不需要任何可写目录：迁移文件已 embed 进二进制，
-# 日志走 stdout。
+# SQLite 后端（§7.3.5）的默认数据目录。
+#
+# ⚠️ `--chown` 不是装饰：容器以 65534（nobody）运行，而 named volume 首次挂载
+# 时 Docker 会把镜像里这个目录的**内容与属主**一起复制进卷——所以在这里
+# chown 过，等于把卷也 chown 了。少了它，SQLite 打开文件会失败（EACCES），
+# 而错误只有一句 `unable to open database file`。
+#
+# ⚠️ **bind mount**（`./data:/data`）走的是另一条路：属主由宿主机决定，
+# 那种情况下要自己 `chown 65534:65534 ./data`。
+COPY --from=build --chown=65534:65534 /out/data /data
+
+# 用 Postgres 时这个卷是空的、没人碰；用 SQLite 时它保证数据不会随
+# 容器重建一起消失。声明在这里是为了「忘了在 compose 里挂卷」也不至于丢数据
+# ——Docker 会自动建一个匿名卷兜底。
+VOLUME /data
+
+# 非 root 运行。
+#
+# 可写目录只有 `/data`（给 SQLite 用）：迁移文件已 embed 进二进制，日志走 stdout。
 #
 # 也不需要 tzdata：配额按 UTC+8 自然日切，但那是用 time.FixedZone 在代码里
 # 算的，不查系统时区。

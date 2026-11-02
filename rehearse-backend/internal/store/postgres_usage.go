@@ -9,7 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// 本文件是 `rehearse_usage` 与 `rehearse_settings` 的 Postgres 实现。
+// 本文件是 `rehearse_usage` 与 `rehearse_settings` 的 **Postgres** 实现。
+// SQLite 侧在 `sqlite_usage.go`，两边的语义必须一致——
+// `store_conformance_test.go` 用同一组用例跑两个后端来保证这一点。
 //
 // 语义逐条对齐 Rust 的 `CoachRepository`（`sqlite.rs:777-833`）与
 // `SettingsRepository`，但**不是逐行翻译**——两处有意的差异：

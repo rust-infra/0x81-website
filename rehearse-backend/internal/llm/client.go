@@ -2,7 +2,15 @@
 //
 // 只实现通用 chat 那部分（§7.9 的对照表：`llm_client.rs` 有 894 行，
 // 但 Rehearse 只用其中约 1/3）。**不做的事**：图像输入、音频转写、
-// 视频摘要、OpenCode 专有头、播客采集的代理链路。
+// 视频摘要、播客采集的代理链路。
+//
+// ⚠️ OpenCode 专有头**要做**（`opencodeHeaders`）。这里曾经把它列在上面那行
+// 「不做的事」里，理由是「Rehearse 只连通用 OpenAI-compatible 端点」——
+// 而 §7.3.2 定的是 LLM 配置来自管理端，实际配的就是 OpenCode 网关
+// （`https://opencode.ai/zen/go/v1`，与墨言共用）。少了这三个头，
+// 网关回 400 `MissingSessionID`，而 coach 层把它统一转成
+// 503「AI coach is temporarily unavailable」——症状是「服务配好了但每一轮都失败」，
+// 从错误信息完全看不出是请求头的问题。
 package llm
 
 import (
@@ -15,6 +23,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Settings 是 LLM 配置。
@@ -151,6 +161,28 @@ func (c *Client) ChatJSON(
 	return c.chatCompletion(ctx, settings, system, user, maxTokens)
 }
 
+// opencodeHeaders 复刻 Rust 的 `opencode_headers`（`llm_client.rs:496-511`）。
+//
+// **只在 base_url 指向 OpenCode 网关时加。** 那个网关要 `x-opencode-session`
+// 才能把请求路由出去（缺了回 400 `MissingSessionID`）；而对普通的
+// OpenAI-compatible 端点，多送三个自定义头没有意义，还可能撞上对未知
+// 请求头敏感的网关。
+//
+// 两个 id 是**每次请求新生成的随机值**，与 Rust 一致
+// （`llm_client.rs:572-573` 每次调用都 `Uuid::new_v4().simple()`）。
+// 它们不是认证件——认证仍然是 `Authorization`。
+func opencodeHeaders(baseURL string) map[string]string {
+	if !strings.Contains(strings.ToLower(baseURL), "opencode.ai") {
+		return nil
+	}
+	// Rust 用 `simple()`，即 32 位十六进制、不带连字符。
+	return map[string]string{
+		"x-opencode-session": strings.ReplaceAll(uuid.NewString(), "-", ""),
+		"x-opencode-request": strings.ReplaceAll(uuid.NewString(), "-", ""),
+		"x-opencode-client":  "rehearse-backend",
+	}
+}
+
 // chatCompletion 是两种请求形态的共同实现。
 //
 // `userContent` 是 `any`：纯文本传 string，带图片传 content parts 数组。
@@ -187,6 +219,9 @@ func (c *Client) chatCompletion(
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(settings.APIKey))
+	for name, value := range opencodeHeaders(settings.BaseURL) {
+		request.Header.Set(name, value)
+	}
 
 	response, err := c.http.Do(request)
 	if err != nil {

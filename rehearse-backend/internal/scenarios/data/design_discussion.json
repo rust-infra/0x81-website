@@ -1,0 +1,85 @@
+{
+  "id": "design_discussion",
+  "category": "pitch",
+  "language": "en-GB",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Daniel",
+    "role": "Staff Engineer",
+    "accent": null,
+    "tone": "neutral"
+  },
+  "setting": "meeting",
+  "title": {
+    "zh": "技术方案讨论",
+    "en": "Design Discussion"
+  },
+  "description": {
+    "zh": "讲清方案取舍，被质疑时稳住节奏",
+    "en": "Explain trade-offs and answer hard questions"
+  },
+  "focus_points": {
+    "zh": [
+      "先给结论",
+      "讲 trade-off",
+      "回答追问"
+    ],
+    "en": [
+      "lead with the answer",
+      "name trade-offs",
+      "handle follow-ups"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "So, you're proposing we add a queue in front of the writer. Why?",
+        "translation": "也就是说，你提议在写入前面加一个队列。为什么？"
+      },
+      "next_lines": [
+        {
+          "text": "The queue protects the writer from traffic spikes.",
+          "translation": "队列可以保护写入服务，避免流量突增把它压垮。"
+        },
+        {
+          "text": "Without it, bursts can overwhelm the writer and drop requests.",
+          "translation": "没有它的话，流量峰值可能会压垮写入服务并丢请求。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Walk me through the design doc — what problem does it solve?",
+        "translation": "讲讲你的设计文档——它解决什么问题？"
+      },
+      "next_lines": [
+        {
+          "text": "It solves duplicate writes during retries.",
+          "translation": "它解决的是重试时的重复写入问题。"
+        },
+        {
+          "text": "The design keeps writes idempotent under failures.",
+          "translation": "这个设计让写入在故障下保持幂等。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "I read your proposal. What's the failure mode you're most worried about?",
+        "translation": "我看了你的方案。你最担心的失败场景是什么？"
+      },
+      "next_lines": [
+        {
+          "text": "My biggest concern is message loss during failover.",
+          "translation": "我最担心的是故障切换时消息丢失。"
+        },
+        {
+          "text": "I would add retries and a dead-letter queue for safety.",
+          "translation": "为了安全，我会加重试和死信队列。"
+        }
+      ]
+    }
+  ],
+  "guidance": "持续追问设计动机和失败场景，例如 \"What happens if the queue backs up?\"。                   用户只给结论不给理由时，追问 \"What's the reasoning behind that?\"。"
+}

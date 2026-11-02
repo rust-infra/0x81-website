@@ -1,0 +1,85 @@
+{
+  "id": "scope_deadline",
+  "category": "hard_talk",
+  "language": "en-US",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Jordan",
+    "role": "Product Manager",
+    "accent": null,
+    "tone": "challenging"
+  },
+  "setting": "one_on_one",
+  "title": {
+    "zh": "需求与排期",
+    "en": "Scope and Deadline"
+  },
+  "description": {
+    "zh": "拒绝不合理 deadline，谈范围和优先级",
+    "en": "Push back on deadlines and negotiate scope"
+  },
+  "focus_points": {
+    "zh": [
+      "不裸拒",
+      "给替代方案",
+      "把取舍摆到台面"
+    ],
+    "en": [
+      "don't just say no",
+      "offer options",
+      "surface the trade-off"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Can we ship this by Friday? Sales is asking.",
+        "translation": "这个周五能上线吗？销售那边在催。"
+      },
+      "next_lines": [
+        {
+          "text": "We can ship the core flow by Friday if we defer the dashboard.",
+          "translation": "如果把仪表盘延期，核心流程可以在周五交付。"
+        },
+        {
+          "text": "To hit Friday, we'd need to cut scope or add another engineer.",
+          "translation": "要赶上周五，就需要缩小范围或增加一位工程师。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Sales wants this by Friday. Can you make it?",
+        "translation": "销售想周五要这个。你能做出来吗？"
+      },
+      "next_lines": [
+        {
+          "text": "It's possible only if we cut the reporting flow.",
+          "translation": "只有砍掉报表流程才有可能。"
+        },
+        {
+          "text": "Friday is risky unless we add another engineer.",
+          "translation": "除非再增加一位工程师，否则周五风险很大。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "We need a date. What can you realistically ship next week?",
+        "translation": "我们得给个日期。下周你现实上能交付什么？"
+      },
+      "next_lines": [
+        {
+          "text": "Next week we can realistically ship the core flow.",
+          "translation": "下周我们现实上可以交付核心流程。"
+        },
+        {
+          "text": "The dashboard still needs another sprint.",
+          "translation": "仪表盘还需要一个迭代。"
+        }
+      ]
+    }
+  ],
+  "guidance": "持续施压要求提前交付。逼用户在「砍范围」「延期」「加人」之间做选择，                   并追问 \"What would you cut?\"。用户硬扛不合理承诺时要点明风险。"
+}

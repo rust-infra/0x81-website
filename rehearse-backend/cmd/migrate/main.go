@@ -11,23 +11,24 @@
 //
 //	migrate up        应用所有未应用的迁移
 //	migrate version   打印已应用的版本
+//	migrate pending   只打印待应用的版本，不改库（dry-run）
 //
 // 迁移文件通过 go:embed 打进二进制（见 `migrations/embed.go`），所以
 // `scratch` 镜像里也能跑。
+//
+// 具体逻辑在 `internal/migrate`——这里只做参数解析与打印，因为测试也要
+// 用同一套逻辑建表（2026-10-10）。
 package main
 
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/0x81/rehearse-backend/internal/config"
+	"github.com/0x81/rehearse-backend/internal/migrate"
 	"github.com/0x81/rehearse-backend/internal/store"
-	"github.com/0x81/rehearse-backend/migrations"
 )
 
 func main() {
@@ -39,168 +40,93 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: migrate <up|version>")
+		return fmt.Errorf("usage: migrate <up|version|pending>")
 	}
 	command := os.Args[1]
 
-	cfg, err := config.Load()
-	if err != nil {
-		return err
+	// 只用 `LoadDatabaseURL` 而不是 `config.Load`：迁移不需要 JWT_SECRET，
+	// 强迫它去编一个只会让人在本地随手 export 一个假密钥（§7.7 的反面）。
+	//
+	// 第二个返回值说明用的是默认 SQLite——**必须说出来**。否则在本目录的
+	// ./data/rehearse.db 上跑完迁移，很可能被误以为改的是生产库
+	// （症状是「迁移成功但线上 schema 没变」，很难查）。
+	dsn, dsnDefaulted := config.LoadDatabaseURL()
+	if dsnDefaulted {
+		fmt.Printf("note: DATABASE_URL not set, using default %s\n", dsn)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// 复用 store.Connect —— 迁移同样要连 Supabase 的 pooler，
-	// 所以 `default_query_exec_mode=exec` 那套校验必须一起生效（§7.3.2）。
-	st, err := store.Connect(ctx, cfg.DatabaseURL)
+	// 复用 store.Open —— 迁移同样要按 DSN 选后端，所以
+	// `EnsurePoolerSafeDSN`（PG）与 `EnsureSQLiteDSN`（SQLite）那两套校验
+	// 必须一起生效。走别的路径建连就绕过了它们。
+	backend, err := store.Open(ctx, dsn)
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer backend.Close()
 
-	if err := ensureMigrationsTable(ctx, st); err != nil {
+	runner, err := migrate.New(backend)
+	if err != nil {
 		return err
 	}
+
+	fmt.Printf("dialect: %s\n", backend.Dialect)
 
 	switch command {
 	case "up":
-		return up(ctx, st)
+		return up(ctx, runner)
 	case "version":
-		return version(ctx, st)
+		return version(ctx, runner)
+	case "pending":
+		return pending(ctx, runner)
 	default:
-		return fmt.Errorf("unknown command %q; expected up or version", command)
+		return fmt.Errorf("unknown command %q; expected up, version or pending", command)
 	}
 }
 
-// migration 是一个待应用的迁移：版本号与它在 embed.FS 里的文件名。
-//
-// 两者一起算出来而不是事后拼字符串——文件名是 `<version>_<描述>.up.sql`，
-// 描述部分属于文件名但不属于版本号，分开存就不用在读的时候反解。
-type migration struct {
-	Version  string
-	Filename string
-}
-
-func ensureMigrationsTable(ctx context.Context, st *store.Postgres) error {
-	_, err := st.Pool().Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version    TEXT        PRIMARY KEY,
-			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		)`)
-	return err
-}
-
-// up 按版本号顺序应用所有未应用的迁移，**每个迁移一个事务**。
-//
-// 一个迁移失败就整体停下并返回错误——不做「跳过失败的继续往下跑」，
-// 那会让 schema 停在半应用状态。
-func up(ctx context.Context, st *store.Postgres) error {
-	applied, err := appliedVersions(ctx, st)
+func up(ctx context.Context, runner *migrate.Runner) error {
+	ran, err := runner.Up(ctx)
 	if err != nil {
 		return err
 	}
-
-	pending, err := availableMigrations()
-	if err != nil {
-		return err
-	}
-
-	count := 0
-	for _, m := range pending {
-		if applied[m.Version] {
-			continue
-		}
-		body, err := migrations.FS.ReadFile(m.Filename)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", m.Filename, err)
-		}
-		if err := applyOne(ctx, st, m.Version, string(body)); err != nil {
-			return fmt.Errorf("apply %s: %w", m.Version, err)
-		}
-		fmt.Printf("applied %s (%s)\n", m.Version, m.Filename)
-		count++
-	}
-
-	if count == 0 {
+	if len(ran) == 0 {
 		fmt.Println("no pending migrations")
+		return nil
+	}
+	for _, version := range ran {
+		fmt.Printf("applied %s\n", version)
 	}
 	return nil
 }
 
-func applyOne(ctx context.Context, st *store.Postgres, version, body string) error {
-	tx, err := st.Pool().Begin(ctx)
+func version(ctx context.Context, runner *migrate.Runner) error {
+	versions, err := runner.Version(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }() // 已提交时是 no-op
-
-	if _, err := tx.Exec(ctx, body); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func version(ctx context.Context, st *store.Postgres) error {
-	applied, err := appliedVersions(ctx, st)
-	if err != nil {
-		return err
-	}
-	if len(applied) == 0 {
+	if len(versions) == 0 {
 		fmt.Println("no migrations applied")
 		return nil
 	}
-	versions := make([]string, 0, len(applied))
-	for v := range applied {
-		versions = append(versions, v)
-	}
-	sort.Strings(versions)
-	for _, v := range versions {
-		fmt.Println(v)
+	for _, version := range versions {
+		fmt.Println(version)
 	}
 	return nil
 }
 
-func appliedVersions(ctx context.Context, st *store.Postgres) (map[string]bool, error) {
-	rows, err := st.Pool().Query(ctx, `SELECT version FROM schema_migrations`)
+func pending(ctx context.Context, runner *migrate.Runner) error {
+	versions, err := runner.Pending(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer rows.Close()
-
-	applied := map[string]bool{}
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			return nil, err
-		}
-		applied[v] = true
+	if len(versions) == 0 {
+		fmt.Println("no pending migrations")
+		return nil
 	}
-	return applied, rows.Err()
-}
-
-// availableMigrations 列出内嵌的全部 up 迁移，按版本号排序。
-//
-// 零填充的数字前缀让字典序等于时间序，所以不需要解析成整数。
-func availableMigrations() ([]migration, error) {
-	entries, err := fs.Glob(migrations.FS, "*.up.sql")
-	if err != nil {
-		return nil, err
+	for _, version := range versions {
+		fmt.Println(version)
 	}
-
-	out := make([]migration, 0, len(entries))
-	for _, name := range entries {
-		version, _, ok := strings.Cut(name, "_")
-		if !ok || version == "" {
-			return nil, fmt.Errorf("migration filename %q must look like <version>_<desc>.up.sql", name)
-		}
-		out = append(out, migration{Version: version, Filename: name})
-	}
-
-	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
-	return out, nil
+	return nil
 }

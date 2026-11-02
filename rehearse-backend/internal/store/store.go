@@ -5,8 +5,14 @@
 // 没有共享表要迁就，所以不需要那套多后端抽象（§7.9 的对照表里
 // `repositories/` 标注为「不移植」）。
 //
-// 这个接口只有**一个**实现（`Postgres`）——§7.3.4 已决定不引入第二套存储后端。
-// 保留接口是为了让上层能被假实现替换（测试、以及「不连库也能跑起来」）。
+// **两套实现（2026-10-10）**：`Postgres`（生产推荐，§7.3.2）与 `SQLite`
+// （未设 `DATABASE_URL` 时的**默认**后端 / 单机部署 / 本地开发 / 测试，§7.3.5）。
+// 接口刻意保持很小（额度三个方法 + 设置两对读写），两套实现加起来
+// 不到 400 行——这正是当初「故意很薄」换来的东西：加一个后端是加法，
+// 不是重写。
+//
+// 接口保留的另一个理由是让上层能被假实现替换（`storetest.Fake`，
+// 用于不连库的单测）。
 package store
 
 import (
@@ -21,6 +27,12 @@ import (
 // 而默认值属于业务层（配额默认 100 次、LLM 配置回落到 env），
 // 不该由存储层替它决定。
 var ErrSettingNotFound = errors.New("setting not found")
+
+// ErrUserSettingsNotFound 表示该用户还没有设置文档。
+//
+// 与 ErrSettingNotFound 同理：第一次登录的用户没有行，调用方（httpapi）
+// 应当回一个空文档而不是 500。
+var ErrUserSettingsNotFound = errors.New("user settings not found")
 
 // Store 是持久层的接口。
 type Store interface {
@@ -44,6 +56,10 @@ type Store interface {
 	// 并发请求会在边界上一起通过，实际用量超过配置上限
 	// （Rust 侧 `coach_usage_try_consume_caps_concurrent_increments`
 	// 就是为这条写的测试，`sqlite.rs:4438`）。
+	//
+	// 两套实现都用**单条** `INSERT ... ON CONFLICT DO UPDATE ... WHERE`
+	// 表达，靠数据库自身的行锁串行化；SQLite 侧这条路径由
+	// `store_conformance_test.go` 在真文件上并发验证。
 	UsageTryConsume(ctx context.Context, userID string, day time.Time, limit uint32) (uint32, bool, error)
 
 	// UsageIncrement 无条件加一次，返回加完后的值。配额关闭时走这条。
@@ -53,4 +69,30 @@ type Store interface {
 	SettingGet(ctx context.Context, key string) (string, error)
 	// SettingPut 写一个设置键（upsert）。
 	SettingPut(ctx context.Context, key, value string) error
+
+	// UserSettingsGet 读某用户的设置文档（JSON 字符串）。
+	// 该用户从未写过时返回 `ErrUserSettingsNotFound`。
+	UserSettingsGet(ctx context.Context, userSub string) (string, error)
+	// UserSettingsPut 全量覆盖某用户的设置文档（upsert）。
+	// `settings` 必须是合法 JSON——形状校验在 httpapi，存储层只保证存得进去、读得回来。
+	UserSettingsPut(ctx context.Context, userSub, settings string) error
+}
+
+// Migrator 是 `cmd/migrate` 需要的存储能力。
+//
+// 单独一个接口而不是塞进 `Store`：server 运行时**不需要** DDL 能力
+// （§7.9 的决定是「运行时无 DDL 权限」），把它挂在 Store 上等于让每个
+// 读路径都拿着一个能 DROP TABLE 的句柄。分开之后，`cmd/migrate` 拿到的
+// 才是迁移句柄，而 `cmd/rehearse` 拿到的只是 Store。
+//
+// 两套后端的 DDL 方言不同（`now()` vs `CURRENT_TIMESTAMP`、`TIMESTAMPTZ`
+// vs `TEXT`），所以这里只抽象「怎么执行」，不抽象「执行什么」——
+// SQL 文本按后端分目录（`migrations/postgres/` 与 `migrations/sqlite/`）。
+type Migrator interface {
+	// EnsureMigrationsTable 建 `schema_migrations`（幂等）。
+	EnsureMigrationsTable(ctx context.Context) error
+	// AppliedVersions 返回已应用的版本号集合。
+	AppliedVersions(ctx context.Context) (map[string]bool, error)
+	// ApplyMigration 在**一个事务**里执行 body 并记下 version。
+	ApplyMigration(ctx context.Context, version, body string) error
 }

@@ -1,0 +1,85 @@
+{
+  "id": "ask_for_help",
+  "category": "daily",
+  "language": "en-IN",
+  "difficulty": "core",
+  "max_turns": 10,
+  "persona": {
+    "name": "Priya",
+    "role": "Senior Engineer",
+    "accent": null,
+    "tone": "friendly"
+  },
+  "setting": "one_on_one",
+  "title": {
+    "zh": "向资深同事求助",
+    "en": "Asking for Help"
+  },
+  "description": {
+    "zh": "说清卡点，带着已尝试方案求助",
+    "en": "Explain a blocker and ask for help clearly"
+  },
+  "focus_points": {
+    "zh": [
+      "描述现象",
+      "列出已尝试",
+      "提出具体请求"
+    ],
+    "en": [
+      "describe the symptom",
+      "list what you tried",
+      "make a specific ask"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Hey, you look stuck. What's going on?",
+        "translation": "嘿，你看起来卡住了。怎么了？"
+      },
+      "next_lines": [
+        {
+          "text": "I'm stuck on a 401 after the token refresh.",
+          "translation": "token 刷新后我一直卡在 401。"
+        },
+        {
+          "text": "I checked the logs and tried a new token, but it still fails.",
+          "translation": "我查了日志也换了新 token，但还是失败。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "You've been quiet today. Anything I can help with?",
+        "translation": "你今天挺安静的。有什么我能帮上的？"
+      },
+      "next_lines": [
+        {
+          "text": "I'm debugging an auth issue and could use a second opinion.",
+          "translation": "我在排查认证问题，想听听你的意见。"
+        },
+        {
+          "text": "Could you help me check whether the token scope is correct?",
+          "translation": "你能帮我确认一下 token 权限范围吗？"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Hey — need a second pair of eyes on something?",
+        "translation": "嘿——需要我帮你看点什么吗？"
+      },
+      "next_lines": [
+        {
+          "text": "Yes, the retry logic isn't behaving as expected.",
+          "translation": "是的，重试逻辑的表现不符合预期。"
+        },
+        {
+          "text": "Could you look at the request flow with me?",
+          "translation": "你能和我一起看一下请求流程吗？"
+        }
+      ]
+    }
+  ],
+  "guidance": "友好但有经验。用户只说 \"It doesn't work\" 时追问具体错误和已尝试的方案；                   用户说清楚后给出方向并鼓励：\"That's a good debugging step.\"。"
+}

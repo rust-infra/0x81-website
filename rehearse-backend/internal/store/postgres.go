@@ -39,12 +39,18 @@ type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// Connect 建连接池。
+// 编译期断言：Postgres 同时满足 Store 与 Migrator。
+var (
+	_ Store    = (*Postgres)(nil)
+	_ Migrator = (*Postgres)(nil)
+)
+
+// connectPostgres 建连接池。由 `Open` 按 DSN 分发调用。
 //
 // DSN 会先过 EnsurePoolerSafeDSN——**这是代码约束，不是文档提醒**：
 // 本地 PG 上没有 pooler，写错模式照样跑得好好的，只有连到 Supabase 才炸，
 // 所以不能靠「实施的人记得」。
-func Connect(ctx context.Context, databaseURL string) (*Postgres, error) {
+func connectPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	dsn, err := EnsurePoolerSafeDSN(databaseURL)
 	if err != nil {
 		return nil, err
@@ -126,4 +132,69 @@ func EnsurePoolerSafeDSN(databaseURL string) (string, error) {
 			"default_query_exec_mode=%q is not safe for the Supabase transaction pooler: %s; use %q instead (§7.3.2)",
 			current, reason, PoolerSafeExecMode)
 	}
+}
+
+// ---- Migrator 实现 ----
+//
+// 这三段原先是 `cmd/migrate` 里的函数，2026-10-10 搬进 store 包：加了 SQLite
+// 之后，`cmd/migrate` 不该知道「PG 的事务怎么开、版本表怎么建」——那是方言。
+// 搬进来之后 `cmd/migrate` 只负责「读哪个目录的 SQL、按什么顺序跑」。
+
+// EnsureMigrationsTable 实现 Migrator。
+func (p *Postgres) EnsureMigrationsTable(ctx context.Context) error {
+	_, err := p.pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version    TEXT        PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`)
+	if err != nil {
+		return fmt.Errorf("ensure schema_migrations: %w", err)
+	}
+	return nil
+}
+
+// AppliedVersions 实现 Migrator。
+func (p *Postgres) AppliedVersions(ctx context.Context) (map[string]bool, error) {
+	rows, err := p.pool.Query(ctx, `SELECT version FROM schema_migrations`)
+	if err != nil {
+		return nil, fmt.Errorf("read schema_migrations: %w", err)
+	}
+	defer rows.Close()
+
+	applied := map[string]bool{}
+	for rows.Next() {
+		var version string
+		if err := rows.Scan(&version); err != nil {
+			return nil, fmt.Errorf("scan schema_migrations: %w", err)
+		}
+		applied[version] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read schema_migrations: %w", err)
+	}
+	return applied, nil
+}
+
+// ApplyMigration 实现 Migrator。
+//
+// body 里通常有**多条**语句（建表 + 建索引），这依赖 pgx 在「无参数 Exec」时
+// 走 simple protocol —— 扩展协议不允许一次 Parse 多条语句。带参数的
+// `UsageTryConsume` 那条才是单语句。
+func (p *Postgres) ApplyMigration(ctx context.Context, version, body string) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // 已提交时是 no-op
+
+	if _, err := tx.Exec(ctx, body); err != nil {
+		return fmt.Errorf("exec migration body: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
+		return fmt.Errorf("record version %s: %w", version, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }

@@ -1,0 +1,85 @@
+{
+  "id": "code_review",
+  "category": "daily",
+  "language": "en-IN",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Priya",
+    "role": "Senior Engineer",
+    "accent": null,
+    "tone": "direct"
+  },
+  "setting": "meeting",
+  "title": {
+    "zh": "Code Review 讨论",
+    "en": "Code Review Discussion"
+  },
+  "description": {
+    "zh": "回应评审意见，解释技术理由，该坚持时坚持",
+    "en": "Respond to review comments and defend your reasoning"
+  },
+  "focus_points": {
+    "zh": [
+      "接受合理意见",
+      "解释取舍",
+      "礼貌坚持"
+    ],
+    "en": [
+      "accept feedback",
+      "explain trade-offs",
+      "push back politely"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "I left a few comments on your PR. Want to walk through them?",
+        "translation": "我在你的 PR 上留了几条评论，要不要一起过一下？"
+      },
+      "next_lines": [
+        {
+          "text": "Sure, let's start with the key changes.",
+          "translation": "好，我们先从关键改动开始。"
+        },
+        {
+          "text": "Which comment should we start with?",
+          "translation": "我们先从哪条评论开始？"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "I went through your PR last night. Got a couple of questions.",
+        "translation": "我昨晚看了你的 PR，有几个问题想问你。"
+      },
+      "next_lines": [
+        {
+          "text": "Sure, what's your first question?",
+          "translation": "好，你的第一个问题是什么？"
+        },
+        {
+          "text": "I can walk you through the design and the trade-offs.",
+          "translation": "我可以给你讲讲设计取舍。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Your PR is open — let's talk through the comments I left.",
+        "translation": "你的 PR 开着呢，说说我留的那几条评论吧。"
+      },
+      "next_lines": [
+        {
+          "text": "Okay, which comment is the most important?",
+          "translation": "好，哪条评论最重要？"
+        },
+        {
+          "text": "Let's go through the edge-case comment first.",
+          "translation": "我们先看那条关于边界情况的评论。"
+        }
+      ]
+    }
+  ],
+  "guidance": "扮演一位严格但公正的资深工程师，对方案提出具体质疑。用户让步时追问理由；                   用户解释清楚时要认可。示范表达：\"I see your point, but I'm worried about…\"。"
+}

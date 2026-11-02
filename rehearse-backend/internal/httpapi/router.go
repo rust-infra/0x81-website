@@ -37,14 +37,21 @@ var errMissingClaims = errors.New("claims missing from request context: route is
 // 而参数超过四五个之后，调用处的顺序错误就会变成一个「能编译的 bug」——
 // 两个同类型的参数调换位置编译器不会报错。
 type Deps struct {
-	Config      *config.Config
-	Store       store.Store
-	Catalog     *scenarios.Catalog
-	Coach       *coach.Service
-	Quota       *coach.QuotaService
-	LLMSettings *coach.LLMSettingsService
-	OCR         *material.OCRService
-	Profile     *material.ProfileService
+	Config *config.Config
+	// Dialect 是当前实际连上的存储后端（store.DialectSQLite / DialectPostgres）。
+	// 只用于 /health 的报告，让运维能一条 curl 看出「跑在哪个库上」。
+	Dialect store.Dialect
+	// DatabaseURLDefault 为 true 表示 DATABASE_URL 没设置、用的是内置默认值。
+	// 与 Dialect 一起进 /health：默认 SQLite 是刻意给的便利，但「生产跑在默认库上」
+	// 必须是一个**看得见**的事实，而不是藏在启动日志里的一行。
+	DatabaseURLDefault bool
+	Store              store.Store
+	Catalog            *scenarios.Catalog
+	Coach              *coach.Service
+	Quota              *coach.QuotaService
+	LLMSettings        *coach.LLMSettingsService
+	OCR                *material.OCRService
+	Profile            *material.ProfileService
 }
 
 // NewRouter 组装全部路由，返回 http.Handler（`*gin.Engine` 满足它）。
@@ -65,7 +72,9 @@ func NewRouter(deps Deps) http.Handler {
 	engine := gin.New()
 	engine.Use(gin.Recovery(), accessLog())
 
-	engine.GET("/health", health(deps.Store))
+	// `/health` 带 dialect 与 database_defaulted：前者说明跑在哪个库上，
+	// 后者说明 DATABASE_URL 是不是没设、用的是内置 SQLite 默认值（§7.3.5）。
+	engine.GET("/health", health(deps.Store, deps.Dialect, deps.DatabaseURLDefault))
 
 	api := engine.Group("/api/rehearse", middleware.RequireAuth(deps.Config.JWTSecret))
 	api.GET("/whoami", whoami)
@@ -83,6 +92,9 @@ func NewRouter(deps Deps) http.Handler {
 		}))
 	// 材料上传是 multipart，走不了 authedJSON（见 material.go）。
 	api.POST("/material/text", materialTextHandler(deps.OCR))
+	// 用户设置文档：客户端全量写、服务端只校验形状（user_settings.go）。
+	api.GET("/settings", userSettingsGetHandler(deps.Store))
+	api.PUT("/settings", userSettingsPutHandler(deps.Store))
 
 	admin := engine.Group("/api/admin", middleware.RequireAdminToken(deps.Config.AdminToken))
 	admin.GET("/settings/rehearse", adminGetSettingsHandler(deps.Quota, deps.LLMSettings))

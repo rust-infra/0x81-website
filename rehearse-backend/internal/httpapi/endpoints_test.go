@@ -152,6 +152,8 @@ func TestUserEndpointsRequireJWT(t *testing.T) {
 	router := newTestRouter(t, storetest.New())
 	paths := []request{
 		{method: http.MethodGet, path: "/api/rehearse/quota"},
+		{method: http.MethodGet, path: "/api/rehearse/settings"},
+		{method: http.MethodPut, path: "/api/rehearse/settings", body: `{}`, contentType: "application/json"},
 		{method: http.MethodPost, path: "/api/rehearse/turn", body: `{}`, contentType: "application/json"},
 		{method: http.MethodPost, path: "/api/rehearse/summary", body: `{}`, contentType: "application/json"},
 		{method: http.MethodPost, path: "/api/rehearse/scenario/draft", body: `{}`, contentType: "application/json"},

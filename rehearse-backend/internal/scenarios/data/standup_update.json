@@ -1,0 +1,85 @@
+{
+  "id": "standup_update",
+  "category": "daily",
+  "language": "en-US",
+  "difficulty": "core",
+  "max_turns": 10,
+  "persona": {
+    "name": "Alex",
+    "role": "Tech Lead",
+    "accent": null,
+    "tone": "friendly"
+  },
+  "setting": "meeting",
+  "title": {
+    "zh": "每日站会 · 进度同步",
+    "en": "Daily Standup"
+  },
+  "description": {
+    "zh": "向同事汇报进展、阻塞和下一步",
+    "en": "Report progress, blockers, and next steps"
+  },
+  "focus_points": {
+    "zh": [
+      "进度说清楚",
+      "主动提阻塞",
+      "明确下一步"
+    ],
+    "en": [
+      "state progress",
+      "raise blockers",
+      "name next step"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Morning! How's the feature going?",
+        "translation": "早！功能做得怎么样了？"
+      },
+      "next_lines": [
+        {
+          "text": "The feature is on track, and I'm finishing the main flow.",
+          "translation": "功能进展顺利，我正在完成主流程。"
+        },
+        {
+          "text": "I wrapped up the API work and will tackle the UI today.",
+          "translation": "我完成了 API 部分，今天会处理 UI。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Hey, quick one — where are we on the feature?",
+        "translation": "嘿，快速同步一下——那个功能到什么程度了？"
+      },
+      "next_lines": [
+        {
+          "text": "We're on track; the API is done and the UI is in progress.",
+          "translation": "进展顺利，API 已经完成，UI 还在做。"
+        },
+        {
+          "text": "The main flow is working, and I'm checking edge cases now.",
+          "translation": "主流程已经跑通，我现在在检查边界情况。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Morning! Ready for standup? How's your work going?",
+        "translation": "早！准备站会了吗？你那边进展如何？"
+      },
+      "next_lines": [
+        {
+          "text": "I'm ready. Here's my progress and what I'll do next.",
+          "translation": "我准备好了。下面是我的进展和下一步。"
+        },
+        {
+          "text": "I finished the API work and today I'll focus on the UI.",
+          "translation": "我完成了 API，今天会集中做 UI。"
+        }
+      ]
+    }
+  ],
+  "guidance": "保持站会节奏，每个回答 1-2 句即可。如果用户没说下一步，追问一句                    \"What's your plan for today?\"。用户表达过于书面时，示范更口语的说法。"
+}

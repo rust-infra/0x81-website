@@ -22,13 +22,15 @@ type Fake struct {
 	mu       sync.Mutex
 	usage    map[string]uint32
 	settings map[string]string
+	// userSettings 以 JWT 的 sub 为键，存原始 JSON 文档。
+	userSettings map[string]string
 	// PingErr 让 `/health` 的降级路径可测。
 	PingErr error
 }
 
 // New 建一个空的内存 store。
 func New() *Fake {
-	return &Fake{usage: map[string]uint32{}, settings: map[string]string{}}
+	return &Fake{usage: map[string]uint32{}, settings: map[string]string{}, userSettings: map[string]string{}}
 }
 
 var _ store.Store = (*Fake)(nil)
@@ -109,5 +111,24 @@ func (f *Fake) SettingPut(_ context.Context, key, value string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.settings[key] = value
+	return nil
+}
+
+// UserSettingsGet 实现 store.Store。
+func (f *Fake) UserSettingsGet(_ context.Context, userSub string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	value, ok := f.userSettings[userSub]
+	if !ok {
+		return "", store.ErrUserSettingsNotFound
+	}
+	return value, nil
+}
+
+// UserSettingsPut 实现 store.Store。
+func (f *Fake) UserSettingsPut(_ context.Context, userSub, settings string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.userSettings[userSub] = settings
 	return nil
 }

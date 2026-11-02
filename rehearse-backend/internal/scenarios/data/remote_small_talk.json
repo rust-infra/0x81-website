@@ -1,0 +1,85 @@
+{
+  "id": "remote_small_talk",
+  "category": "daily",
+  "language": "en-GB",
+  "difficulty": "easy",
+  "max_turns": 8,
+  "persona": {
+    "name": "Emma",
+    "role": "Designer",
+    "accent": null,
+    "tone": "friendly"
+  },
+  "setting": "coffee_chat",
+  "title": {
+    "zh": "远程茶水间",
+    "en": "Remote Small Talk"
+  },
+  "description": {
+    "zh": "寒暄、接话，别让话题掉地上",
+    "en": "Keep a casual conversation going"
+  },
+  "focus_points": {
+    "zh": [
+      "回应加反问",
+      "分享一个小细节",
+      "延续话题"
+    ],
+    "en": [
+      "answer and ask back",
+      "share a detail",
+      "keep it going"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Hey! How's your week going? Surviving the meetings?",
+        "translation": "嘿！这周过得怎么样？会议还扛得住吗？"
+      },
+      "next_lines": [
+        {
+          "text": "It's been a busy week, but the design review went well.",
+          "translation": "这周挺忙的，不过设计评审进展不错。"
+        },
+        {
+          "text": "I'm surviving, mostly one meeting at a time.",
+          "translation": "还撑得住，基本上是一场会接一场会。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Morning! Any plans for the weekend?",
+        "translation": "早！周末有什么安排吗？"
+      },
+      "next_lines": [
+        {
+          "text": "I'm planning a quiet weekend with family.",
+          "translation": "我打算和家人过一个安静的周末。"
+        },
+        {
+          "text": "No big plans yet—what about you?",
+          "translation": "还没什么大计划，你呢？"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Hey, how's it going? Still working from the same café?",
+        "translation": "嘿，最近咋样？还在同一家咖啡店办公吗？"
+      },
+      "next_lines": [
+        {
+          "text": "Still working from the same café, but I like the routine.",
+          "translation": "还在同一家咖啡店办公，不过我喜欢这种节奏。"
+        },
+        {
+          "text": "I switch cafés depending on the weather.",
+          "translation": "我会根据天气换不同的咖啡店。"
+        }
+      ]
+    }
+  ],
+  "guidance": "轻松闲聊，话题围绕远程工作日常、天气、周末、咖啡、宠物。                   用户只回一个词时，帮他扩展并抛出下一个话题。"
+}

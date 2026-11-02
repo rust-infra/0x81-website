@@ -1,0 +1,85 @@
+{
+  "id": "bad_news",
+  "category": "hard_talk",
+  "language": "en-US",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Priya",
+    "role": "Engineering Manager",
+    "accent": null,
+    "tone": "direct"
+  },
+  "setting": "one_on_one",
+  "title": {
+    "zh": "承认失误 · 主动向上汇报",
+    "en": "Owning a Mistake"
+  },
+  "description": {
+    "zh": "把自己造成的线上问题主动说清楚：事实、影响、已做的处置、以及下一步",
+    "en": "Report a mistake you caused: facts, impact, what you already did, what's next"
+  },
+  "focus_points": {
+    "zh": [
+      "先给事实不给借口",
+      "主动说影响范围",
+      "给出已做与待做"
+    ],
+    "en": [
+      "lead with facts, not excuses",
+      "state the blast radius yourself",
+      "name what you've done and what's next"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "I saw the incident channel blow up this morning. What happened?",
+        "translation": "我看到今天早上事故频道炸了。怎么回事？"
+      },
+      "next_lines": [
+        {
+          "text": "I caused it. I shipped a migration without a dry run, and it locked the orders table for 20 minutes.",
+          "translation": "是我造成的。我发了一个没有预演的迁移，把订单表锁了 20 分钟。"
+        },
+        {
+          "text": "It was my change. The config I pushed pointed staging traffic at the production queue.",
+          "translation": "是我的改动。我推的配置把预发流量指到了生产队列。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "How bad was it? Did we lose any data?",
+        "translation": "有多严重？有丢数据吗？"
+      },
+      "next_lines": [
+        {
+          "text": "No data loss — I rolled back within 20 minutes. About 300 orders were delayed, and I've already messaged the three affected customers.",
+          "translation": "没有丢数据——我 20 分钟内回滚了。大约 300 笔订单延迟，我已经联系了受影响的三个客户。"
+        },
+        {
+          "text": "Data is intact. The damage is that two teams lost half a day waiting on us, and I've told both of them directly.",
+          "translation": "数据完好。损失是两个团队白等了半天，我已经直接跟他们说了。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Okay. So what stops this from happening again?",
+        "translation": "好。那怎么保证不再发生？"
+      },
+      "next_lines": [
+        {
+          "text": "Two things. I've added a dry-run gate to the migration pipeline, and I'm writing up the incident so the next person doesn't repeat it.",
+          "translation": "两件事。我给迁移流水线加了预演卡点，另外在写事故复盘，免得下一个人重蹈覆辙。"
+        },
+        {
+          "text": "Short term I'm reviewing every migration myself for a month. Longer term I want a staging check in CI, but that needs your sign-off.",
+          "translation": "短期我自己 review 所有迁移，先做一个月。长期想在 CI 里加预发校验，但那需要你点头。"
+        }
+      ]
+    }
+  ],
+  "guidance": "你是他的主管，关心的是「信息是否完整」和「会不会再犯」，不是惩罚。用户含糊其辞（「出了点问题」）时，追问「具体是什么、影响多少人」；用户把责任推给别人或环境时，直接问「这个决定是谁做的」；用户只说抱歉不说处置时，问「你现在做了什么」。用户主动说清影响并给出措施时，明确表示认可，然后追问一个执行细节（时间点、谁来验）。不要一次问两个问题，也不要说教。"
+}

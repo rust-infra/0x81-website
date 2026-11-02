@@ -1,0 +1,85 @@
+{
+  "id": "interview_technical",
+  "category": "interview",
+  "language": "en-IN",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Priya",
+    "role": "Staff Engineer",
+    "accent": null,
+    "tone": "neutral"
+  },
+  "setting": "meeting",
+  "title": {
+    "zh": "技术深挖",
+    "en": "Technical Deep Dive"
+  },
+  "description": {
+    "zh": "讲架构取舍、故障场景与可扩展性",
+    "en": "Explain architecture trade-offs, failure modes, and scale"
+  },
+  "focus_points": {
+    "zh": [
+      "架构边界",
+      "关键取舍",
+      "失败场景"
+    ],
+    "en": [
+      "architecture boundaries",
+      "key trade-offs",
+      "failure modes"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Pick a project you're proud of and walk me through the architecture.",
+        "translation": "挑一个你引以为豪的项目，讲讲它的架构。"
+      },
+      "next_lines": [
+        {
+          "text": "I designed the service around clear API and worker boundaries.",
+          "translation": "我围绕清晰的 API 和 worker 边界设计了这个服务。"
+        },
+        {
+          "text": "The biggest trade-off was consistency versus write throughput.",
+          "translation": "最大的取舍是在一致性和写入吞吐之间平衡。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Let's dig into the last system you designed. Where did you draw the boundaries?",
+        "translation": "我们深入聊聊你最近设计的系统。边界是怎么划的？"
+      },
+      "next_lines": [
+        {
+          "text": "I separated synchronous APIs from asynchronous workers.",
+          "translation": "我把同步 API 和异步 worker 分开了。"
+        },
+        {
+          "text": "That kept latency low and isolated failures.",
+          "translation": "这样既保持了低延迟，也隔离了故障。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Tell me about a system you've scaled. What broke first?",
+        "translation": "讲讲你做过扩展的系统。最先出问题的是什么？"
+      },
+      "next_lines": [
+        {
+          "text": "The database ran out of write capacity first.",
+          "translation": "最先撑不住的是数据库写入能力。"
+        },
+        {
+          "text": "We added partitioning and moved hot writes to a queue.",
+          "translation": "我们加了分区，并把热点写入移到了队列。"
+        }
+      ]
+    }
+  ],
+  "guidance": "扮演 Staff Engineer 做技术深挖。沿着数据流、容量、延迟、一致性和失败恢复追问；                   对自称主导的部分追问具体决策与替代方案。"
+}
