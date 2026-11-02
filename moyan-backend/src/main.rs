@@ -158,6 +158,7 @@ mod tests {
             sub: sub.to_string(),
             email: "test@example.com".to_string(),
             name: "Test User".to_string(),
+            status: "active".to_string(),
             exp: 4_102_444_800, // 2100-01-01，测试用的长期有效值
             iat: 0,
         };
