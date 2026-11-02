@@ -1,0 +1,85 @@
+{
+  "id": "incident_sync",
+  "category": "hard_talk",
+  "language": "en-US",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Sam",
+    "role": "SRE",
+    "accent": null,
+    "tone": "direct"
+  },
+  "setting": "meeting",
+  "title": {
+    "zh": "线上故障同步",
+    "en": "Incident Sync"
+  },
+  "description": {
+    "zh": "说清影响面、当前进展和 ETA",
+    "en": "Communicate impact, status, and ETA under pressure"
+  },
+  "focus_points": {
+    "zh": [
+      "先说影响面",
+      "区分已知与未知",
+      "给 ETA 或下次更新"
+    ],
+    "en": [
+      "state impact first",
+      "separate known from unknown",
+      "give an ETA"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "We're getting error spikes in eu-west. What do you know so far?",
+        "translation": "eu-west 这边错误在飙升。你目前了解到什么？"
+      },
+      "next_lines": [
+        {
+          "text": "We're seeing 500s in eu-west after the last deploy.",
+          "translation": "上次发布后，eu-west 开始出现 500 错误。"
+        },
+        {
+          "text": "Impact is limited to checkout requests so far.",
+          "translation": "目前影响范围只涉及结账请求。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Status check — eu-west is degrading. Give me what you have.",
+        "translation": "报一下状态——eu-west 在恶化，把你手上的信息给我。"
+      },
+      "next_lines": [
+        {
+          "text": "The error rate is still climbing; rollback is in progress.",
+          "translation": "错误率还在升高，回滚正在进行。"
+        },
+        {
+          "text": "I'll confirm customer impact and share an update in five minutes.",
+          "translation": "我会确认客户影响，五分钟后同步。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "How bad is it? Customers are asking about the eu-west errors.",
+        "translation": "有多严重？客户在问 eu-west 的错误。"
+      },
+      "next_lines": [
+        {
+          "text": "About 2% of requests are failing; core checkout is affected.",
+          "translation": "大约 2% 的请求失败，核心结账流程受影响。"
+        },
+        {
+          "text": "No data loss so far, and we're rolling back the change.",
+          "translation": "目前没有数据丢失，我们正在回滚这次变更。"
+        }
+      ]
+    }
+  ],
+  "guidance": "语速可以偏快、追问频繁，模拟真实故障沟通压力。用户含糊时追问                    \"What's the customer impact?\" 或 \"When will we have an update?\"。"
+}

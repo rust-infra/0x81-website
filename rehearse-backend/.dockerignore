@@ -1,0 +1,21 @@
+# 构建上下文里不需要的东西。镜像最终只有两个静态二进制 + CA 证书，
+# 但 build 阶段的上下文越小越快。
+.git
+.gitignore
+bin/
+*.md
+!README.md
+.golangci.yml
+Makefile
+
+# SQLite 后端的运行态文件（§7.3.5）。**必须排除**：本地跑过一次之后
+# `data/` 里会有真库（含配额与 LLM 密钥），打进镜像就是一次凭据泄漏。
+#
+# ⚠️ 必须是 `/data/`（前导斜杠 = 锚定到构建上下文根）。写成 `data/` 会匹配
+# **任意层级**的 data 目录，连带把 `internal/scenarios/data/` 那 14 个
+# `go:embed` 输入也排除掉，构建直接失败在
+# `pattern data/*.json: no matching files found`。
+/data/
+*.db
+*.db-wal
+*.db-shm

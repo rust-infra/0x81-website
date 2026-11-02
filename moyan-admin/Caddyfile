@@ -2,6 +2,15 @@
     root * /usr/share/caddy/html
     encode gzip
 
+    # 职演（Rehearse）的设置接口走**路径分流**（§6.4）：管理端只有一个 LLM
+    # 表单，保存时双写两个后端——墨言那份走下面的 /api/*，职演那份走这里。
+    #
+    # ⚠️ 必须放在 `handle /api/*` **之前**：Caddy 的 handle 按书写顺序匹配，
+    # 放后面就永远轮不到，表现是「后台的职演区块一直 404」。
+    handle /api/admin/settings/rehearse* {
+        reverse_proxy rehearse-backend:4324
+    }
+
     # API 反向代理到后端（必须放在 SPA 回退之前，
     # 否则 try_files 会把 /api/* 重写为 /index.html）
     handle /api/* {

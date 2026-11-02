@@ -71,7 +71,7 @@ Branch: `feat/ai-agent`
 
 ### 页面 UI 还原度复核：已执行
 
-基准：`moyan-app/design/coach/index.html`（390 × 844，共 25 个设计状态）。逐页对照后完成以下统一修正：
+基准：`rehearse-app/design/coach-v1-moyan/index.html`（390 × 844，共 25 个设计状态）。逐页对照后完成以下统一修正：
 
 - 全局：将 48pt 的超大页头留白收回设计稿的 8pt；卡片阴影改为描边；宣纸白、深夜墨、iOS 浅色的弱文字提升到设计稿的 AA 对比度。
 - Tab：改用 58pt 独立悬浮胶囊，放在安全区上方，不再把底部安全区撑进白色 Tab 背景；取消设计稿没有的选中色块。

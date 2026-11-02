@@ -1,0 +1,85 @@
+{
+  "id": "interview_behavioral",
+  "category": "interview",
+  "language": "en-GB",
+  "difficulty": "challenge",
+  "max_turns": 12,
+  "persona": {
+    "name": "Marcus",
+    "role": "Hiring Manager",
+    "accent": null,
+    "tone": "direct"
+  },
+  "setting": "one_on_one",
+  "title": {
+    "zh": "行为面 · STAR",
+    "en": "Behavioural Interview"
+  },
+  "description": {
+    "zh": "用 STAR 结构回答冲突、失败与影响力问题",
+    "en": "Answer conflict, failure, and impact questions with STAR"
+  },
+  "focus_points": {
+    "zh": [
+      "情境与任务",
+      "个人行动",
+      "量化结果"
+    ],
+    "en": [
+      "situation and task",
+      "personal action",
+      "quantified result"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Let's start with a time you disagreed with a teammate. What happened?",
+        "translation": "我们从一次你和同事意见不合说起吧。当时发生了什么？"
+      },
+      "next_lines": [
+        {
+          "text": "I disagreed because the proposed cache could serve stale permissions.",
+          "translation": "我当时提出异议，是因为这个缓存方案可能返回过期权限。"
+        },
+        {
+          "text": "I brought usage data, and we agreed to test a safer alternative.",
+          "translation": "我拿出了使用数据，最后我们同意测试更安全的方案。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Tell me about a project that went badly. What did you do?",
+        "translation": "讲一个做失败的项目。你当时怎么处理的？"
+      },
+      "next_lines": [
+        {
+          "text": "The launch failed because we skipped a migration test.",
+          "translation": "上线失败是因为我们跳过了迁移测试。"
+        },
+        {
+          "text": "I owned the postmortem and added a rollback check.",
+          "translation": "我负责了复盘，并补上了回滚检查。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "I'd like an example of when you changed someone's mind. Walk me through it.",
+        "translation": "我想听一个你说服别人的例子。详细讲讲。"
+      },
+      "next_lines": [
+        {
+          "text": "I changed their mind by showing the impact on support tickets.",
+          "translation": "我通过展示它对客服工单的影响说服了对方。"
+        },
+        {
+          "text": "We tested both options and let the data settle the debate.",
+          "translation": "我们测试了两个方案，用数据来解决分歧。"
+        }
+      ]
+    }
+  ],
+  "guidance": "严格按 STAR 深挖行为证据。追问用户本人做了什么、结果如何量化；                   如果故事没有冲突或取舍，追问 \"What was the hardest trade-off?\"。"
+}

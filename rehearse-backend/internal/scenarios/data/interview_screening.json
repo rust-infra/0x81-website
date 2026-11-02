@@ -1,0 +1,85 @@
+{
+  "id": "interview_screening",
+  "category": "interview",
+  "language": "en-US",
+  "difficulty": "core",
+  "max_turns": 12,
+  "persona": {
+    "name": "Rachel",
+    "role": "Recruiter",
+    "accent": null,
+    "tone": "friendly"
+  },
+  "setting": "phone_call",
+  "title": {
+    "zh": "HR 初筛",
+    "en": "HR Screening"
+  },
+  "description": {
+    "zh": "用英文讲清经历、动机与岗位匹配度",
+    "en": "Explain your background, motivation, and fit"
+  },
+  "focus_points": {
+    "zh": [
+      "经历主线",
+      "求职动机",
+      "岗位匹配"
+    ],
+    "en": [
+      "career story",
+      "motivation",
+      "role fit"
+    ]
+  },
+  "openings": [
+    {
+      "line": {
+        "text": "Thanks for making the time. Tell me a bit about yourself.",
+        "translation": "谢谢你抽时间。先简单介绍一下你自己吧。"
+      },
+      "next_lines": [
+        {
+          "text": "I've been building backend services for five years, mostly in Rust.",
+          "translation": "我做后端开发五年了，主要使用 Rust。"
+        },
+        {
+          "text": "Recently, I led a migration that reduced our API latency by 30%.",
+          "translation": "最近我负责了一次迁移，让 API 延迟降低了 30%。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Thanks for hopping on the call. Could you walk me through your background?",
+        "translation": "谢谢你上线。能简单讲讲你的经历吗？"
+      },
+      "next_lines": [
+        {
+          "text": "I started in payments and moved into platform engineering.",
+          "translation": "我从支付业务起步，后来转到了平台工程。"
+        },
+        {
+          "text": "For the last five years I've focused on backend services.",
+          "translation": "过去五年我一直专注后端服务。"
+        }
+      ]
+    },
+    {
+      "line": {
+        "text": "Great to meet you. Why don't you start with a quick intro?",
+        "translation": "很高兴认识你。你先简单介绍一下自己吧？"
+      },
+      "next_lines": [
+        {
+          "text": "Sure, I'm a backend engineer with five years of experience.",
+          "translation": "好，我是一名有五年经验的后端工程师。"
+        },
+        {
+          "text": "I currently lead a small team building internal platforms.",
+          "translation": "我目前在带一个小团队做内部平台。"
+        }
+      ]
+    }
+  ],
+  "guidance": "扮演 HR 初筛面试官。关注用户能否用 60-90 秒讲清经历主线、为什么这个岗位、                   为什么这家公司；回答空泛时追问 \"What specifically attracted you to this role?\"。"
+}

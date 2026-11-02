@@ -114,6 +114,12 @@ fn resolve_upstream(host: &str) -> Option<(&'static str, u16)> {
         // 所有客户端不用发版。
         // 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
         "auth.0x81.uk" => Some(("PROXY_UPSTREAM_AUTH", 4323)),
+        // 职演（Rehearse）的 API 入口。注意它和 `rehearse-app` 的关系与墨言那对
+        // 恰好相反：墨言是「产品域名指前端、auth 指后端」，职演**没有 Web 前端**
+        // （§3.3 只做 App），所以这个域名直接指向后端 `rehearse-backend:4324`。
+        // App 打的就是它（`API_URL=https://rehearse.0x81.uk`）。
+        // 设计：docs/superpowers/specs/2026-10-02-rehearse-design.md §6.3
+        "rehearse.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_REHEARSE", 4324)),
         "0x81.uk" | "www.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_INDEX", 4320)),
         _ => None,
     }
@@ -387,6 +393,8 @@ mod tests {
             ),
             // 统一登录入口，直连后端而不是前端
             ("auth.0x81.uk", "PROXY_UPSTREAM_AUTH", 4323),
+            // 职演 API（App 打这个域名，它直连后端）
+            ("rehearse.0x81.uk", "PROXY_UPSTREAM_HOST_REHEARSE", 4324),
             ("0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),
             ("www.0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),
         ] {

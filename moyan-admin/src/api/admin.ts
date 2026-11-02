@@ -524,12 +524,60 @@ export async function updateCoachSettings(
   return parseEnvelope<CoachSettings>(res);
 }
 
+/**
+ * 职演（Rehearse）的 LLM 与配额设置。
+ *
+ * 与墨言那份**不是同一张表**：职演有自己的库（`rehearse_settings`），由
+ * `rehearse-backend` 暴露。Caddy 在 `/api/admin/settings/rehearse*` 上做了
+ * 路径分流（见 `moyan-admin/Caddyfile`），所以这里仍用相对路径，前端不需要
+ * 知道 4323 / 4324 是两个进程。
+ */
+export interface RehearseSettings {
+  daily_turn_limit: number;
+  enabled: boolean;
+  base_url: string;
+  model: string;
+  temperature: number;
+  api_key_set: boolean;
+  api_key_masked: string | null;
+}
+
+/**
+ * **局部更新**：只传要改的字段。
+ *
+ * ⚠️ 不能整对象回传：后端是 `*T` + 指针判空，没传的字段保持原值；但如果把
+ * `daily_turn_limit` 一起传成表单默认值，就等于把配额重置了。
+ */
+export interface UpdateRehearseSettingsInput {
+  daily_turn_limit?: number;
+  enabled?: boolean;
+  base_url?: string;
+  api_key?: string;
+  model?: string;
+  temperature?: number;
+  clear_api_key?: boolean;
+}
+
+export async function getRehearseSettings(): Promise<RehearseSettings> {
+  const res = await adminFetch("/api/admin/settings/rehearse");
+  return parseEnvelope<RehearseSettings>(res);
+}
+
+export async function updateRehearseSettings(
+  input: UpdateRehearseSettingsInput,
+): Promise<RehearseSettings> {
+  const res = await adminFetch("/api/admin/settings/rehearse", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseEnvelope<RehearseSettings>(res);
+}
+
 export async function getLlmSettings(): Promise<LlmSettings> {
   const res = await adminFetch("/api/admin/settings/llm");
   return parseEnvelope<LlmSettings>(res);
-}
-
-export async function updateLlmSettings(
+}export async function updateLlmSettings(
   input: UpdateLlmSettingsInput,
 ): Promise<LlmSettings> {
   const res = await adminFetch("/api/admin/settings/llm", {

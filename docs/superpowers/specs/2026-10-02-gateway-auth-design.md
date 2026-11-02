@@ -137,7 +137,7 @@ X-User-Id: <别人的 id>
 
 ⚠️ **`moyan-web` 故意不切到 `auth.0x81.uk`。**
 
-已核实：`moyan-web` 的 `API_BASE` 是 `import.meta.env.VITE_API_URL || ""`（`backendMode.ts:22`）——**线上是空串，走相对路径**。它的登录调用（`authService.ts` 的 4 处）本来就是同源的 `/api/auth/*`，**没有硬编码任何产品名**。
+已核实：`moyan-web` 的 `API_BASE` 是 `import.meta.env.VITE_API_URL || ""`（`backendMode.ts:22`）——**线上是空串，走相对路径**。它的 auth 调用（`authService.ts` 的 5 处 `${API_BASE}/api/auth/*`：`kimi/device`、`kimi/token`、`google/callback`、`me`、`telegram`）本来就是同源的，**没有硬编码任何产品名**。
 
 把它改成绝对地址 `https://auth.0x81.uk` 会：
 
@@ -147,7 +147,7 @@ X-User-Id: <别人的 id>
 
 **所以「统一入口」对 Web 是零收益、有成本。App 才需要中性入口**（它们必须硬编码一个 host）。
 
-> 这一条与评审时选的「一起切到新入口」有出入。理由写在这里，可以否——否的话代价是 `moyan-web` 的跨域预检（`ALLOWED_ORIGINS` 里已经有 `https://moyan.0x81.uk`，所以放开本身不用改配置）。
+> ✅ **已定（2026-10-02 评审）：不切。** 这一条原本与评审时选的「一起切到新入口」有出入，复核论据后确认按本稿的结论走——`moyan-web` 的 `API_BASE` 线上确实是空串（`backendMode.ts:22`），`src` 里搜不到任何 `0x81.uk` 硬编码，所以切过去是零收益、只换来一次 CORS + OPTIONS 预检。若将来要改成切，代价可控：`ALLOWED_ORIGINS` 里已经有 `https://moyan.0x81.uk`，放开本身不用改配置。
 
 ### 3.3 一个域名，两种语义
 
@@ -273,7 +273,7 @@ HS256，`JWT_SECRET`。**必须 ASCII**——仓库里已经踩过这个坑（`X
 | **2** | 验证：`curl -o /dev/null -w '%{http_code}' https://auth.0x81.uk/api/auth/me` 从 **404 变成 401**，且网关日志里不再有 `no upstream configured` 警告 | 无代码 |
 | **3** | `moyan-app` 登录调用切到 `auth.0x81.uk`（3 处） | `moyan-app` |
 | **4** | `rehearse-backend` 落地时直接用 `auth.0x81.uk` | 新增后端 |
-| **5** | （可选）compose 侧 env 键改名 `MOYAN_JWT_SECRET` → `AUTH_JWT_SECRET` | compose + 服务器 `.env` |
+| **5** | compose 侧 env 键改名 `MOYAN_JWT_SECRET` → `AUTH_JWT_SECRET`、`MOYAN_ADMIN_TOKEN` → `AUTH_ADMIN_TOKEN`，**并把 `:-` 默认值换成 `:?` 强制校验**（见 §10 已定）。**值原样搬过去，不要重新生成**——换值会让所有已发出的 token 立即失效，已登录用户全部掉线 | compose + 服务器 `.env` |
 
 **阶段 1 和 2 是零风险的**——网关只多了一条不冲突的 Host 分支，现有流量完全不变。阶段 3 是唯一动到现有客户端的一步，而且只改 3 个调用点。
 
@@ -337,10 +337,24 @@ HS256，`JWT_SECRET`。**必须 ASCII**——仓库里已经踩过这个坑（`X
 
 ## 10. 待确认
 
-1. **`moyan-web` 不切入口这条**——与评审时选的「一起切」有出入。理由见 §3.2（零收益 + 引入跨域预检），可以否
-2. **compose 侧 env 键是否改名** `MOYAN_JWT_SECRET` → `AUTH_JWT_SECRET`——要动服务器上的手工部署件，不改也能跑
-3. **是否给 `website-rs` 补 CI 门禁**——本稿对它的改动很小（一条分支），但顺手删死脚手架之后应该至少能编过
-4. **`auth.0x81.uk` 是否要独立于 Cloudflare 的 Universal SSL**——一层子域被 `*.0x81.uk` 覆盖，不需要自有证书（同 `admin-moyan.0x81.uk` 的情况）。除非将来要做更严格的 TLS 策略
+1. **是否给 `website-rs` 补 CI 门禁**——本稿对它的改动很小（一条分支），但顺手删死脚手架之后应该至少能编过
+
+**已定（2026-10-02）**：
+
+- ✅ **`moyan-web` 不切入口**——复核后按本稿结论走，理由见 §3.2。原「与评审时的选择有出入」已消解
+- ✅ **`auth.0x81.uk` 不需要自有证书**——这条原本挂在待确认里，但下方「2026-10-02 实测」已经把它答了：证书 `CN=0x81.uk`、SAN 覆盖 `*.0x81.uk`，一层子域被 Cloudflare Universal SSL 覆盖。**实测结论与待确认条目互相矛盾，以实测为准**（条目已移到这里）
+- ✅ **compose 侧 env 键改名：改。** `MOYAN_JWT_SECRET` → `AUTH_JWT_SECRET`、`MOYAN_ADMIN_TOKEN` → `AUTH_ADMIN_TOKEN`——这两个键现在喂的是**跨产品**的共享密钥与共享管理令牌，`MOYAN_` 前缀编码了错误的所有权。**并且必须同时把 `:-` 默认值换成 `:?` 强制校验**：
+
+  ```yaml
+  # 现状（= 静默失败）
+  JWT_SECRET=${MOYAN_JWT_SECRET:-change-me-in-production}   # 漏改 → 假密钥，服务正常启动，所有 token 验不过
+  ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}                        # 漏改 → 空串，管理端鉴权失效
+  # 改为
+  JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
+  ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
+  ```
+
+  `:-` 是「取默认值」，**不是**「不设回落」——**只改键名不改默认值，会把故障从部署期推到运行期，比不改更糟**。改名实施步骤（含「值原样搬、不要重新生成」，换值会让所有已发 token 立即失效）见 rehearse 稿 §7.7
 
 已在核对中确认的事实（留档）：
 
@@ -351,7 +365,7 @@ HS256，`JWT_SECRET`。**必须 ASCII**——仓库里已经踩过这个坑（`X
 - ✅ `moyan-backend` 里不带 `jwt_middleware` 的公开接口恰好 5 条（`main.rs:63-81` + 各 `routes/*.rs`）——**方案 A 下不需要白名单**（后端自己判断），这条留档只是备查
 - ✅ `moyan-admin` 用 `X-Admin-Token`，不走用户 JWT，不受影响
 - ✅ **`moyan-web` 的 `API_BASE` 是 `import.meta.env.VITE_API_URL || ""`（`backendMode.ts:22`），线上是空串走相对路径**——这是「Web 不切」的依据
-- ✅ `moyan-web/src/services/authService.ts` 有 4 处 auth 调用、`moyan-app/src/lib/api.ts` 有 3 处，全部走 `API_BASE` 前缀
+- ✅ `moyan-web/src/services/authService.ts` 有 **5** 处 `${API_BASE}/api/auth/*` 调用（`kimi/device` / `kimi/token` / `google/callback` / `me` / `telegram`）、`moyan-app/src/lib/api.ts` 有 3 处，全部走 `API_BASE` 前缀。（本行原写「4 处」，漏了 `telegram`——它属于 §3.2 表里「独立项目，暂不动」那一行，但确实是第 5 处）
 - ✅ `moyan-backend` 的 CORS 已包含 `https://moyan.0x81.uk`（`docker-compose.yml:46` 默认值）
 - ✅ `argon2` 在代码里根本没被调用（`Cargo.toml` 注释写着 "for future local auth"）——认证全是 OAuth，没有密码哈希互通问题
 

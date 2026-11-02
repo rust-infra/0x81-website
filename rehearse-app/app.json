@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Rehearse",
+    "slug": "rehearse-app",
+    "version": "1.0.0",
+    "scheme": "rehearse",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "uk.0x81.rehearse",
+      "deploymentTarget": "16.4",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "uk.0x81.rehearse"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "googleClientId": "",
+      "googleRedirectUri": "rehearse://auth/google"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "职演需要使用麦克风录下你说的每一轮，才能给出逐轮反馈。"
+        }
+      ],
+      "./plugins/withSwift5Podfile",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "职演需要使用麦克风录下你说的每一轮，才能给出逐轮反馈。",
+          "speechRecognitionPermission": "职演需要使用系统语音识别把你说的话转成文字。"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "职演需要读取你选择的简历或职位图片。",
+          "cameraPermission": "职演需要使用相机拍摄简历或职位图片。"
+        }
+      ],
+      "expo-document-picker"
+    ]
+  }
+}

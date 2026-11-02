@@ -2,13 +2,17 @@ import {
   getCoachSettings,
   getLlmSettings,
   getPodcastConfig,
+  getRehearseSettings,
   updateCoachSettings,
   updateLlmSettings,
   updatePodcastConfig,
+  updateRehearseSettings,
   type CoachSettings,
   type LlmSettings,
   type PodcastConfig,
+  type RehearseSettings,
   type UpdateLlmSettingsInput,
+  type UpdateRehearseSettingsInput,
 } from "@/api/admin";
 import {
   Alert,
@@ -27,10 +31,13 @@ import { useEffect, useState } from "react";
 export default function SettingsPage() {
   const [form] = Form.useForm<UpdateLlmSettingsInput>();
   const [coachForm] = Form.useForm<CoachSettings>();
+  const [rehearseForm] = Form.useForm<UpdateRehearseSettingsInput>();
   const [coachSaving, setCoachSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<LlmSettings | null>(null);
+  const [rehearse, setRehearse] = useState<RehearseSettings | null>(null);
+  const [rehearseSaving, setRehearseSaving] = useState(false);
   const [podcast, setPodcast] = useState<PodcastConfig | null>(null);
   const [podcastEnabled, setPodcastEnabled] = useState(false);
   const [podcastWebEnabled, setPodcastWebEnabled] = useState(false);
@@ -59,6 +66,7 @@ export default function SettingsPage() {
     void load();
     void loadPodcast();
     void loadCoach();
+    void loadRehearse();
   }, []);
 
   const loadPodcast = async () => {
@@ -113,6 +121,38 @@ export default function SettingsPage() {
     }
   };
 
+  const loadRehearse = async () => {
+    try {
+      const data = await getRehearseSettings();
+      setRehearse(data);
+      rehearseForm.setFieldsValue({
+        daily_turn_limit: data.daily_turn_limit,
+        enabled: data.enabled,
+      });
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "读取职演设置失败");
+    }
+  };
+
+  const handleSaveRehearse = async () => {
+    setRehearseSaving(true);
+    try {
+      const values = await rehearseForm.validateFields();
+      // 只提交配额两项：base_url / model / key 由上面的 LLM 表单统一维护，
+      // 这里再放一份就成了「同一件事两个入口」。
+      const saved = await updateRehearseSettings({
+        daily_turn_limit: values.daily_turn_limit,
+        enabled: values.enabled,
+      });
+      setRehearse(saved);
+      message.success("职演配额已保存");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存职演配额失败");
+    } finally {
+      setRehearseSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
@@ -128,7 +168,24 @@ export default function SettingsPage() {
       const data = await updateLlmSettings(payload);
       setSettings(data);
       form.setFieldValue("api_key", "");
-      message.success("LLM 设置已保存");
+
+      // 双写职演（设计稿 §7.3.2：一处编辑、双写）。
+      // 职演那份失败**不回滚**墨言——两个库本来就是各管各的——但必须点名
+      // 是哪一边失败，否则用户会以为整次保存都没生效。
+      try {
+        const saved = await updateRehearseSettings({
+          base_url: payload.base_url,
+          model: payload.model,
+          temperature: payload.temperature,
+          ...(payload.api_key ? { api_key: payload.api_key } : {}),
+        });
+        setRehearse(saved);
+        message.success("LLM 设置已保存（墨言 + 职演）");
+      } catch (err) {
+        message.warning(
+          `墨言已保存，但职演写入失败：${err instanceof Error ? err.message : "未知错误"}`,
+        );
+      }
     } catch (err) {
       if (err instanceof Error) {
         message.error(err.message);
@@ -143,7 +200,15 @@ export default function SettingsPage() {
     try {
       const data = await updateLlmSettings({ clear_api_key: true });
       setSettings(data);
-      message.success("已清除 API Key");
+      try {
+        const saved = await updateRehearseSettings({ clear_api_key: true });
+        setRehearse(saved);
+        message.success("已清除 API Key（墨言 + 职演）");
+      } catch (err) {
+        message.warning(
+          `墨言已清除，但职演清除失败：${err instanceof Error ? err.message : "未知错误"}`,
+        );
+      }
     } catch (err) {
       message.error(err instanceof Error ? err.message : "清除失败");
     } finally {
@@ -204,7 +269,8 @@ export default function SettingsPage() {
         </Space>
       </Card>
       <Typography.Paragraph type="secondary">
-        配置 OpenAI 兼容接口（base_url / api_key / model），供数据采集页调用。
+        配置 OpenAI 兼容接口（base_url / api_key / model）。**保存会同时写入墨言与职演**——
+        两个服务各管各的库，但产品上只有一份配置。任一侧失败会单独提示，不会静默只写一边。
       </Typography.Paragraph>
 
       <Card loading={loading} style={{ maxWidth: 640 }}>
@@ -275,6 +341,36 @@ export default function SettingsPage() {
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={coachSaving}>
             保存配额设置
+          </Button>
+        </Form>
+      </Card>
+      <Card title="职演（Rehearse）" style={{ maxWidth: 640, marginTop: 16 }}>
+        <Alert
+          type={rehearse?.api_key_set ? "success" : "warning"}
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={
+            rehearse?.api_key_set ? `LLM 已配置：${rehearse.model}` : "LLM 尚未配置"
+          }
+          description={
+            rehearse?.api_key_set
+              ? `Key ${rehearse.api_key_masked ?? "***"} · ${rehearse.base_url}。换模型或换 Key 请用上面的 LLM 表单（保存会双写到这里）。`
+              : "未配置时 /api/rehearse/turn 与 /summary 会返回 503。请在上面的 LLM 表单里填 Key 并保存——保存会同时写入职演。"
+          }
+        />
+        <Form form={rehearseForm} layout="vertical" onFinish={handleSaveRehearse}>
+          <Form.Item
+            name="daily_turn_limit"
+            label="每日上限（轮 / 用户 / 天）"
+            rules={[{ required: true, message: "请输入每日上限" }]}
+          >
+            <InputNumber min={0} max={100000} style={{ width: 200 }} />
+          </Form.Item>
+          <Form.Item name="enabled" label="启用配额" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={rehearseSaving}>
+            保存职演配额
           </Button>
         </Form>
       </Card>
