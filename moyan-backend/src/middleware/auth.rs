@@ -12,6 +12,7 @@ pub struct Claims {
     pub sub: String, // user id
     pub email: String,
     pub name: String,
+    pub status: String, // active / disabled（§7.4.3）
     pub exp: usize, // expiration
     pub iat: usize, // issued at
 }
@@ -64,6 +65,12 @@ pub async fn jwt_middleware(mut req: Request<Body>, next: Next) -> Result<Respon
         }
     };
 
+    // status 检查（§7.4.3）。与 rehearse-backend 对齐：非 active 一律 401。
+    if claims.status != "active" {
+        warn!(sub = %claims.sub, status = %claims.status, "rejecting token for non-active account");
+        return Err(AppError::Unauthorized("Account is inactive".to_string()));
+    }
+
     // Store claims in request extensions for handlers to access
     req.extensions_mut().insert(claims);
 
@@ -98,6 +105,7 @@ async fn legacy_claims_from_token(state: &AppState, token: &str) -> Result<Claim
         sub: user.id,
         name: "Legacy Token User".to_string(),
         email,
+        status: user.status,
         exp: now + 60 * 60 * 24 * 365,
         iat: now,
     })

@@ -24,6 +24,7 @@ fn generate_jwt(state: &AppState, user: &User) -> Result<String, AppError> {
         sub: user.id.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
+        status: user.status.clone(),
         exp: exp.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
