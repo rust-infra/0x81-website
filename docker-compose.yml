@@ -134,14 +134,29 @@ services:
       - "4324:4324"
     environment:
       - PORT=4324
-      # ⚠️ 下面三个键用 `${VAR:?}` 而不是 `${VAR:-默认}`——**这是刻意的**。
+      # ⚠️ 迁移**不在启动路径上**（§7.9：server 运行时无 DDL 权限）。新卷第一次
+      # 起来必须先跑一次迁移，否则 `/health` 报 ok、业务接口却全是
+      # `no such table`——一个「健康但不可用」的假象：
+      #   docker compose run --rm --entrypoint /migrate rehearse-backend up
+      #
+      # ⚠️ JWT_SECRET / ADMIN_TOKEN 仍然用 `${VAR:?}`——**这是刻意的**。
       #
       # `${VAR:-x}` 是「取默认值」，漏改服务器 .env 的后果是服务**带着假密钥
       # 正常启动**、所有 token 验不过（原来的 JWT_SECRET 写的就是
       # `:-change-me-in-production`），比启动失败难查得多。
       # `${VAR:?}` 让 `docker compose up -d` 在变量缺失时直接报错退出。
       # 见 §7.7 与 2026-10-02 的决定。
-      - DATABASE_URL=${REHEARSE_DATABASE_URL:?REHEARSE_DATABASE_URL is required (Supabase pooler DSN, §7.3.2)}
+      #
+      # DATABASE_URL 是**唯一的例外**（§7.3.5，2026-10-18）：不设时回落容器内
+      # SQLite，单机自托管与本地开发不用起 PG 也能跑。代价是「生产漏配」会从
+      # **启动失败**变成**静默跑在单副本 SQLite 上**——所以配了三道可见性：
+      # 启动时一条 WARN、`/health` 的 `database_defaulted`、以及这段注释。
+      # **多副本部署必须显式给 Postgres pooler DSN**（各副本会各写各的文件）。
+      #
+      # 两种写法都合法（由 scheme 选后端）：
+      #   postgres://...@...pooler.supabase.com:6543/postgres?sslmode=require
+      #   sqlite:/data/rehearse.db        ← 默认；依赖下面的 rehearse-data 卷
+      - DATABASE_URL=${REHEARSE_DATABASE_URL:-sqlite:/data/rehearse.db}
       - JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
       - ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
       # Rehearse 没有 Web 客户端（§7.5），但管理端接口是被 moyan-admin 调的，
@@ -153,6 +168,14 @@ services:
       - REHEARSE_LLM_API_KEY=${REHEARSE_LLM_API_KEY:-}
       - REHEARSE_LLM_MODEL=${REHEARSE_LLM_MODEL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      # SQLite 后端（§7.3.5）的数据目录。用 Postgres 时它是空的——compose 没法
+      # 按 DSN 条件挂载，而挂一个空卷没有代价。
+      #
+      # ⚠️ **必须挂卷**：不挂的话库文件落在容器的可写层里，
+      # 一次 `--force-recreate` 或重建镜像就把配额与 LLM 配置清空了，
+      # 而症状是「服务正常、数据归零」，很容易被当成代码 bug。
+      - rehearse-data:/data
     restart: unless-stopped
     healthcheck:
       # 镜像是 scratch——**里面没有 shell、没有 wget、没有 curl**，
@@ -210,3 +233,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+
+# 命名卷。用 SQLite 后端（§7.3.5）时它存库文件；用 Postgres 时是空的。
+volumes:
+  rehearse-data:

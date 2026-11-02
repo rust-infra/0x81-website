@@ -8,8 +8,18 @@
 **/.DS_Store
 **/vendor
 certs/
-data
+# ⚠️ 用**锚定路径**，不要写裸 `data`。
+#
+# 2026-10-10 修：原来这里是裸 `data`，而它匹配**任意层级**名为 data 的目录，
+# 于是 `rehearse-backend/internal/scenarios/data/` 里那 14 个场景 JSON
+# 被静默忽略、**从未进过 git**。那批文件是 `go:embed data/*.json` 的输入，
+# 缺了它们 `go build` 直接失败：
+#   internal/scenarios/scenarios.go:25:12: pattern data/*.json: no matching files found
+# 也就是说新克隆的仓库**编不出来**，而 `git status` 里什么都看不到
+# （被忽略的文件不会出现在 untracked 里）。
+/data
 moyan-backend/data/
+rehearse-backend/data/
 .env
 bin/
 
@@ -19,3 +29,9 @@ __pycache__/
 
 # 本地开发运行态（moyan-dev.sh 的日志/PID）
 .dev/
+
+# SQLite 后端（§7.3.5）的运行态文件。库文件默认落在 rehearse-backend/data/
+# （已被上面的 `data` 覆盖），但 WAL 的 sidecar 可能在别处——它们**绝不能提交**：
+# 提交了 -wal 却漏了 -shm（或反之）会让别人 checkout 出一个损坏的库。
+*.db-wal
+*.db-shm

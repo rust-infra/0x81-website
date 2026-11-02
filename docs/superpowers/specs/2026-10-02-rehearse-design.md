@@ -15,7 +15,7 @@
 | 定位 | 独立产品：职场演练，中英双语对等 |
 | 平台 | **只做 App**（iOS + Android），不做 Web。材料校对的手机端摩擦在 App 内解决（§10） |
 | 后端 | **独立服务 `rehearse-backend`，用 Go 重写**（2026-10-02 决定）。进程、语言、镜像都与墨言后端分开 |
-| 数据库 | **Rehearse 用独立的托管 Postgres（Supabase，只当 PG 用）**，**与墨言不共享任何表**；墨言继续用它的 SQLite 文件（§7.3） |
+| 数据库 | **Rehearse 用自己的库，与墨言不共享任何表**；墨言继续用它的 SQLite 文件。**未设 `DATABASE_URL` 时默认 SQLite**（2026-10-18，§7.3.5）；显式 `postgres://` 走托管 Postgres（Supabase，只当 PG 用，生产推荐）。⚠️ SQLite 只用于单副本 |
 | 认证 | **Rehearse 只验 token，不签发**：登录入口统一为 `auth.0x81.uk`（§7.4，详见 `2026-10-02-gateway-auth-design.md`） |
 | 账号 | 共享 0x81 账号体系，但**共享载体是 JWT 契约而非数据库**：`sub` 即 user id，建号逻辑只有认证服务一份（§9.1） |
 | 仓库 | 同仓新增 `rehearse-app/` 与 `rehearse-backend/` |
@@ -112,7 +112,7 @@ coach 只依赖三样东西：`llm_client`（通用 chat）、`admin_settings` �
 - 音素级发音评分
 - 多人群面模拟（真人或 AI 多人）
 - 社区分享 / 场景市场
-- 跨设备同步演练历史（v1 仍只存本机）
+- 跨设备同步演练历史（v1 仍只存本机）。**设置是例外**：主题 / 界面语言 / 语音偏好会跨设备同步（2026-11-02，§7.5.1），凭据不参与
 - 摄像头（只用于拍摄纸质简历/材料，不做视频模拟）
 
 ## 4. 语言维度（最重要的模型改动）
@@ -408,6 +408,7 @@ handle /api/*                        { reverse_proxy moyan-backend:4323 }
 |---|---|---|
 | HTTP | **`github.com/gin-gonic/gin`**（2026-10-04 改；原稿写的是标准库 `net/http` + `ServeMux`） | 路由分组、中间件链、请求体绑定、multipart、404 兜底都由框架提供——手写一遍是几百行没有业务价值的样板。见下面的「为什么换掉 ServeMux」 |
 | Postgres 驱动 | **`github.com/jackc/pgx/v5`**（`pgxpool`） | 纯 Go，无 cgo——`CGO_ENABLED=0` 仍然成立，静态二进制与 `scratch` 镜像都依赖这一点（§7.3.2） |
+| SQLite 驱动 | **`modernc.org/sqlite` v1.29.6**（2026-10-10 加） | 单机 / 本地开发 / 测试用（§7.3.5）。**纯 Go**（自带移植版 SQLite）——`mattn/go-sqlite3` 要 cgo，会被 §7.2 的硬约束否决。代价是二进制 +3.4 MB（12.5 → 15.9 MB，`-s -w`） |
 | 数据访问 | `database/sql` + `pgx` 的 `stdlib` 适配，手写 SQL | Rehearse 只碰自己的表（§7.3.3），不需要 ORM 或 sqlc 代码生成 |
 | JWT 验签 | `github.com/golang-jwt/jwt/v5` | HS256，claims 与 Rust 侧逐字段一致（§7.4）。**只验签，不签发** |
 | Google OAuth / ID token | **不需要** | 登录是 `auth.0x81.uk` 的事，Rehearse 不碰 |
@@ -466,6 +467,7 @@ Rehearse 的表**全部归 Rehearse 独占**：
 |---|---|---|
 | `rehearse_usage` | 每日额度计数（原 `coach_usage`） | Rehearse 独占 |
 | `rehearse_settings` | LLM 配置等管理端可改的设置（原 `admin_settings` 的 `coach` 键） | Rehearse 独占 |
+| `rehearse_user_settings` | **用户自己的设置文档**（主题 / 界面语言 / 语音偏好），一行一个 `sub`（2026-11-02，§7.5.1） | Rehearse 独占 |
 
 **没有任何共享表。** 所以第一版那条「独占表可以随便改、共享表要两边同时改代码」的规则**不再存在**——Rehearse 改自己的 schema 不需要通知任何人。
 
@@ -537,6 +539,49 @@ Supabase 官方文档的原话：*"although the direct connections and Supavisor
 - 托管 PG 的运维面（备份、监控、连接池）比自建 Mongo 小
 - 再引一套存储后端会让「谁是权威」变得含糊
 
+#### 7.3.5 SQLite：**未设 `DATABASE_URL` 时的默认后端**（2026-10-10 加，2026-10-18 改为默认）
+
+`DATABASE_URL` 的 **scheme 决定后端**：`postgres://` → §7.3.2 的托管 PG（**生产推荐**），`sqlite:` → 本地文件。分发在 `store.Open`（`internal/store/open.go`），**只认显式 scheme**，裸路径会被拒绝——打错一个字母就静默在别处新建一个空库，比启动失败难查得多。
+
+**2026-10-18 起，这个键不设就是 SQLite**：宿主进程回落 `config.DefaultDatabaseURL`（`sqlite:./data/rehearse.db`），容器里由 compose 回落成 `sqlite:/data/rehearse.db`。在此之前它是必填项，而 README 早已写着「未设置时回落到 …」——**稿子先于代码**，这次补齐。
+
+**这是全仓唯一有默认值的配置键**（§7.7 的原则是「必填项缺失就报错」）。它是个刻意的例外，因为「存储位置」与「密钥」不同：默认 SQLite 不会造成「服务正常但所有请求 401」那种假象，只会让服务跑在一个**能用的**库上。但代价必须说清楚——**「线上漏配 `DATABASE_URL`」从启动失败变成了静默跑在单副本 SQLite 上**（没有托管备份、没有 PITR、多副本各写各的文件）。所以配了三道可见性，缺一不可：
+
+| 位置 | 表现 | 为什么是这里 |
+|---|---|---|
+| 启动日志 | 一条 `WARN`，带 `dsn` / `single_replica_only` / `fix` | 部署时第一眼看到，且给出可执行的修复动作 |
+| `GET /health` | `"dialect":"sqlite"` + `"database_defaulted":true` | 日志会轮转，`/health` 不会；一条 curl 就能判定 |
+| compose | `${REHEARSE_DATABASE_URL:-sqlite:/data/rehearse.db}` | 单机自托管不配任何东西也能起 |
+
+⚠️ **多副本部署必须显式给 Postgres pooler DSN**：几个副本各写各的 SQLite 文件，症状是「每个副本都健康，但数据对不上」。
+
+**为什么要加**（三条，按重要性）：
+
+1. **一致性测试终于跑得起来。** 加之前，配额原子性那条硬验收（§13）**只在真 Postgres 上跑**，靠 `REHEARSE_TEST_DATABASE_URL` 门控——也就是说**默认从来不跑**，CI 上更是不跑。加之后 SQLite 那一半默认就在 `go test ./...` 里，并发上限那条用例每台机器每次都验。
+2. **单机自托管不必再依赖一个外部数据库**，与墨言「一个容器 + 一个文件」的运维形态对齐。
+3. **本地开发不用起 PG**（`make run` 直接起；`make run-sqlite` 是「建目录 → 迁移 → 起服务」的从零版本）。
+
+**为什么这不是把 §7.3.1 的决定推翻**：那一节否掉的是**两个服务共享同一个 SQLite 文件**——文件级耦合、跨容器会静默坏。这里是**每个服务自己的库**，与共享无关。SQLite 的**多副本限制仍然成立**：多进程写同一文件靠文件锁，跨容器 / 网络卷会静默失效，所以 **SQLite 只用于单副本**；多副本一律用 Postgres。
+
+**与 Postgres 的有意差异**（只有两处，都在 `internal/store/sqlite_usage.go`）：
+
+| | Postgres | SQLite |
+|---|---|---|
+| `day` 列类型 | `DATE`（由**类型**保证格式） | `TEXT`（由 `sqliteDay()` 保证格式——SQLite 没有 DATE 类型，写成 DATE 也只是「亲和性」，反而误导） |
+| 连接池 | `MaxConns=8`（pooler 上限所限） | `MaxOpenConns=4` + WAL + `busy_timeout=5000`（SQLite 同时只有一个写事务，池子开大只会把 `SQLITE_BUSY` 摊到更多连接上） |
+
+**原子性靠同一条 SQL**：两边的 `UsageTryConsume` 都是单条 `INSERT ... ON CONFLICT (user_id, day) DO UPDATE ... WHERE turns_used < ? RETURNING turns_used`——`WHERE` 不满足时既不入也不更新，`RETURNING` 没有输出，那就是「已达上限」。**不是「先 SELECT 再 UPDATE」**：那种写法在单线程测试里照样通过，只有并发才暴露。
+
+**PRAGMA 是代码约束，不是文档提醒**（与 §7.3.2 的 `EnsurePoolerSafeDSN` 同一个思路）：`store.EnsureSQLiteDSN` 把 `busy_timeout(5000)` / `journal_mode(WAL)` / `synchronous(NORMAL)` / `foreign_keys(1)` 追加进 DSN，且**追加在用户已有参数之后**，所以冲突时以本服务的值为准。忘了 WAL 在单进程下完全看不出问题，只有并发起来才暴露，而症状是随机的 `database is locked`。
+
+**迁移按方言分目录**：`migrations/postgres/` 与 `migrations/sqlite/`，**版本号必须对齐**（同一版本号描述同一件事）。合成一份的代价是退到最小公倍数（全 TEXT、不写 CHECK），那等于把从 PG 换来的类型校验扔掉。`cmd/migrate` 按方言自己挑目录，**调用方不需要知道**（`internal/migrate`）。
+
+⚠️ **三个必须记住的运维点**：
+
+1. **容器里必须挂卷。** 不挂的话库文件落在可写层，一次 `--force-recreate` 就把配额与 LLM 配置清空，而症状是「服务正常、数据归零」。compose 已加 `rehearse-data:/data`；Dockerfile 里 `/data` 已 `chown 65534`（named volume 首次挂载会把镜像里该目录的**属主一起**复制进卷，否则非 root 进程写不进去）。
+2. **目录不会自动创建。** SQLite 不替调用方建父目录，缺了直接 `unable to open database file`。**代码刻意不做自动 mkdir**——容器里自动建目录会把「卷没挂上」变成静默的数据丢失。`make run` / `make run-sqlite` / `make migrate-up-sqlite` 会先 `mkdir -p`。
+3. **`data/` 在 .gitignore 与 .dockerignore 里都必须锚定**（写 `/data/`）。裸 `data` 匹配**任意层级**，会连带忽略 `internal/scenarios/data/` 那 14 个 `go:embed` 输入，`go build` 直接失败在 `pattern data/*.json: no matching files found`。这个坑真踩过——见 §13。
+
 ### 7.4 认证：只验签，不签发
 
 > **这一节在 2026-10-02 改过两轮。** 第一版让 Rehearse 在 Go 里移植一遍 Google 登录 + JWT 签发（把认证复制成两份）；第二版改成「网关做认证 + 注入身份头」。最终采用第三版：**统一登录入口 + 各服务自己验 token**。完整设计与方案取舍见 `2026-10-02-gateway-auth-design.md`，本节只写 Rehearse 侧的结论。
@@ -581,6 +626,8 @@ Supabase 官方文档的原话：*"although the direct connections and Supavisor
 
 **互通必须有双向测试**：固定密钥 + 固定 payload，断言 Rust 签的 token Go 能验、Go 签的 Rust 能验。
 
+**客户端对 401 的处理是契约的一部分**（2026-11-02）：收到 401 一律清掉本机凭证并回到登录页，不做原地重试。签发侧加上 `status` 之后，旧 token 会在部署当天全部失效；没有这条，用户会停在一个「已登录但每个请求都失败」的空壳里，只能自己去设置里退出。Rehearse App 在 `api-client.ts` 的 `onUnauthorized` 里实现。
+
 ##### 为什么必须把 `status` 放进 claims
 
 `users.status`（`active` / `disabled`，默认 `active`，由 `migrations/003_vocabulary_server.sql` 加入）**现在不在 claims 里**。后果是：
@@ -614,6 +661,7 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 | `POST /api/coach/interview/text` | `POST /api/rehearse/material/text` |
 | `POST /api/coach/interview/profile` | `POST /api/rehearse/material/profile` |
 | `GET\|PUT /api/admin/settings/coach` | `GET\|PUT /api/admin/settings/rehearse`（走 §6.4 的 Caddy 分流）；**LLM 配置也归这个接口**，Rehearse 存自己的 `rehearse_settings`（§7.3.2） |
+| — | `GET\|PUT /api/rehearse/settings`：**用户自己的设置文档**（§7.5.1），与上面那条管理端配置是两回事 |
 | — | `GET /health` |
 
 ⚠️ **没有 `/api/auth/*`。** 登录入口是 `auth.0x81.uk`，由认证服务（`moyan-backend`）提供；Rehearse 后端不认识任何 auth 路径，它只验签（§7.4）。
@@ -621,6 +669,17 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 `moyan-backend` 侧：**删除全部 coach 路由与代码**（`controllers/coach.rs`、`models/coach.rs`、`routes/coach.rs`、`services/coach*.rs`、`services/interview_*.rs`），以及 `main.rs` 里的 `.nest("/api/coach", ...)`。
 
 ⚠️ 删除时机：必须与 §11 阶段 3（App 搬家）同批。在那之前墨言 App 还在打 `/api/coach/*`。
+
+#### 7.5.1 用户设置同步（2026-11-02）
+
+需求：换一台设备装 App，主题 / 界面语言 / 语音偏好要跟过来。演练历史仍然只存本机（§2）。
+
+- **端点**：`GET|PUT /api/rehearse/settings`，挂在用户 JWT 子树下；隔离键是 claims 的 `sub`，不读用户表（§7.4）。
+- **存储**：`rehearse_user_settings(user_sub PRIMARY KEY, settings, updated_at)`（迁移 0002，两套方言）。`settings` 是**客户端全量写的 JSON 文档**，服务端只校验有语义的少数项（theme / language / provider / 语速范围），不展开成列——设置项随 App 迭代，展开意味着每加一个开关都要一次迁移。
+- **凭据永不同步**：Google / ElevenLabs / 阿里云 / Gemini 的 key、Google Cloud 服务账号 JSON 只存本机。服务端遇到这些键直接 400；客户端上传前剔除、下载时忽略（两层都防）。
+- **新旧判定用服务端时间**：PUT 时服务端生成 RFC3339 的 `updated_at` 写进文档。客户端记下本机上次成功同步的 `updated_at`，进入设置页时只有远端更新才覆盖本机——避免旧设备把新设置冲掉。两端比较的都是同一台服务器的钟，不受设备时钟偏差影响。
+- **写方只有 App**：PUT 是全量替换，不做 patch；该用户从未写过时 GET 回 `{}`，由客户端决定用本机默认值。
+- **上传串行、合并到最新一份**（2026-11-02）：连续改动不并发发多份全量文档。两份同时在飞时，先发的若后到，服务端会留下旧的那份，而客户端已经记下更新的时间戳，之后不会再纠正。客户端只保留一个「待发」标记，发送那一刻才从当前状态组装文档。
 
 ### 7.6 字段改动清单
 
@@ -658,7 +717,7 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 
 | 容器侧 | compose 侧（现在 → 改为） | 注入给谁 | 说明 |
 |---|---|---|---|
-| `DATABASE_URL` | `MOYAN_DATABASE_URL` 保持不变；**新增 `REHEARSE_DATABASE_URL`** | 各管各的 | 墨言：`sqlite:/data/moyan.db`（本地文件）。Rehearse：Supabase 的 Postgres 连接串，**要用 pooler 端口 + `sslmode=require`**（§7.3.2） |
+| `DATABASE_URL` | `MOYAN_DATABASE_URL` 保持不变；**新增 `REHEARSE_DATABASE_URL`** | 各管各的 | 墨言：`sqlite:/data/moyan.db`（本地文件）。Rehearse（§7.3.5）：**留空 = 默认 `sqlite:/data/rehearse.db`**（2026-10-18）；生产显式写 `postgres://…`（Supabase pooler 端口 + `sslmode=require`，§7.3.2） |
 | `JWT_SECRET` | `MOYAN_JWT_SECRET` → **改名为 `AUTH_JWT_SECRET`** | 两个后端 | 两个后端各自验签用，必须是同一个值。**必须 ASCII**。改名理由：它现在喂的是一个**跨产品**的共享密钥，`MOYAN_` 前缀编码了错误的所有权 |
 | `ADMIN_TOKEN` | `MOYAN_ADMIN_TOKEN` → **改名为 `AUTH_ADMIN_TOKEN`** | 两个后端 | 管理端 `X-Admin-Token`。同上 |
 | `ALLOWED_ORIGINS` | `MOYAN_ALLOWED_ORIGINS` | 两个后端 | Rehearse 侧加上 `https://rehearse.0x81.uk`（没有 Web 客户端时其实用不上，RN 的 fetch 不带 `Origin`，加上只是留口子） |
@@ -666,7 +725,7 @@ Rehearse 的所有接口从 `/api/coach/*` 改为 `/api/rehearse/*`。**因为�
 | `REHEARSE_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | **新增** | Rehearse | LLM 配置的 **env 兜底**（§7.3.2）。DB 的 `rehearse_settings` 里有值就优先用 DB |
 | `PORT` | — | Rehearse | 固定 `4324` |
 
-⚠️ **`REHEARSE_DATABASE_URL` 含 Postgres 密码**，所以：只走环境变量、不进仓库、不进日志、不进错误响应。§13 有对应的验收项。
+⚠️ **`REHEARSE_DATABASE_URL` 含 Postgres 密码**（SQLite 形态没有凭据，但两种形态共用同一个键），所以：只走环境变量、不进仓库、不进日志、不进错误响应。§13 有对应的验收项。
 
 网关侧新增（`website-rs`）：`PROXY_UPSTREAM_HOST_REHEARSE`、`PROXY_UPSTREAM_AUTH`。**就这两个**——网关不验签、不注入身份（`gateway-auth-design.md` §4.1）。
 
@@ -735,15 +794,17 @@ rehearse-backend/
 ├── README.md                     # 起服务 / 跑测试 / 跑迁移
 ├── Makefile                      # build · test · lint · migrate（CI 复用同一组命令）
 ├── cmd/
-│   ├── rehearse/main.go          # 服务入口：读 config → 连 PG → 注册路由 → 起 HTTP
-│   └── migrate/main.go           # 迁移 runner（与 server 分开，运行时不带 DDL 权限）
+│   ├── rehearse/main.go          # 服务入口：读 config → store.Open（按 DSN 选后端）→ 注册路由 → 起 HTTP
+│   └── migrate/main.go           # 迁移 runner（与 server 分开，运行时不带 DDL 权限）；只做参数解析与打印
 ├── internal/
 │   ├── config/config.go          # env 集中读取与校验（§7.7）；缺关键项直接报错退出
+│   ├── migrate/migrate.go        # 迁移 runner 本体：按方言挑目录、按版本号跑、一迁移一事务
 │   ├── httpapi/                  # HTTP 层
 │   │   ├── router.go             # gin 引擎装配：路由分组 + 两棵鉴权子树
 │   │   ├── health.go             # GET /health
 │   │   ├── coach.go              # /scenarios /turn /summary /scenario/draft /quota
 │   │   ├── material.go           # /material/text /material/profile
+│   │   ├── user_settings.go      # GET|PUT /api/rehearse/settings（§7.5.1）
 │   │   └── admin.go              # /api/admin/settings/rehearse
 │   ├── middleware/
 │   │   ├── auth.go               # JWT 验签 + status 检查（§7.4.1，约 40 行）
@@ -767,17 +828,31 @@ rehearse-backend/
 │   │   └── profile.go            # 紧凑档案生成
 │   ├── llm/client.go             # 通用 chat（OpenAI 兼容，不用 SDK）
 │   ├── store/
-│   │   ├── store.go              # 接口：只有 Rehearse 自己的两张表
-│   │   ├── postgres.go           # pgx 实现
-│   │   ├── usage.go              # rehearse_usage：原子递增 + 当日唯一键
-│   │   └── settings.go           # rehearse_settings
+│   │   ├── store.go              # Store 接口 + Migrator 接口（只有 Rehearse 自己的三张表）
+│   │   ├── open.go               # Dialect / DetectDialect / Backend / Open：**按 DSN 选后端**（§7.3.5）
+│   │   ├── postgres.go           # pgx 连接 + pooler DSN 校验 + 迁移执行
+│   │   ├── postgres_usage.go     # rehearse_usage / rehearse_settings 的 PG 实现
+│   │   ├── postgres_user_settings.go  # rehearse_user_settings 的 PG 实现（§7.5.1）
+│   │   ├── sqlite.go             # SQLite 连接 + DSN 归一 + PRAGMA + 迁移执行（§7.3.5）
+│   │   ├── sqlite_usage.go       # 同上两张表的 SQLite 实现（语义与 PG 逐条一致）
+│   │   ├── sqlite_user_settings.go    # rehearse_user_settings 的 SQLite 实现
+│   │   ├── store_conformance_test.go  # ★ 后端无关的一致性用例，SQLite 默认跑、PG 门控
+│   │   └── storetest/fake.go     # 内存假实现，给上层单测用
 │   └── model/                    # 请求 / 响应类型
 │       ├── coach.go
 │       ├── material.go
 │       └── settings.go
 └── migrations/
-    ├── 0001_init.up.sql          # rehearse_usage + rehearse_settings
-    └── 0001_init.down.sql
+    ├── postgres/                 # 与 sqlite/ **版本号必须对齐**（§7.3.5）
+    │   ├── 0001_init.up.sql      # rehearse_usage + rehearse_settings
+    │   ├── 0001_init.down.sql
+    │   ├── 0002_user_settings.up.sql    # rehearse_user_settings（§7.5.1）
+    │   └── 0002_user_settings.down.sql
+    └── sqlite/
+        ├── 0001_init.up.sql
+        ├── 0001_init.down.sql
+        ├── 0002_user_settings.up.sql
+        └── 0002_user_settings.down.sql
 ```
 
 #### 几个刻意的决定
@@ -785,7 +860,8 @@ rehearse-backend/
 - **按领域分包，不镜像 Rust 的 `services/` `models/` `controllers/`。** 这是 Go 的惯例，但**代价是 §7.8 那份对照清单不再自动成立**——所以下面那张表是**必需交付物**，不是可选的文档
 - **`internal/coach/guards.go` 单独存在**。§7.8 说换语言重写最大的风险是悄悄丢掉护栏，那就把护栏**集中到一个文件**：code review 时只需盯这一处，`guards_test.go` 也只需要一个
 - **`scenarios/data/` + `go:embed`**。§7.8 的判断是「主体是数据」——14 个场景的文案与教学点从 Rust 常量搬成 JSON（**一场景一文件，共 14 个**），逻辑代码只剩查表。**每个 JSON 里必须带上该场景的 `guidance`**（那段指导语现在是 preset 的字段、被填进 system prompt 的 `Server guidance:` 槽位，§4.4）——它是**内容**，不是契约，所以跟着数据走
-- **两个二进制**（`cmd/rehearse` + `cmd/migrate`）。迁移与 server 分开，**server 运行时不带 DDL 权限**，也避免「启动时无条件迁移」这种在多副本下会打架的行为
+- **两个二进制**（`cmd/rehearse` + `cmd/migrate`）。迁移与 server 分开，**server 运行时不带 DDL 权限**，也避免「启动时无条件迁移」这种在多副本下会打架的行为。迁移逻辑在 `internal/migrate` 而不是 `cmd/migrate` 里，因为**测试也要建表**——同一套「按版本号找、按顺序跑」的逻辑不该有两份
+- **存储按后端分文件，接口只有一份**（2026-10-10）。`store.Store` 的方法不变，`postgres*.go` 与 `sqlite*.go` 各实现一遍，**语义一致性由 `store_conformance_test.go` 保证**——同一组用例在两个后端上各跑一遍。只测一边的话，另一边写错了没有任何信号，而错法（把原子操作拆成两步）在单线程测试里照样通过
 - **`internal/` 而不是 `pkg/`**。这是服务不是库，没有对外 API；`internal/` 让「不对外」由编译器保证
 - **`model` 用单数**。Go 的包名惯例是单数（`net/url` 而非 `net/urls`）
 - **测试不设 `tests/` 目录**。Go 用同包同目录的 `_test.go`——`guards_test.go` 就挨着 `guards.go`
@@ -1037,7 +1113,7 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | 阶段 | 内容 | 影响面 |
 |------|------|--------|
 | **0** | 本 spec 定稿；名字、bundle id、域名、env 键名、Supabase 项目与凭据归属定稿（**Go module 路径与目录结构已定**，§7.9） | 无代码 |
-| **1** | **Rehearse 的 Postgres 就位**：在 Supabase 建项目、拿到 pooler 连接串（`6543` + `sslmode=require` + `default_query_exec_mode=exec`）、跑 Rehearse 自己的迁移建 `rehearse_usage` 与 `rehearse_settings`、空库起全量验证、**并额外做一次 pooler 冒烟**（本地 PG 没有 pooler，§7.3.2 那类差异只有在这里才测得出）。**完全不动墨言的 SQLite 库** | 新增后端（**无墨言改动**） |
+| **1** | **Rehearse 的 Postgres 就位**：在 Supabase 建项目、拿到 pooler 连接串（`6543` + `sslmode=require` + `default_query_exec_mode=exec`）、跑 Rehearse 自己的迁移建 `rehearse_usage` 与 `rehearse_settings`、空库起全量验证、**并额外做一次 pooler 冒烟**（本地 PG 没有 pooler，§7.3.2 那类差异只有在这里才测得出）。**完全不动墨言的 SQLite 库**。<br>⚠️ **2026-10-10 起这一步不再阻塞其余工作**：SQLite 后端（§7.3.5）让「空库起全量 + 配额原子性 + 全量测试」在本地就能跑完，Supabase 只剩「验 pooler 那一类差异」这一件**只能在那里做**的事 | 新增后端（**无墨言改动**） |
 | **2** | **Go 服务骨架**：按 §7.9 的目录结构落地——`rehearse-backend/` 起服务、连自己的 PG、**JWT 验签中间件（约 40 行，含 `status` 检查）**、错误信封、`/health`、Dockerfile（多阶段：`golang:alpine` → `scratch`/distroless）、compose 里加 `build: ./rehearse-backend`、`go-checks.yml` 门禁 | 新增后端 + `docker-compose.yml` |
 
 > ✅ **阶段 2 已完成**（2026-10-02）：`rehearse-backend/` 已落地，`gofmt` / `go vet` / `golangci-lint` / `go test -race` 全绿，`docker compose config` 通过且缺变量时报错。业务端点（`/turn` 等）与真实 Supabase 的连通性验证属阶段 3。
@@ -1110,11 +1186,14 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 
 ## 13. 测试与验收
 
-**存储（Rehearse 自己的 Postgres）**
+**存储（两套后端：托管 Postgres 与 SQLite，§7.3）**
 - **连接**：Supabase 连接串可用（pooler 端口 + `sslmode=require`）；容器内能连通；连接池在并发下不泄漏
-- **隔离（现在是架构性的）**：`rehearse-backend` 的代码里**不出现任何 SQLite DSN，也不出现墨言的任何表名**（`users` / `user_decks` / `user_cards` / `type_*` / `collect_jobs` / `admin_settings` …）。第一版这条要靠人工审计，现在**连库都没有，写不出来**
-- **迁移**：`rehearse-backend/migrations/` 能空库起全量、能重复执行（幂等）；与 `moyan-backend` 的迁移**无任何顺序依赖**——单独起 Rehearse 不需要墨言先跑过任何东西
-- **配额原子性**：并发压测下 `rehearse_usage` 的当日计数不超限（对照 Rust 版 `coach_usage_try_consume_caps_concurrent_increments` 的行为，`sqlite.rs:4438`）
+- **后端选择**：`DATABASE_URL` 的 scheme 决定后端；**裸路径必须被拒绝**（`store.DetectDialect`）——静默在别处新建空库是比启动失败更难查的故障；错误信息里**不出现 DSN**（PG 形态含密码）
+- **隔离（现在是架构性的）**：`rehearse-backend` 的代码里**不出现墨言的任何表名**（`users` / `user_decks` / `user_cards` / `type_*` / `collect_jobs` / `admin_settings` …），**也不与墨言共享任何库文件**。
+  ⚠️ **2026-10-10 修正**：这一条原文写的是「**不出现任何 SQLite DSN**」——那是 §7.3.1 时代的表述。现在 SQLite 是本服务**自己的**可选后端（§7.3.5），DSN 当然会出现；真正要守的是「不与墨言共享」，而它由**架构**保证：两个服务的库路径不同、迁移目录不同、没有任何共享表
+- **迁移**：`migrations/{postgres,sqlite}/` 两套**版本号必须对齐**；各自能空库起全量、能重复执行（幂等）；与 `moyan-backend` 的迁移**无任何顺序依赖**——单独起 Rehearse 不需要墨言先跑过任何东西
+- **配额原子性**：并发压测下 `rehearse_usage` 的当日计数不超限（对照 Rust 版 `coach_usage_try_consume_caps_concurrent_increments` 的行为，`sqlite.rs:4438`）。**两个后端都要测**，且 SQLite 那一半**默认就跑**（`go test ./...` 里），Postgres 那一半由 `REHEARSE_TEST_DATABASE_URL` 门控。同一组用例写在 `store_conformance_test.go` 里，两边各跑一遍
+- **SQLite 特有（§7.3.5）**：`journal_mode=WAL` 与 `busy_timeout` **真的生效**（查 `PRAGMA` 的实际返回值，不是查 DSN 字符串里写没写）；`day` 是 `'YYYY-MM-DD'` 文本且由 `sqliteDay()` 统一产生；目录不存在时**报错而不是静默建库**；容器内 `/data` 对非 root 可写（卷的属主）
 - **凭据不泄漏**：连接串/密码不出现在日志、错误响应、`/health` 输出里
 - **⚠️ pooler 兼容性（必须在真实 Supabase 上测，本地 PG 测不出）**：用 `default_query_exec_mode=exec` 连 `6543` 端口能跑通全部查询；**并且故意用默认的 `cache_statement` 必须能复现 `prepared statement does not exist`**——能复现才说明这条风险是真的、且我们的修法确实在起作用。不复现等于没验
 - **降级**：Postgres 不可达时 `/health` 明确报错、业务接口返回可判定的错误码，而不是超时挂住
@@ -1129,6 +1208,11 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - **代码审计**：`rehearse-backend` 里不出现任何 OAuth / JWT 签发 / `find_or_create` / 兜底认证逻辑（§7.4.2）
 - 同一 Google 账号在墨言注册过，在 Rehearse 首次登录命中**同一条** `users` 记录（靠 `idx_users_provider` 唯一索引），不产生重复用户——**这条测在认证服务侧**，因为建号不在 Rehearse
 
+**构建（2026-10-10 补）**
+- **空克隆能构建（硬门槛）**：`git clone` 出来的仓库 `go build ./...` 必须成功。**此前不成立**——`.gitignore` 里的裸 `data` 把 `rehearse-backend/internal/scenarios/data/` 那 14 个 `go:embed` 输入一起忽略了，**它们从未进过 git**，新克隆直接失败在 `pattern data/*.json: no matching files found`。CI 的 `go-checks.yml` 在本仓 checkout 上跑，看不出这个差别；`docker build` 也只在**同一份**上下文里跑，同样看不出。所以这条要靠**空克隆**来验，不能靠「本地能编过」
+- ⚠️ 相关的两个坑：`data` 这个模式在 `.gitignore` 与 `.dockerignore` 里**都必须锚定**（写 `/data/`）——两边的匹配语义都是「不带斜杠 = 任意层级」，而 `.dockerignore` 里写错会让 `COPY . .` 少拷那 14 个文件，构建失败的原因与上面一模一样
+- **`CGO_ENABLED=0` 仍然成立**：加了 SQLite 之后也不能变。`modernc.org/sqlite` 是纯 Go 实现，二进制从 12.5 MB 涨到 15.9 MB（`-s -w`，实测）；换成 `mattn/go-sqlite3` 会让这一条直接不成立
+
 **Go 后端功能**
 - 行为对齐（§7.8）：同一组输入下，护栏判定与响应结构与 Rust 版逐条一致——长度上限、轮数上限、枚举校验、配额计数、错误码
 - 新字段：`language` 枚举校验、`persona.accent` 校验、`category` 新枚举校验、`reply_translation` 可空
@@ -1139,7 +1223,8 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - 构建：`CGO_ENABLED=0` 下能编出静态二进制（`file` 显示 statically linked）；镜像能在 `scratch` 下起来
 - **镜像能连出站 HTTPS**：`scratch` 里已 `COPY` CA 证书——验法是让容器内的进程实际发起一次到 Supabase 或 LLM 的 TLS 连接，不是只看镜像能起来（§7.1 的两个坑）
 - **容器 healthcheck 可用**：`docker compose ps` 里 rehearse-backend 的 health 状态要能变成 `healthy`。⚠️ 不能用 `wget --spider`（`scratch` 没有 shell/wget/curl），要用 `rehearse -healthcheck`
-- **配置缺失要吵**：故意不设 `REHEARSE_DATABASE_URL` / `AUTH_JWT_SECRET` / `AUTH_ADMIN_TOKEN`，`docker compose up -d` 必须**报错退出**而不是带默认值启动（§7.7 的 `:?`）
+- **密钥缺失要吵**：故意不设 `AUTH_JWT_SECRET` / `AUTH_ADMIN_TOKEN`，`docker compose up -d` 必须**报错退出**而不是带默认值启动（§7.7 的 `:?`）
+- **默认库要看得见**：故意不设 `REHEARSE_DATABASE_URL`，服务必须能起来（§7.3.5 的默认值），但启动日志有一条 `WARN`、`GET /health` 返回 `"dialect":"sqlite"` 与 `"database_defaulted":true`——「生产跑在默认库上」必须是一个能 curl 出来的事实，而不是藏在日志里
 - 部署链路：**`docker compose build rehearse-backend` 一条命令出成品镜像**，不需要 `scripts/fetch-*`、不需要 `./bin/` 挂载、不需要 release 资产；`docker-compose.yml` 里这一项是 `build: ./rehearse-backend`（与 `website` / `0xindex` 同一种写法），**不是** `moyan-backend` 那套 `image:` + 卷挂载
 - 门禁（`.github/workflows/go-checks.yml`）：`gofmt -l` 无输出、`go vet ./...`、`go build ./...`、`go test -race ./...` 全绿；`golangci-lint run` 按 §7.9 定下的 linter 集通过（默认集 + `exhaustive` / `bodyclose` / `sqlclosecheck`）。**特别验 `exhaustive` 真的在跑**——故意在某个 `switch` 里删掉一个 `category` case，门禁必须变红（否则这条 linter 只是配置里的一行装饰）
 - **对照表逐行勾完**：§7.9 的 Rust → Go 对照表每一行都有对应实现或明确标注「不移植」；`internal/coach/guards.go` 的每条护栏都能指回 Rust 侧的具体代码位置
@@ -1177,9 +1262,11 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | App 域名 | 业务 `https://rehearse.0x81.uk`；登录 `https://auth.0x81.uk` |
 | 运行镜像 | `scratch` / `distroless/static`（静态二进制，无运行时依赖） |
 | 构建与部署 | **`docker build` 一条命令出成品镜像**（多阶段：`golang:alpine` → `scratch`）；compose 里 `build: ./rehearse-backend`。**不用 release 资产、不用 `fetch-*` 脚本、不挂载 `./bin/`** |
-| 数据库 | **Rehearse 用独立的托管 Postgres（Supabase，只当 PG 用）**；墨言继续用它的 SQLite 文件。**不共享任何表** |
-| 表归属 | **无共享表**：`rehearse_usage` / `rehearse_settings` 全归 Rehearse 独占 |
-| 迁移所有权 | 各管各的：墨言管它的 SQLite 迁移，Rehearse 管自己的 PG 迁移，**无跨服务顺序依赖** |
+| 数据库 | **Rehearse 用自己的库，与墨言不共享任何表**；墨言继续用它的 SQLite 文件。**未设 `DATABASE_URL` 时默认 SQLite**（2026-10-18，§7.3.5）；生产显式写 Postgres pooler |
+| 表归属 | **无共享表**：`rehearse_usage` / `rehearse_settings` / `rehearse_user_settings` 全归 Rehearse 独占 |
+| 跨设备设置同步 | **做**（2026-11-02，§7.5.1）：主题 / 界面语言 / 语音偏好走 `GET\|PUT /api/rehearse/settings`；**凭据永不同步**；演练历史仍只存本机 |
+| 会话语音输入 | **按住说话**（2026-11-02）：按住麦克风录音、松开发送，抬起就是「说完了」的信号；按住不足 0.6s 视为误触、取消本次录音。键盘输入不变 |
+| 迁移所有权 | 各管各的：墨言管它的 SQLite 迁移，Rehearse 管自己的迁移（**两套方言**：`migrations/postgres/` + `migrations/sqlite/`，§7.3.5），**无跨服务顺序依赖** |
 | **认证方案** | **A：统一登录入口 + 各服务自己验 token**（网关不做认证，`gateway-auth-design.md` §2.3 记录了为什么不选网关方案） |
 | **Rehearse 的 auth 面** | 一个约 40 行的 **JWT 验签中间件**（含 `status` 检查）。不写 OAuth、不签发、不建号、不需要 `idtoken` |
 | **登录入口** | `auth.0x81.uk`；`moyan-app` 同批切换，`moyan-web` **不切**（同源相对路径，切了只会引入跨域） |
@@ -1190,7 +1277,8 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 | LLM 配置 | Rehearse 存自己的 `rehearse_settings`（env 兜底保留）；**管理端只有一个表单，保存时双写两个后端**（§7.3.2） |
 | bundle id | `uk.0x81.rehearse`；顺手把墨言改成 `uk.0x81.moyan` |
 | `/api/coach/*` 别名 | 不保留（无已发布客户端） |
-| 数据库改名 | `coach_usage` → `rehearse_usage`，但**换了库**（SQLite → Postgres），不是重命名；是否搬历史数据见 §11 阶段 3 |
+| 数据库改名 | `coach_usage` → `rehearse_usage`，但**换了库**（墨言的 SQLite → Rehearse 自己的库），不是重命名；是否搬历史数据见 §11 阶段 3 |
+| 存储后端 | **未设 `DATABASE_URL` 默认 SQLite**（§7.3.5，2026-10-18 改）；**生产推荐显式写 Postgres（§7.3.2）**。由 scheme 选后端。⚠️ SQLite 只用于**单副本** |
 | 墨言 Tab | 词库回归第 2 位，撤销「全屏页」改动；导流卡放首页 |
 | 共享代码 | 纯复制 + 「必须同步」清单；不抽 workspaces 共享包 |
 | 系统分享入口 | v2（iOS Share Extension 成本高，§10.2） |
@@ -1216,6 +1304,8 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 10. **LLM 配置双写的一致性**——**已定（2026-10-02）：一处编辑、双写。** 存储上两份（两个服务各管各的库），但**UI 上只有一份**：管理端 LLM 表单保存时同时 PUT 给两个后端。理由：拆分前两边用的就是同一个 provider/key，「两份」是架构后果、不是产品意图，暴露成两个表单只会制造一个本不存在的「漏改一处」风险。风险随之从「漏改」换成「**部分失败**」——双写要串行、要明确报告哪个后端失败、UI 要能显示失败的一边并重试（§7.3.2、§12）
 11. **`guidance` 要不要动态生成**——**已定（2026-10-02）：v1 静态**，随场景数据一起搬进 `scenarios/data/*.json`（§7.9）。**触发条件**：真机发现「**场景重复感**」——同一场景多练几轮后那句固定指导语不再带来新东西 → 让 `guidance` **按用户 / 按历史动态生成一句**，填进**现有槽位**（`coach.rs:63-67` 那条路径）。**契约层与注入防护都不动；不要把 system prompt 整体交给 LLM 生成**（三个理由见 §4.4：注入面、§7.8 的验收做不了、成本与延迟）
 
+12. **要不要给 Go 后端加 SQLite 后端**——**已定（2026-10-10）：加。** **2026-10-18 进一步改成「未设 `DATABASE_URL` 时的默认后端」**（§7.3.5），生产仍推荐显式写 Postgres pooler。理由是**验收可执行性**而不是运维偏好：加之前，配额原子性那条硬验收（§13）只在真 Postgres 上跑、靠 `REHEARSE_TEST_DATABASE_URL` 门控，也就是**默认从来不跑**；加之后 SQLite 那一半进了 `go test ./...`，每次提交都验。附带收益是单机自托管与本地开发都不再依赖外部数据库。**约束**：① 驱动必须纯 Go（`modernc.org/sqlite`，cgo 被 §7.2 否决）；② SQLite 只用于单副本（多进程写同一文件跨容器会静默坏，§7.3.1）；③ 两套迁移按方言分目录、版本号必须对齐；④ 默认值必须**看得见**（启动 WARN + `/health` 的 `database_defaulted`）
+
 已在核对中解决的问题（留档）：
 
 - ✅ `RECORD_AUDIO` 在墨言可删（§8.2，已查代码确认）
@@ -1237,5 +1327,6 @@ Rehearse 与墨言共用**同一个账号体系**。**用户在墨言有账号�
 - ✅ **Go module 路径与项目目录结构定稿**（2026-10-02）：module `github.com/0x81/rehearse-backend`，**按 Go 惯例按领域分包**（不镜像 Rust 的 `services/` `models/` `controllers/`），完整目录树与 Rust → Go 对照表见 §7.9。因为选了「按领域分包」，§7.8 要求的对照清单**改由 §7.9 那张表承担**——这是该选择的必需配套，不是可选文档
 - ✅ **`moyan-backend/src/repositories/`（3 文件 6,597 行）不移植**：Rehearse 只碰自己那两张表（§7.3.2），写一个薄的 `internal/store/` 即可。这是「独立库」决定带来的简化
 - ✅ **CI 在 `.github/workflows/`**：现有 `rust-checks.yml` / `docker-build.yml` / `release-rust-binaries.yml`，Go 门禁新增 `go-checks.yml` 与它们并列（§7.9、§15 #6）
+- ✅ **`internal/scenarios/data/` 那 14 个场景 JSON 从未进过 git**（2026-10-10 发现并修复）：`.gitignore` 里的裸 `data` 匹配任意层级的 `data` 目录，把它们一起忽略了，而**被忽略的文件不会出现在 `git status` 里**——所以从 2026-10-02 落地到 2026-10-10 之间，「新克隆的仓库编不出来」这件事一直没有信号（`go:embed` 直接报 `pattern data/*.json: no matching files found`）。CI 的 `go-checks.yml` 在**本仓 checkout** 上跑、`docker build` 也在**同一份上下文**里跑，两者都看不出这个差别——能兜住它的只有「空克隆构建」这条验收（§13）。同时把 `.dockerignore` 里新加的 `data/` 改成锚定的 `/data/`，否则 `COPY . .` 会少拷那 14 个文件，失败原因与上面一模一样
 - ✅ **Go 不沿用「CI 出二进制 + release 资产 + `fetch-*` 脚本」那套**（2026-10-02 定）：Rust 那么绕是因为 release 编译贵、且服务器明确不编译；Go 编译便宜到可以每次 `docker build` 现场做。所以 `rehearse-backend` 走 `build: ./rehearse-backend`，与 `website` / `0xindex` / `moyan-web` / `moyan-admin` 同一种写法。**不新增 `release-go-binaries.yml`、不新增 `scripts/fetch-go.sh`、不需要 `./bin/` 挂载**（§7.1）
 - ✅ **§5.1 / §5.2 的场景清单 drift 已修**（2026-10-02）：核对 `coach_scenarios.rs` 实际 **11** 个 `Preset`（`Engineering` 3 / `HighStakes` 5 / `Daily` 3），不是稿子写的 8 个。修正了三处——① §5.2 的映射表从 8 行补到 11 行（补上 `interview_screening` / `interview_behavioral` / `interview_technical`）；② 「新增 6 个」改为「**真新增 3 个**」（`salary_negotiation` / `promotion_defense` / `bad_news`），`interview_behavioral` / `interview_technical` 代码里早已存在；③ §5.1 的分族表从 `interview 4 / pitch 3 / hard_talk 3 / daily 4` 改为 **`4 / 2 / 4 / 4`**（原表的 `pitch` 记 3、但清单只能凑出 2，`hard_talk` 记 3、清单是 4；`pitch` 描述里的「周会」根本没有对应场景）。总数仍是 **14**（11 + 3）。另：稿子写的 `interview_hr` 沿用代码里的 id `interview_screening`，不改名。§5.1 的表改成**逐 id 列出**，两节可以直接对账
