@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "ai.0x81 — AI 产品索引",
-    "description": "一个目录，多个 runtime。已上线：tact 与 CrabBridge。"
+    "description": "一个目录，多个 runtime。已上线：tact 与 CrabBridge。孵化中：职演。"
   },
   "nav": {
     "products": "产品",
@@ -11,7 +11,7 @@
   "hero": {
     "badge": "v0.1 · tact / crab 已上线",
     "title": "AI 产品，集中索引。",
-    "subtitle": "一个目录，多个 runtime。已上线：tact（coding agent）与 crab（Codex ↔ DeepSeek / Kimi）。",
+    "subtitle": "一个目录，多个 runtime。已上线：tact（coding agent）与 crab（Codex ↔ DeepSeek / Kimi）。孵化中：职演，按住说话的 AI 面试演练。",
     "cta_tact": "打开 tact",
     "cta_crab": "打开 crab",
     "cta_matrix": "浏览矩阵"
@@ -36,6 +36,9 @@
     },
     "crab": {
       "blurb": "CrabBridge — 经 Responses API 连接 Codex ↔ DeepSeek / Kimi。"
+    },
+    "rehearse": {
+      "blurb": "职演 — 语音优先的 AI 面试与职场演练 App。按住说话，逐轮反馈。Go 后端，Expo App。"
     }
   }
 }

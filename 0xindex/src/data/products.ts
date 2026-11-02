@@ -40,4 +40,20 @@ export const products: Product[] = [
       "}",
     ],
   },
+  {
+    // 只做 App、没有 Web 前端（设计稿 §3.3），所以这里没有 url：
+    // 公开入口要等 App 上架。翻成 live 时再补 url（商店页或落地页）。
+    id: "rehearse",
+    status: "soon",
+    stack: "go · expo · voice",
+    fileName: "rehearse.go",
+    codeLines: [
+      "export const product = {",
+      "  id: 'rehearse',",
+      "  status: 'soon',",
+      "  stack: 'go · expo · voice',",
+      "  surface: 'app-only',",
+      "}",
+    ],
+  },
 ];

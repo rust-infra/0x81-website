@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "ai.0x81 — AI product index",
-    "description": "One catalog. Many runtimes. Live now: tact and CrabBridge."
+    "description": "One catalog. Many runtimes. Live now: tact and CrabBridge. Incubating: 职演 (Rehearse)."
   },
   "nav": {
     "products": "Products",
@@ -11,7 +11,7 @@
   "hero": {
     "badge": "v0.1 · tact / crab live",
     "title": "AI products, indexed.",
-    "subtitle": "One catalog. Many runtimes. Live now: tact (coding agent) and crab (Codex ↔ DeepSeek / Kimi).",
+    "subtitle": "One catalog. Many runtimes. Live now: tact (coding agent) and crab (Codex ↔ DeepSeek / Kimi). Incubating: 职演 (Rehearse), voice-first interview practice.",
     "cta_tact": "Open tact",
     "cta_crab": "Open crab",
     "cta_matrix": "Browse matrix"
@@ -36,6 +36,9 @@
     },
     "crab": {
       "blurb": "CrabBridge — Codex ↔ DeepSeek / Kimi via the Responses API."
+    },
+    "rehearse": {
+      "blurb": "职演 (Rehearse) — voice-first AI interview and workplace rehearsal app. Hold to talk, per-turn feedback. Go backend, Expo app."
     }
   }
 }
