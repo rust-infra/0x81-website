@@ -1,6 +1,6 @@
 # 0x81-website
 
-Host 分流网关 + 多个 Astro 静态站点：
+Host 分流网关 + 多个产品站点与服务：
 
 | 域名 | 服务 | 说明 |
 |------|------|------|
@@ -10,6 +10,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
 | `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关也认旧名 `admin.moyan.0x81.uk`，两者都路由到 5001；**旧名已无 DNS 记录**，实测见「管理后台的域名与 TLS」） |
 | `auth.0x81.uk` | `moyan-backend` | **统一登录入口**。跨产品的能力域名，直连后端 `:4323`（不经前端）。与 `moyan.0x81.uk` 现在指向同一个后端，但语义不同——前者是「登录」这个能力，后者是墨言这个产品。客户端只认前者，所以将来 auth 抽成独立服务时只改网关一条路由，App 不用发版。设计见 `docs/superpowers/specs/2026-10-02-gateway-auth-design.md` |
+| `rehearse.0x81.uk` | `rehearse-backend` | **职演 API**。只做 App、没有 Web 前端，所以域名直连后端 `:4324`（与墨言「产品域名指前端」相反）。App 的生产 `API_URL` 就是它，设计见 `docs/superpowers/specs/2026-10-02-rehearse-design.md` |
 
 ## 架构
 
@@ -26,6 +27,7 @@ website-rs :80/:443     Axum 网关
       │  （旧名 admin.moyan.0x81.uk 网关也收、同样路由到 5001，但它已无 DNS 记录，
       │    现状见「管理后台的域名与 TLS」）
       ├─ Host: auth.0x81.uk           →  moyan-backend :4323（统一登录入口，不经前端）
+      ├─ Host: rehearse.0x81.uk       →  rehearse-backend :4324（职演 API，只做 App，无 Web 前端）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -45,6 +47,8 @@ website-rs :80/:443     Axum 网关
 ├── moyan-web/        # 墨言前端（Vite → Caddy :5000）
 ├── moyan-admin/      # 墨言管理后台（Vite → Caddy :5001）
 ├── moyan-backend/    # 墨言 API（Axum :4323）
+├── rehearse-backend/ # 职演 API（Go / gin :4324；SQLite 或 Postgres）
+├── rehearse-app/     # 职演 App（Expo / React Native；设计稿在 design/）
 ├── docs/             # 设计稿与实现计划
 └── docker-compose.yml
 ```
@@ -64,12 +68,13 @@ Compose 环境变量：
 - `PROXY_UPSTREAM_HOST_MOYAN=moyan-web`
 - `PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin`
 - `PROXY_UPSTREAM_AUTH=moyan-backend`（统一登录入口，直连后端）
+- `PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend`（职演 API，直连后端）
 
 ### 网关横切能力
 
 | 能力 | 说明 |
 |------|------|
-| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001，**`auth` → 4323（直连后端）**。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
+| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001，**`auth` → 4323（直连后端）**，**`rehearse` → 4324（直连后端）**。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
 | TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
@@ -145,17 +150,41 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 - 前端：Vite 构建 + Caddy，主机映射 `5000:5000`，域名 `moyan.0x81.uk`
 - 前端是**服务端为权威**模式：`docker-compose.yml` 给 `moyan-web` 传构建参数 `VITE_SERVER_MODE=1`（判断逻辑集中在 `moyan-web/src/services/backendMode.ts`）。线上是**同源部署**——`VITE_API_URL` 故意留空、请求走相对路径 `/api` 由 Caddy 反代，所以**不能**再用「`VITE_API_URL` 是否为空」判断后端是否可用：那样前端会静默退回 IndexedDB 本地模式，表现是「管理后台导入的词库在 `/decks` 永远看不到」（2026-09-18 踩过）。开关只影响构建产物，改完必须 `docker compose build moyan-web && docker compose up -d moyan-web`（`up -d` 不会重建镜像）。副作用：服务端模式下 `/decks` 等页面要求登录，浏览器里旧的本地牌组/进度不再显示
-- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 **`https://admin-moyan.0x81.uk`**（网关也认旧名 `admin.moyan.0x81.uk`，但该名已无 DNS 记录；现状见「管理后台的域名与 TLS」）；登录页输入 `X-Admin-Token`（Compose 环境变量 `MOYAN_ADMIN_TOKEN` → 后端 `ADMIN_TOKEN`）。**这个 token 必须写在服务器根 `.env` 里**，留空则 `/api/admin/*` 一律 503——怎么放见「环境变量（仓库根 `.env`）」
+- 管理后台：Vite 构建 + Caddy，主机映射 `5001:5001`，域名 **`https://admin-moyan.0x81.uk`**（网关也认旧名 `admin.moyan.0x81.uk`，但该名已无 DNS 记录；现状见「管理后台的域名与 TLS」）；登录页输入 `X-Admin-Token`（Compose 环境变量 **`AUTH_ADMIN_TOKEN`** → 后端 `ADMIN_TOKEN`，与职演共用同一个值）。**这个 token 必须写在服务器根 `.env` 里**，留空则 compose 直接启动失败（`:?`），怎么放见「环境变量（仓库根 `.env`）」
 - 后端：Axum API `:4323`；Caddy 将 `/api/*` 反代到 `moyan-backend`（保留 `/api` 前缀）
-- 后端鉴权：Bearer **JWT（HS256，密钥 `MOYAN_JWT_SECRET`）**。⚠️ 这个键**必须**在根 `.env` 里设（`openssl rand -hex 32`）：留空会回落到 compose 里公开的 `change-me-in-production`，等于任何人都能自签 token（2026-09-18 已换掉线上默认值）。另有非 JWT 的 legacy 兜底认证（`ALLOW_LEGACY_TOKEN_AUTH`）：**默认关闭**，只有 `moyan-backend/dev-run.sh` 打开——它会把任意 Bearer 值按哈希自动建号放行，线上开着就是无鉴权入口
+- 后端鉴权：Bearer **JWT（HS256，密钥 `AUTH_JWT_SECRET`，与职演共用）**。⚠️ 这个键**必须**在根 `.env` 里设（`openssl rand -hex 32`）：compose 用 `:?`，漏配会直接报错退出；早先的 `:-change-me-in-production` 回落已删除（2026-11-02，§7.7）。另有非 JWT 的 legacy 兜底认证（`ALLOW_LEGACY_TOKEN_AUTH`）：**默认关闭**，只有 `moyan-backend/dev-run.sh` 打开——它会把任意 Bearer 值按哈希自动建号放行，线上开着就是无鉴权入口
+- JWT claims 是 `{sub,email,name,status,exp,iat}`。`status` 不是 `active` 的 token 一律 401（2026-11-02 起两个后端都校验）；**升级后没有 `status` 的旧 token 全部失效，已登录用户需要重新登录一次**
 - Google OAuth 生产回调建议设为 `https://moyan.0x81.uk/api/auth/google/callback`（`MOYAN_GOOGLE_REDIRECT_URL`）
 - CORS 允许来源：`MOYAN_ALLOWED_ORIGINS`（默认含 `https://moyan.0x81.uk` 与 `https://admin-moyan.0x81.uk`，另保留了旧名 `https://admin.moyan.0x81.uk`——旧名已无 DNS，这条留着只是无害的兼容）
+
+### `rehearse-backend` / `rehearse-app`（职演）
+
+- 定位：职场演练（面试 / 汇报答辩 / 高压对话 / 日常协作），**只做 App，没有 Web 前端**
+- 后端：**Go（gin）**，`:4324`；自己的三张表 `rehearse_usage` / `rehearse_settings` / `rehearse_user_settings`，**与墨言零共享**
+- 构建方式与两个 Rust 服务不同：Go 编译便宜，compose 直接多阶段构建出成品镜像（`golang:alpine` → `scratch`），不走「CI 出二进制 → release 资产 → `fetch-rust.sh` → 挂载」那一套。镜像里没有 shell，healthcheck 是 `/rehearse -healthcheck`
+- **迁移不在启动路径上**：新库第一次起来必须手动跑一次，否则 `/health` 报 ok、业务接口全是 `no such table`：
+  ```bash
+  docker compose run --rm --entrypoint /migrate rehearse-backend up
+  ```
+- 存储：`REHEARSE_DATABASE_URL` 不设时默认容器内 `sqlite:/data/rehearse.db`（单副本、无托管备份）。多副本或要托管备份时显式给 Postgres pooler DSN（`6543` + `sslmode=require` + `default_query_exec_mode=exec`）
+- 鉴权：与墨言共用 `AUTH_JWT_SECRET` 验签；claims 里 `status` 不是 `active` 一律 401；**代码里没有** `ALLOW_LEGACY_TOKEN_AUTH` 那种兜底
+- LLM 配置：DB 里的 `rehearse_settings` 是权威，`REHEARSE_LLM_BASE_URL` / `_API_KEY` / `_MODEL` 只在 DB 没配时兜底。管理端在 `moyan-admin` 的「职演」卡片里改（LLM 表单保存时**双写**墨言与职演，一边失败不回滚另一边）
+- 用户设置同步：`GET|PUT /api/rehearse/settings`，按 JWT 的 `sub` 隔离；主题 / 界面语言 / 语音偏好跨设备同步，**凭据永不上传**（服务端会拒绝带密钥字段的文档）
+- 管理端分流：`moyan-admin` 的 Caddyfile 把 `/api/admin/settings/rehearse*` 单独反代到 `rehearse-backend:4324`。改了 Caddyfile 必须**重建** `moyan-admin` 镜像，旧镜像会把请求回落成 `index.html`
+- App：`rehearse-app/`，Expo + expo-router，dev client。本地启动 `npm install && npx expo start --dev-client --port 8083`（8081 常被墨言的 Metro 占用）；API 地址从 Metro 的 hostUri 推断到 `:4324`，登录打 `:4323`
+- 设计稿与 PRD：`docs/superpowers/specs/2026-10-02-rehearse-design.md`、`2026-10-02-rehearse-prd.md`；UI 稿 `rehearse-app/design/index.html`
 
 ## Rust 服务的构建与部署（CI 编译，服务器只运行）
 
 `website-rs` 与 `moyan-backend` 的镜像**只含运行时依赖**：二进制在 CI 里编译成 GitHub Release
 资产，服务器按 tag 下载后挂载进容器。服务器上没有 cargo / Rust 工具链，`git pull` 也不再搬运
 二进制（历史提交里还有旧的，git 不会回收，也不会自动删除）。
+
+> 职演（`rehearse-backend`）是 Go 服务，**不走这条流程**：compose 直接构建出成品镜像，见上一节。
+> 网关的新路由（`auth.0x81.uk` / `rehearse.0x81.uk`）只存在于**合并后重新编译**的 `website-rs`
+> 里——服务器上那份 `bin/website-rs` 来自旧 tag 的话，两个域名都会落到本地占位路由
+> （`/` 返回 200 的 `{"status":"ok"}`）。发新 tag 或本地 `PLATFORM=linux/amd64 scripts/build-rust.sh website-rs`
+> 后替换 `bin/`，再 `docker compose restart website-rs`。
 
 ### Rust 门禁（`.github/workflows/rust-checks.yml`）
 
@@ -190,7 +219,7 @@ workflow 的 matrix。
       ├─ scripts/fetch-rust.sh v0.1.0      ← 需要 GH_TOKEN，走 api.github.com
       │    └ 下到临时目录 → 校验 sha256 + ELF 架构 → bin/x.new → rename 覆盖
       └─ docker compose up -d              ← 只建 runtime 层（apt/pip，之后走缓存）
-           └ 7 个容器起来：2 个 Rust 服务挂载 bin/，5 个前端照常构建
+           └ 8 个容器起来：2 个 Rust 服务挂载 bin/，1 个 Go 服务（职演）直接构建，5 个前端照常构建
 ```
 
 ### 服务器上的落盘与容器拓扑
@@ -201,8 +230,10 @@ workflow 的 matrix。
  ├── docker-compose.yml
  ├── scripts/{build-rust.sh, fetch-rust.sh, lib/elf-arch.py}
  ├── .env                       ← 手工放的密钥文件（不进 git、也不进 release），chmod 600
- │      MOYAN_ADMIN_TOKEN=…        → 容器内 ADMIN_TOKEN；留空则 /api/admin/* 一律 503
- │      MOYAN_JWT_SECRET=…         → 登录态签名（留空回落到 change-me-in-production）
+ │      AUTH_ADMIN_TOKEN=…          → 两个后端的 ADMIN_TOKEN（留空则 compose 直接报错退出）
+ │      AUTH_JWT_SECRET=…           → 两个后端共用的验签密钥（`:?` 强制，必须 ASCII）
+ │      REHEARSE_DATABASE_URL=…     → 留空 = 容器内 SQLite；生产建议 Postgres pooler
+ │      REHEARSE_LLM_*              → 职演 LLM 的 env 兜底（权威在 DB 的 rehearse_settings）
  │      GH_TOKEN=github_pat_xxx    → fine-grained，Contents: Read（fetch-rust.sh 拉 release 资产）
  ├── certs/{origin.pem, origin-key.pem}
  └── bin/                       ← 唯一由 fetch-rust.sh 填充，不在版本控制里
@@ -225,18 +256,24 @@ workflow 的 matrix。
                      │                       （本机 MOYAN_DATA_DIR=/data/moyan-data，/data 是 /dev/vdb1）
                      └ healthcheck GET /api/health
 
+   rehearse-backend :4324     多阶段构建的成品镜像（golang:alpine → scratch，容器里没有 shell）
+                     ├ /data              ← rehearse-data 卷（SQLite；用 Postgres 时为空）
+                     └ healthcheck /rehearse -healthcheck（二进制自探）
+                        ⚠️ 新卷第一次起来要先跑一次 /migrate，见「职演」一节
+
    前端 5 个      0xindex:4320 · website:4321 · crab-web:4322 · moyan-web:5000 · moyan-admin:5001
                      └ 常规多阶段构建（node 构建 → Caddy 托管 dist），与 Rust 二进制无关
 
  流量：Cloudflare → website-rs:80/443 →（按 Host 反代，规则见上面「架构」）→ 5 个前端
-                                                            └ /api → moyan-backend:4323
+                                                            ├ /api → moyan-backend:4323
+                                                            └ auth.0x81.uk / rehearse.0x81.uk 直连两个后端
 ```
 
 ### 三条常用路径
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| **首次部署** | `git clone` → `cp .env.example .env` 后填 `MOYAN_ADMIN_TOKEN` / `MOYAN_JWT_SECRET` / `GH_TOKEN`（`chmod 600 .env`）→ `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。自检不通过就是证书没就位或没生效。漏写 `MOYAN_ADMIN_TOKEN` 的表现是后台登录一直 503 |
+| **首次部署** | `git clone` → `cp .env.example .env` 后填 `AUTH_ADMIN_TOKEN` / `AUTH_JWT_SECRET` / `GH_TOKEN`（`chmod 600 .env`）→ `scripts/fetch-rust.sh <tag>` → scp 两个证书文件（见「HTTPS」）→ `docker compose up -d --build` → `docker compose run --rm --entrypoint /migrate rehearse-backend up` → `scripts/check-tls.sh` | 必须先 fetch：否则 compose 会把不存在的 `./bin/<service>` 建成空目录。职演新库不跑 migrate 的表现是 `/health` ok、业务接口全 `no such table`。自检不通过就是证书没就位或没生效。漏写 `AUTH_ADMIN_TOKEN` 的表现是 compose 直接报错退出 |
 | **日常更新** | `git pull` → `scripts/fetch-rust.sh <tag>` → `docker compose up -d` | 只重启容器、只建 runtime 层；只有改过 Dockerfile 的依赖列表才加 `--build`。证书没换就不用动 |
 | **换证书** | `scp` 新证书到 `<server>:/root/Projects/0x81-website/certs/`（两个文件都换，别只换一个）→ `chmod 600 origin-key.pem` → `docker compose restart website-rs` → `scripts/check-tls.sh` | 证书是纯手工部署件之一（另一个是根 `.env`），不进 git / 不进 release；Cloudflare Origin 证书最长 15 年，无需续期自动化。自检会校验"确实是私钥且与证书配对"，配错文件当场报错 |
 | **回滚** | `scripts/fetch-rust.sh <旧 tag> && docker compose up -d` | 版本锚点是 tag，不用碰 git 历史 |
@@ -415,7 +452,7 @@ moyan-db-backup --force          # 即使数据没变化也生成一份新备份
 ```bash
 cd /root/Projects/0x81-website
 cp .env.example .env          # 模板在仓库根，列了 compose 会插值的全部键
-$EDITOR .env                  # 至少填 MOYAN_ADMIN_TOKEN / MOYAN_JWT_SECRET / GH_TOKEN
+$EDITOR .env                  # 至少填 AUTH_ADMIN_TOKEN / AUTH_JWT_SECRET / GH_TOKEN
 chmod 600 .env
 docker compose config | grep -i admin_token   # 能打出非空值 = 插值读到了
 docker compose up -d                          # 改完 .env 要重建，只 restart 不够
@@ -425,21 +462,33 @@ docker compose up -d                          # 改完 .env 要重建，只 rest
   `/root/Projects/0x81-website/.env`；`scripts/fetch-rust.sh` 先 `cd` 到仓库根再读同一个文件，
   两处一致。`moyan-backend/.env`、`moyan-web/.env` 等**子目录** `.env` 只服务本地
   `dev-run.sh` / `vite dev`，compose 完全不看它们。
-- **键名必须带 `MOYAN_` 前缀**：compose 里写的是 `ADMIN_TOKEN=${MOYAN_ADMIN_TOKEN:-}` 这种映射，
-  直接写 `ADMIN_TOKEN=` 不会进容器。
+- **前缀按归属分**：`AUTH_*` 是两个后端共用的认证件（`AUTH_JWT_SECRET` / `AUTH_ADMIN_TOKEN`，
+  compose 用 `:?` 强制，缺了直接启动失败）；`MOYAN_*` 只喂墨言；`REHEARSE_*` 只喂职演。
+  compose 里写的是 `JWT_SECRET=${AUTH_JWT_SECRET:?...}` 这种映射，直接写 `JWT_SECRET=` 不会进容器。
+- **`AUTH_JWT_SECRET` 与 `AUTH_ADMIN_TOKEN` 必须 ASCII**，且两个后端读到的必须是同一个值
+  （职演只验签，换值会让所有已发出的 token 立即失效）。旧键名 `MOYAN_JWT_SECRET` / `MOYAN_ADMIN_TOKEN`
+  已在 2026-11-02 改名：服务器 `.env` 里的键要跟着改，**值原样搬**。
 - **`MOYAN_DATA_DIR` = SQLite 数据目录（宿主侧，挂到容器 `/data`）**：不设 = `./moyan-backend/data`
   （仓库内，dev 默认）；生产建议指到独立数据盘，本机填 `/data/moyan-data`（`/data` 是 `/dev/vdb1`，
   与系统盘 `/dev/vda1` 分开）。⚠️ 改这个键**等于换挂载源**：只有
   `docker compose up -d`（重建容器）才生效，`restart` 只会重新解析**同一个**源路径；
   且必须先把旧的 `moyan.db` 拷进新目录，否则新目录是空库看起来像"数据丢了"。
   校验：`docker exec 0x81-website-moyan-backend-1 stat -c %i /data` 与宿主目标目录 inode 相同。
-- **`MOYAN_ADMIN_TOKEN` 不能空**：它是管理后台登录页要填的 `X-Admin-Token`；空值下后端对
-  `/api/admin/*` 一律回 503（`"ADMIN_TOKEN is not configured"`，设计上禁止空密钥放行）。
+- **`REHEARSE_DATABASE_URL` 留空 = 容器内 SQLite**（`sqlite:/data/rehearse.db`，挂 `rehearse-data`
+  卷，单副本、无托管备份）。多副本或要托管备份时填 Postgres pooler DSN（`6543` + `sslmode=require`
+  + `default_query_exec_mode=exec`）。`/health` 里的 `database_defaulted` 能看出是不是在跑默认库。
+- **`REHEARSE_LLM_*` 只是兜底**：权威配置在 DB 的 `rehearse_settings`，由管理端「职演」卡片写入。
+  DB 里写过 base_url / model 之后，env 的那两项不再生效；`REHEARSE_LLM_API_KEY` 同理。
+- **`REHEARSE_ALLOWED_ORIGINS`**：管理后台调职演接口是跨源的（`admin-moyan.0x81.uk` →
+  `rehearse.0x81.uk`），白名单必须含管理后台域名；默认值已包含。
+- **`AUTH_ADMIN_TOKEN` 不能空**：它是管理后台登录页要填的 `X-Admin-Token`；空值下 compose
+  直接报错退出（`:?`）。旧版是「空值放行时后端对 `/api/admin/*` 回 503」，2026-11-02 起改成
+  启动即失败，避免「后台登录一直 503」这种难查的表现。
 - **后台登不上，先按状态码分流**（不用登服务器，`moyan-backend/src/middleware/admin_auth.rs:7-12`）：
   `GET /api/admin/ping` 返回 **503** = 容器里 `ADMIN_TOKEN` 是空串（没配）；返回 **401** =
   已配置但请求头的值不相等。拿到 401 时按顺序怀疑：改完 `.env` 只 `restart` 而没重建容器（值不会
   生效，要 `up -d`）；`.env` 的值带 `\r`（CRLF 文件）/引号/尾随空格——登录页会对**你输入的值**
-  `trim()`，带杂质的服务端值永远匹配不上（用 `sed -n 's/^MOYAN_ADMIN_TOKEN=//p' .env | od -c` 看）；
+  `trim()`，带杂质的服务端值永远匹配不上（用 `sed -n 's/^AUTH_ADMIN_TOKEN=//p' .env | od -c` 看）；
   记的串和服务器上的不是同一个；**值含非 ASCII 字符**（如 `£`、中文）——这种最阴：服务端配了、
   你输的也一字不差，仍然恒 401，因为 `admin_auth.rs:26` 用 `HeaderValue::to_str()`，
   而它只接受可见 ASCII（0x20-0x7E），值里有 `£` 时 `to_str()` 直接 `Err`，中间件把请求当成
@@ -470,11 +519,12 @@ docker compose up -d --build
 | `0xindex` | `4320` | 主站（也可直接访问） |
 | `website` | `4321` | tact（也可直接访问） |
 | `crab-web` | `4322` | CrabBridge（也可直接访问） |
-| `moyan-backend` | `4323` | 墨言 API |
+| `moyan-backend` | `4323` | 墨言 API（也是统一登录入口 `auth.0x81.uk` 的上游） |
 | `moyan-web` | `5000` | 墨言前端（Caddy；`/api` 反代到 backend） |
-| `moyan-admin` | `5001` | 墨言管理后台（Caddy；`/api` 反代到 backend） |
+| `moyan-admin` | `5001` | 墨言管理后台（Caddy；`/api` 反代到 backend，职演设置走单独分流） |
+| `rehearse-backend` | `4324` | 职演 API（Go；默认 SQLite，可用 Postgres） |
 
-本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` / `admin-moyan.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
+本地按 Host 访问时，需把 `0x81.uk` / `tact.0x81.uk` / `crab.0x81.uk` / `moyan.0x81.uk` / `admin-moyan.0x81.uk` / `auth.0x81.uk` / `rehearse.0x81.uk` 指到本机（`/etc/hosts` 或本地 DNS）。
 
 单独开发前端：
 
@@ -486,8 +536,19 @@ cd website && bun install && bun run dev
 cd crab-web && bun install && bun run dev
 ```
 
+职演 App（Expo dev client；iOS 模拟器 / 真机）：
+
+```bash
+cd rehearse-app && npm install
+npx expo start --dev-client --port 8083   # 8081 常被墨言的 Metro 占用
+# 另开：npm test（tsc + node --test，只覆盖 src/lib）
+```
+
 ## 相关文档
 
 - 主站设计：`docs/superpowers/specs/2026-07-14-0xindex-main-site-design.md`
 - 主站实现计划：`docs/superpowers/plans/2026-07-14-0xindex-main-site.md`
 - CrabBridge 站设计：`docs/superpowers/specs/2026-07-14-crab-web-design.md`
+- 职演设计：`docs/superpowers/specs/2026-10-02-rehearse-design.md`（PRD 同名 `-prd.md`）
+- 统一登录入口设计：`docs/superpowers/specs/2026-10-02-gateway-auth-design.md`
+- 职演 App 验收记录：`docs/superpowers/verification/2026-10-18-rehearse-app-simulator-qa.md`
