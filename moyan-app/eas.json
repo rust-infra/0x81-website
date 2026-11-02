@@ -14,7 +14,8 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "API_URL": "https://moyan.0x81.uk"
+        "API_URL": "https://moyan.0x81.uk",
+        "AUTH_URL": "https://auth.0x81.uk"
       }
     }
   },

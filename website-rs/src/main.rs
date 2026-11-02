@@ -12,84 +12,16 @@
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
-    extract::{Path, Request, State},
+    extract::Request,
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::{Level, info};
-
-#[derive(Clone)]
-struct AppState {
-    db: Arc<Database>, // your DB pool
-}
-
-// --- Models ---
-#[derive(Serialize)]
-struct User {
-    id: u64,
-    name: String,
-}
-
-#[derive(Deserialize)]
-struct CreateUser {
-    name: String,
-}
-
-// --- Error Type ---
-#[derive(Debug)]
-enum AppError {
-    NotFound,
-    BadRequest(String),
-    Internal(String),
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let (status, message) = match self {
-            AppError::NotFound => (StatusCode::NOT_FOUND, "Not found".to_string()),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-            AppError::Internal(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal error".to_string(),
-            ),
-        };
-        (status, Json(serde_json::json!({ "error": message }))).into_response()
-    }
-}
-
-// --- Handlers ---
-async fn get_user(
-    State(_state): State<AppState>,
-    Path(id): Path<u64>,
-) -> Result<Json<User>, AppError> {
-    // let user = state.db.find_user(id).await?;
-    let user = User {
-        id,
-        name: format!("user-{}", id),
-    };
-    Ok(Json(user))
-}
-
-async fn create_user(
-    State(_state): State<AppState>,
-    Json(payload): Json<CreateUser>,
-) -> Result<Json<User>, AppError> {
-    if payload.name.is_empty() {
-        return Err(AppError::BadRequest("name cannot be empty".into()));
-    }
-    let user = User {
-        id: 1,
-        name: payload.name,
-    };
-    Ok(Json(user))
-}
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))
@@ -121,9 +53,7 @@ fn request_host(req: &Request) -> String {
     // h1 的 Host 可能带端口（如 localhost:4321）；只有纯数字端口才剥掉，
     // 免得把 IPv6 字面量（[::1]）切坏。
     match raw.rsplit_once(':') {
-        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => {
-            host.to_ascii_lowercase()
-        }
+        Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host.to_ascii_lowercase(),
         _ => raw.to_ascii_lowercase(),
     }
 }
@@ -134,7 +64,11 @@ async fn log_request(req: Request, next: middleware::Next) -> Response {
     let start = std::time::Instant::now();
     let host = {
         let host = request_host(&req);
-        if host.is_empty() { "-".to_string() } else { host }
+        if host.is_empty() {
+            "-".to_string()
+        } else {
+            host
+        }
     };
 
     let response = next.run(req).await;
@@ -154,45 +88,60 @@ async fn log_request(req: Request, next: middleware::Next) -> Response {
 static PROXY_CLIENT: std::sync::LazyLock<reqwest::Client> =
     std::sync::LazyLock::new(reqwest::Client::new);
 
-async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
-    let host = request_host(&req);
-    let host = host.as_str();
-
-    if host == "tact.0x81.uk" {
-        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_TACT");
-        proxy_request(req, &upstream, 4321).await
-    } else if host == "crab.0x81.uk" {
-        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_CRAB");
-        proxy_request(req, &upstream, 4322).await
-    } else if host == "moyan.0x81.uk" {
-        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN");
-        proxy_request(req, &upstream, 5000).await
-    } else if host == "admin-moyan.0x81.uk" || host == "admin.moyan.0x81.uk" {
+/// Host →（上游环境变量名，默认端口）。
+///
+/// **抽成纯函数是为了可测。** 这张表是本服务唯一的业务逻辑，而它出错的表现是
+/// 「静默落到占位路由」：`/` 与 `/health` 返回 200 的 `{"status":"ok"}`，其它路径
+/// 返回 404——不报错、不告警（只有一条 warn），最费时间的一类故障。下面的测试把
+/// 这张表钉住，避免「加了 DNS 但忘了加路由」这种事再发生。
+///
+/// 端口是默认值：环境变量只覆盖主机名，端口写死在代码里（见 `proxy_upstream_host`）。
+fn resolve_upstream(host: &str) -> Option<(&'static str, u16)> {
+    match host {
+        "tact.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_TACT", 4321)),
+        "crab.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_CRAB", 4322)),
+        "moyan.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_MOYAN", 5000)),
         // 现行域名是 `admin-moyan.0x81.uk`：一层子域，被 Universal SSL 的 *.0x81.uk
         // 覆盖，DNS 已生效、https 可直连。旧名 `admin.moyan.0x81.uk` 是两层子域，
         // *.0x81.uk 覆盖不到（边缘直接握手失败，Full (strict) 下 526），其 DNS 记录
         // 已删除；这里仍然接受它只是零成本兼容，真要恢复可用得重新加记录并配自有证书。
-        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_MOYAN_ADMIN");
-        proxy_request(req, &upstream, 5001).await
-    } else if host == "0x81.uk" || host == "www.0x81.uk" {
-        let upstream = proxy_upstream_host("PROXY_UPSTREAM_HOST_INDEX");
-        proxy_request(req, &upstream, 4320).await
-    } else {
-        // 没匹配上任何上游 = 有请求打到了没配置的 Host（或主机名解析又漏了一种情况）。
-        // 必须告警：下面落到本服务的占位路由时会返回 200 的 {"status":"ok"}，
-        // 表现为"站点打不开但一切正常"，最费时间。健康检查走 localhost，不吵它。
-        if !matches!(host, "" | "localhost" | "127.0.0.1" | "[::1]") {
-            tracing::warn!("no upstream configured for host {host:?}; falling through to local routes");
+        "admin-moyan.0x81.uk" | "admin.moyan.0x81.uk" => {
+            Some(("PROXY_UPSTREAM_HOST_MOYAN_ADMIN", 5001))
         }
-        next.run(req).await
+        // 统一登录入口。它和 `moyan.0x81.uk` 现在指向同一个后端，但两者语义不同：
+        // 前者是「登录」这个跨产品能力的能力域名，后者是墨言这个产品的产品域名。
+        // 客户端（App）只认前者，所以将来 auth 抽成独立服务时，只改这一行，
+        // 所有客户端不用发版。
+        // 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
+        "auth.0x81.uk" => Some(("PROXY_UPSTREAM_AUTH", 4323)),
+        "0x81.uk" | "www.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_INDEX", 4320)),
+        _ => None,
     }
+}
+
+async fn proxy_or_next(req: Request, next: middleware::Next) -> Response {
+    let host = request_host(&req);
+
+    if let Some((env_key, port)) = resolve_upstream(&host) {
+        let upstream = proxy_upstream_host(env_key);
+        return proxy_request(req, &upstream, port).await;
+    }
+
+    // 没匹配上任何上游 = 有请求打到了没配置的 Host（或主机名解析又漏了一种情况）。
+    // 必须告警：下面落到本服务的占位路由时会返回 200 的 {"status":"ok"}（`/`、`/health`）
+    // 或 404（其它路径），表现为"站点打不开但一切正常"，最费时间。
+    // 健康检查走 localhost，不吵它。
+    if !matches!(host.as_str(), "" | "localhost" | "127.0.0.1" | "[::1]") {
+        tracing::warn!("no upstream configured for host {host:?}; falling through to local routes");
+    }
+    next.run(req).await
 }
 
 fn proxy_upstream_host(up_stream_host: &'static str) -> String {
     std::env::var(up_stream_host).unwrap_or_else(|_| "127.0.0.1".into())
 }
 
-async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Response {
+async fn proxy_request(req: Request, up_stream_host: &String, port: u16) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
     let headers = req.headers().clone();
@@ -229,8 +178,7 @@ async fn proxy_request(req: Request, up_stream_host: &String, port: i32) -> Resp
 
             for (key, value) in resp.headers().iter() {
                 let key_str = key.as_str();
-                if is_hop_by_hop_header(key_str) || key_str.eq_ignore_ascii_case("cache-control")
-                {
+                if is_hop_by_hop_header(key_str) || key_str.eq_ignore_ascii_case("cache-control") {
                     continue;
                 }
                 response_builder = response_builder.header(key_str, value.as_bytes());
@@ -310,21 +258,16 @@ async fn main() {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    let state = AppState {
-        db: Arc::new(Database::new()),
-    };
-
+    // 占位路由：**只服务没匹配上上游的请求**（健康检查走 localhost，还有配错的域名）。
+    // 它们的存在让「Host 没配对」这件事不报错，所以 `proxy_or_next` 里的 warn 是唯一信号。
     let app = Router::new()
         .route("/health", get(health))
-        .route("/users/{id}", get(get_user))
-        .route("/users", post(create_user))
         .route("/", get(root))
         .layer(middleware::from_fn(log_request))
         .layer(TraceLayer::new_for_http()) // logging
         .layer(middleware::from_fn(proxy_or_next))
         .layer(CompressionLayer::new()) // gzip
-        .layer(CorsLayer::permissive()) // CORS
-        .with_state(state);
+        .layer(CorsLayer::permissive()); // CORS
 
     let handle = axum_server::Handle::new();
     tokio::spawn({
@@ -400,10 +343,107 @@ async fn shutdown_signal() {
     info!("signal received, starting graceful shutdown");
 }
 
-// Stub database
-struct Database;
-impl Database {
-    fn new() -> Self {
-        Database
+#[cfg(test)]
+mod tests {
+    use super::{request_host, resolve_upstream};
+    use axum::body::Body;
+    use axum::extract::Request;
+
+    /// h1 请求：URI 是 origin-form，主机名只在 `Host` 头里。
+    fn h1_request(host_header: &str) -> Request {
+        Request::builder()
+            .uri("/api/auth/me")
+            .header("host", host_header)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    /// h2 请求：**没有 `Host` 头**，authority 在 URI 里（hyper 会写成绝对形式）。
+    fn h2_request(authority: &str) -> Request {
+        Request::builder()
+            .uri(format!("https://{authority}/api/auth/me"))
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    /// 路由表必须与 `docker-compose.yml` 里 `website-rs` 的环境变量一一对应。
+    /// 加域名时两处都要改——这张表就是那份清单的可执行版本。
+    #[test]
+    fn routing_table_maps_every_configured_host() {
+        for (host, env_key, port) in [
+            ("tact.0x81.uk", "PROXY_UPSTREAM_HOST_TACT", 4321u16),
+            ("crab.0x81.uk", "PROXY_UPSTREAM_HOST_CRAB", 4322),
+            ("moyan.0x81.uk", "PROXY_UPSTREAM_HOST_MOYAN", 5000),
+            (
+                "admin-moyan.0x81.uk",
+                "PROXY_UPSTREAM_HOST_MOYAN_ADMIN",
+                5001,
+            ),
+            // 旧名：零成本兼容，已无 DNS 记录（见 resolve_upstream 的注释）
+            (
+                "admin.moyan.0x81.uk",
+                "PROXY_UPSTREAM_HOST_MOYAN_ADMIN",
+                5001,
+            ),
+            // 统一登录入口，直连后端而不是前端
+            ("auth.0x81.uk", "PROXY_UPSTREAM_AUTH", 4323),
+            ("0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),
+            ("www.0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),
+        ] {
+            assert_eq!(
+                resolve_upstream(host),
+                Some((env_key, port)),
+                "{host} 的路由丢了——加域名时记得同时改这里和 docker-compose.yml"
+            );
+        }
+    }
+
+    /// 没配的 Host 必须返回 `None`（落到占位路由并打 warn），
+    /// 而不是悄悄命中某条分支。
+    #[test]
+    fn unknown_hosts_have_no_upstream() {
+        for host in [
+            "",
+            "localhost",
+            "127.0.0.1",
+            "[::1]",
+            "example.com",
+            "auth.0x81.uk.",
+        ] {
+            assert_eq!(resolve_upstream(host), None, "{host:?} 不该匹配到上游");
+        }
+    }
+
+    /// `auth.0x81.uk` 与 `moyan.0x81.uk` 指向**不同的**上游：
+    /// 前者是直连后端的能力域名，后者是产品域名（指向前端）。混了就白拆了。
+    #[test]
+    fn auth_domain_does_not_share_moyan_product_route() {
+        assert_ne!(
+            resolve_upstream("auth.0x81.uk"),
+            resolve_upstream("moyan.0x81.uk")
+        );
+    }
+
+    /// h1：`Host` 头可能带端口，纯数字端口要剥掉。
+    #[test]
+    fn request_host_strips_port_from_h1_host_header() {
+        assert_eq!(
+            request_host(&h1_request("auth.0x81.uk:443")),
+            "auth.0x81.uk"
+        );
+        assert_eq!(request_host(&h1_request("AUTH.0x81.UK")), "auth.0x81.uk");
+    }
+
+    /// IPv6 字面量不能被端口剥离逻辑切坏（`[::1]` 里的冒号不是端口分隔符）。
+    #[test]
+    fn request_host_keeps_ipv6_literal_intact() {
+        assert_eq!(request_host(&h1_request("[::1]")), "[::1]");
+    }
+
+    /// h2：**没有 `Host` 头**，主机名只能从 URI authority 取。
+    /// 这条是整条 HTTPS 流量的命门——只读 `Host` 头会让所有 h2 请求静默落到占位路由。
+    #[test]
+    fn request_host_falls_back_to_uri_authority_for_h2() {
+        assert_eq!(request_host(&h2_request("auth.0x81.uk")), "auth.0x81.uk");
     }
 }

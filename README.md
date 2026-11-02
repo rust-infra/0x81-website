@@ -9,6 +9,7 @@ Host 分流网关 + 多个 Astro 静态站点：
 | `crab.0x81.uk` | `crab-web` | CrabBridge 产品落地页 |
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
 | `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关也认旧名 `admin.moyan.0x81.uk`，两者都路由到 5001；**旧名已无 DNS 记录**，实测见「管理后台的域名与 TLS」） |
+| `auth.0x81.uk` | `moyan-backend` | **统一登录入口**。跨产品的能力域名，直连后端 `:4323`（不经前端）。与 `moyan.0x81.uk` 现在指向同一个后端，但语义不同——前者是「登录」这个能力，后者是墨言这个产品。客户端只认前者，所以将来 auth 抽成独立服务时只改网关一条路由，App 不用发版。设计见 `docs/superpowers/specs/2026-10-02-gateway-auth-design.md` |
 
 ## 架构
 
@@ -24,6 +25,7 @@ website-rs :80/:443     Axum 网关
       ├─ Host: admin-moyan.0x81.uk    →  moyan-admin :5001（/api → moyan-backend :4323）
       │  （旧名 admin.moyan.0x81.uk 网关也收、同样路由到 5001，但它已无 DNS 记录，
       │    现状见「管理后台的域名与 TLS」）
+      ├─ Host: auth.0x81.uk           →  moyan-backend :4323（统一登录入口，不经前端）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -61,12 +63,13 @@ Compose 环境变量：
 - `PROXY_UPSTREAM_HOST_CRAB=crab-web`
 - `PROXY_UPSTREAM_HOST_MOYAN=moyan-web`
 - `PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin`
+- `PROXY_UPSTREAM_AUTH=moyan-backend`（统一登录入口，直连后端）
 
 ### 网关横切能力
 
 | 能力 | 说明 |
 |------|------|
-| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
+| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001，**`auth` → 4323（直连后端）**。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
 | TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
@@ -153,6 +156,21 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 `website-rs` 与 `moyan-backend` 的镜像**只含运行时依赖**：二进制在 CI 里编译成 GitHub Release
 资产，服务器按 tag 下载后挂载进容器。服务器上没有 cargo / Rust 工具链，`git pull` 也不再搬运
 二进制（历史提交里还有旧的，git 不会回收，也不会自动删除）。
+
+### Rust 门禁（`.github/workflows/rust-checks.yml`）
+
+`fmt → clippy -D warnings → test → release build`，与 tact 上的本地推送门禁同一顺序。
+
+**目前只覆盖 `website-rs`。** 它是全部流量的入口，而 `resolve_upstream` 出错**不会报错**——
+只会静默把请求丢到占位路由（`/` 返回 200 的 `{"status":"ok"}`，其它路径 404）。这种代码
+最需要门禁，所以它的 6 个测试（路由表、未知 Host、`auth` 与 `moyan` 不共用上游、Host 头
+剥端口、IPv6 字面量、h2 走 URI authority）是硬门槛。
+
+⚠️ **`moyan-backend` 暂未纳入**，因为它现在过不了：`cargo fmt --check` 有 **213 处**差异
+（整个 crate 没跑过 rustfmt），`cargo clippy -- -D warnings` 有 **23 个**错误。这些全是卫生
+问题、没有正确性 bug（`&PathBuf` 该用 `&Path`、多余 `return`、无谓 `clone`、死字段、未用变量、
+`too_many_arguments` 等）。清理是独立的一块活：先 `cargo fmt`，再逐个改 lint，做完把它加进
+workflow 的 matrix。
 
 ### 一次发布 + 一次部署
 
@@ -362,6 +380,9 @@ moyan-db-backup --force          # 即使数据没变化也生成一份新备份
   表现成"整站变成一段 JSON 但处处 200"。`website-rs` 的 `request_host()` 同时处理两种形式，
   没匹配上上游时还会打 `no upstream configured for host ...` 告警——看到这条就说明有请求打到了
   没配置的 Host 名。
+  ⚠️ **判断某个新域名「配好了没有」不要只看 `/`**：占位路由本身就有 `/` 和 `/health`，两者在
+  路由缺失时也返回 200 的 `{"status":"ok"}`。要打一个只有真实上游才有的路径（例如
+  `/api/auth/me`），它在路由缺失时返回 **404**、路由生效后返回 **401**——状态码的变化才是信号。
 - 管理后台的域名现状见下面「管理后台的域名与 TLS」——**走 `https://admin-moyan.0x81.uk`，
   https 已通**。
 

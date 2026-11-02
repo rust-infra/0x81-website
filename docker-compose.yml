@@ -130,6 +130,11 @@ services:
       - PROXY_UPSTREAM_HOST_CRAB=crab-web
       - PROXY_UPSTREAM_HOST_MOYAN=moyan-web
       - PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin
+      # 统一登录入口 auth.0x81.uk → moyan-backend。它和 PROXY_UPSTREAM_HOST_MOYAN
+      # 是两回事：那个是墨言产品域名（指向前端），这个是跨产品的「登录」能力域名
+      # （直接指向后端）。将来 auth 抽成独立服务时只改这一个键。
+      # 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
+      - PROXY_UPSTREAM_AUTH=moyan-backend
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:

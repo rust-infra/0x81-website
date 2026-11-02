@@ -16,7 +16,7 @@ use crate::models::{
 
 // ==================== Helpers ====================
 
-fn generate_jwt(state: &AppState, user: &User) -> Result<String, AppError> {
+fn generate_jwt(secret: &str, user: &User) -> Result<String, AppError> {
     let now = Utc::now();
     let exp = now + chrono::Duration::days(30);
 
@@ -24,6 +24,9 @@ fn generate_jwt(state: &AppState, user: &User) -> Result<String, AppError> {
         sub: user.id.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
+        // 签发方必须带上 status：Rehearse 只放行 `active`，缺了字段就是 401
+        // 「Account is not active」（设计稿 §7.4.3）。
+        status: user.status.clone(),
         exp: exp.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
@@ -31,7 +34,7 @@ fn generate_jwt(state: &AppState, user: &User) -> Result<String, AppError> {
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| AppError::Internal(format!("JWT generation failed: {}", e)))
 }
@@ -95,7 +98,7 @@ pub async fn google_callback(
     )
     .await?;
 
-    let token = generate_jwt(&state, &user)?;
+    let token = generate_jwt(&state.jwt_secret, &user)?;
 
     Ok(success(AuthResponse {
         token,
@@ -141,7 +144,7 @@ pub async fn google_mobile_login(
     )
     .await?;
 
-    let token = generate_jwt(&state, &user)?;
+    let token = generate_jwt(&state.jwt_secret, &user)?;
 
     Ok(success(AuthResponse {
         token,
@@ -339,7 +342,7 @@ pub async fn kimi_token_poll(
         },
         Err(err) => return Err(err),
     };
-    let token = generate_jwt(&state, &user)?;
+    let token = generate_jwt(&state.jwt_secret, &user)?;
 
     Ok(success(serde_json::json!({
         "token": token,
@@ -795,7 +798,7 @@ pub async fn telegram_login(
     )
     .await?;
 
-    let token = generate_jwt(&state, &user)?;
+    let token = generate_jwt(&state.jwt_secret, &user)?;
 
     Ok(success(AuthResponse {
         token,
@@ -888,5 +891,43 @@ mod kimi_email_tests {
             kimi_placeholder_email("用户名一二三四五六七八"),
             "用户名一二三四五@kimi.user"
         );
+    }
+}
+
+#[cfg(test)]
+mod jwt_claims_tests {
+    use super::*;
+
+    fn test_user(status: &str) -> User {
+        User {
+            id: "user_1".to_string(),
+            email: "dev@local".to_string(),
+            name: "Dev".to_string(),
+            avatar: None,
+            provider: "kimi".to_string(),
+            provider_id: "provider_1".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_sync_at: None,
+            status: status.to_string(),
+            role: "user".to_string(),
+            last_login_at: None,
+            system_decks_initialized_at: None,
+        }
+    }
+
+    /// Rehearse 只放行 `status == "active"`（设计稿 §7.4.3）。签发时漏掉这个字段，
+    /// 客户端拿到的 token 会在职演侧恒 401「Account is not active」。
+    #[test]
+    fn issued_token_carries_the_user_status() {
+        let token = generate_jwt("test-secret", &test_user("active")).expect("issue token");
+        let claims = decode::<Claims>(
+            &token,
+            &DecodingKey::from_secret(b"test-secret"),
+            &Validation::new(Algorithm::HS256),
+        )
+        .expect("decode token")
+        .claims;
+        assert_eq!(claims.status, "active");
     }
 }
