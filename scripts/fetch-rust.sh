@@ -11,10 +11,12 @@
 #   scripts/fetch-rust.sh v1.2.3              # 指定 tag（回滚就是拉旧 tag）
 #   scripts/fetch-rust.sh v1.2.3 website-rs   # 只更新其中一个
 #
-# 凭证：仓库是 private，release 资产只能走 API 下载（github.com/.../releases/
-# download/... 这条直链在私有仓库下不带凭证会 404）。需要一个 fine-grained
-# PAT，权限只要 Contents: Read。放在环境变量 GH_TOKEN / GITHUB_TOKEN，或
-# 仓库根目录 .env 里的 GH_TOKEN=... 一行。token 不会被写进任何产物。
+# 凭证：仓库是 public，匿名就能读 release，通常不需要 token。只有把 REPO
+# 指向私有仓库时才需要：fine-grained PAT，权限 Contents: Read，放在环境变量
+# GH_TOKEN / GITHUB_TOKEN，或仓库根目录 .env 里的 GH_TOKEN=... 一行。
+#
+# 无效 token 比不带更糟：GitHub 对坏凭证连公开资源也回 401。所以带了 token
+# 就先验一次，401 就丢掉改走匿名。token 不会被写进任何产物。
 #
 # 落盘是"先下到临时目录 → 校验 sha256 与 ELF 架构 → 在 bin/ 内改名为 .new 再
 # rename 覆盖"：下载或校验失败不会留下半个二进制让 compose 挂上去，旧版本仍可用。
@@ -50,22 +52,28 @@ for name in "${services[@]}"; do
     esac
 done
 
-# token 取值顺序：环境变量 > 仓库根 .env 里的 GH_TOKEN 行
+# token 可选。取值顺序：环境变量 > 仓库根 .env 里的 GH_TOKEN 行
 token=${GH_TOKEN:-${GITHUB_TOKEN:-}}
 if [ -z "$token" ] && [ -f .env ]; then
     token=$(sed -n 's/^GH_TOKEN=//p' .env | tail -1)
 fi
-if [ -z "$token" ]; then
-    cat >&2 <<'EOF'
-缺少 GitHub token（仓库是 private，release 资产必须带凭证下载）。
 
-  1. GitHub → Settings → Developer settings → Fine-grained tokens
-     → 只授权 rust-infra/0x81-website，权限选 Contents: Read
-  2. 放到服务器上的环境变量，或仓库根目录 .env：
-         GH_TOKEN=github_pat_xxx
-  3. 重跑本脚本
-EOF
-    exit 1
+if [ -n "$token" ]; then
+    probe=$(curl -sS -o /dev/null -w '%{http_code}' \
+        -H "Authorization: Bearer $token" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${repo}") || probe=000
+    if [ "$probe" = "401" ]; then
+        echo "注意：GH_TOKEN 无效（HTTP 401），本次改用匿名访问" >&2
+        token=""
+    fi
+fi
+
+# bash 3.2（macOS 自带）在 set -u 下展开空数组会报 unbound variable，
+# 所以下面一律用 ${auth[@]+"${auth[@]}"} 这种写法。
+auth=()
+if [ -n "$token" ]; then
+    auth=(-H "Authorization: Bearer $token")
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -75,7 +83,7 @@ fi
 
 api() {
     curl -fsSL --retry 3 --retry-all-errors \
-        -H "Authorization: Bearer $token" \
+        ${auth[@]+"${auth[@]}"} \
         -H "Accept: application/vnd.github+json" \
         "$@"
 }
@@ -87,11 +95,12 @@ else
 fi
 if ! release_json=$(api "$release_url"); then
     echo "拉取 release 失败：${release_url}" >&2
-    echo "检查 tag 是否存在，以及 token 是否有效（需要 Contents: Read）" >&2
+    echo "检查 tag 是否存在；若 REPO 指向私有仓库，需要有效的 GH_TOKEN（Contents: Read）" >&2
     exit 1
 fi
 
-# 资产名 → 资产 id（用 API 而不是直链，私有仓库直链不带凭证会 404）
+# 资产名 → 资产 id。统一走 API：public / private 同一条路径，REPO 换成私有仓库
+# 时只要补 token，不用改下载逻辑。
 asset_id() {
     printf '%s' "$release_json" | python3 -c '
 import json, sys
@@ -122,7 +131,7 @@ for name in "${wanted[@]}"; do
     fi
     echo "==> 下载 $name"
     curl -fSL --retry 3 --retry-all-errors \
-        -H "Authorization: Bearer $token" \
+        ${auth[@]+"${auth[@]}"} \
         -H "Accept: application/octet-stream" \
         "https://api.github.com/repos/${repo}/releases/assets/${id}" \
         -o "${tmp}/${name}"
