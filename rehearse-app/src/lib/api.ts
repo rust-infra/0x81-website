@@ -266,3 +266,26 @@ export async function googleMobileLogin(
   const data = body.data as { token: string; user: User };
   return { token: data.token, user: data.user };
 }
+
+/**
+ * Telegram Mini App 免密登录。
+ *
+ * `initData` 由 Telegram 注入，服务端用 bot token 验 HMAC-SHA256
+ * （`moyan-backend/src/controllers/auth.rs` 的 `telegram_login`）。bot token
+ * 只在服务端，客户端拿不到也不需要。
+ */
+export async function telegramLogin(
+  initData: string
+): Promise<{ token: string; user: User }> {
+  const res = await fetch(`${AUTH_BASE}/api/auth/telegram`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ init_data: initData }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    throw new Error(body?.error?.message || translate('loginFailed'));
+  }
+  const data = body.data as { token: string; user: User };
+  return { token: data.token, user: data.user };
+}

@@ -24,7 +24,7 @@ npm run typecheck  # tsc --noEmit —— 覆盖全部 .ts/.tsx
 include 里**——所以删错一个组件、或改了 props 没跟上，`npm test` 全绿也发现不了。
 改过 `src/app/` 或 `src/components/` 之后要额外跑 `npm run typecheck`。
 
-**17 个测试文件 / 75 个测试**，纯 TypeScript + Node 内置 test runner，不需要 metro / jest，
+**20 个测试文件 / 92 个测试**，纯 TypeScript + Node 内置 test runner，不需要 metro / jest，
 也不需要模拟器——`lib/` 那一层是纯逻辑，改完立刻能验。
 
 ⚠️ **`npm install` 会失败**：`react-dom@19.3.0` 要求 peer `react@^19.3.0`，而本项目钉的是
@@ -41,3 +41,7 @@ include 里**——所以删错一个组件、或改了 props 没跟上，`npm t
   字段名对不上时以那份 Go DTO 的 struct tag 为准（设计稿 §7.6 记了每个改名的理由）。
 - **中文演练还没做**（阶段 7）。`language: 'zh-CN'` 现在会拿到 400，预置场景里有 2 个默认
   语言是 `zh-CN`——客户端开始会话时要覆盖成 `en-*`。
+- **Web / Telegram Mini App 走 `npm run build:web`**（`expo export --platform web` +
+  `scripts/patch-web-html.mjs`）。⚠️ SPA 导出**不会读取 `app/+html.tsx`**（那个文件只在
+  static / server rendering 下生效），Telegram SDK 与 viewport 是导出后注入的——别再往
+  `+html.tsx` 里加东西，否则它不会进产物。

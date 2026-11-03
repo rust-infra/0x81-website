@@ -42,6 +42,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web --output-dir dist && node scripts/patch-web-html.mjs dist/index.html",
     "postinstall": "patch-package",
     "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/lib/*.test.js",
     "typecheck": "tsc --noEmit"

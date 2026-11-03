@@ -1,0 +1,32 @@
+:4324 {
+    root * /usr/share/caddy/html
+    encode gzip
+
+    # 业务 API。与原生 App 走的是同一条路径，只是多了一跳容器内反代。
+    handle /api/rehearse/* {
+        reverse_proxy rehearse-backend:4324
+    }
+
+    # 统一登录入口。Web 端把 AUTH_URL 也设成 rehearse.0x81.uk，由这里
+    # 反代到 moyan-backend，浏览器侧因此完全同源，不需要改 CORS。
+    handle /api/auth/* {
+        reverse_proxy moyan-backend:4323
+    }
+
+    # 运维探针仍然由后端回答（dialect / database_defaulted）。
+    handle /health {
+        reverse_proxy rehearse-backend:4324
+    }
+
+    # 其余 /api/* 保持后端的 JSON 404 契约，不能落到 SPA 的 index.html。
+    handle /api/* {
+        header Content-Type application/json
+        respond `{"success":false,"error":{"message":"Not found"}}` 404
+    }
+
+    # SPA 回退。必须放在上面几个 handle 之后，否则 /api/* 会被改写成 index.html。
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}
