@@ -15,6 +15,8 @@
 
 已适配、未适配和刻意调整的部分见文末「与 Go 版的差异」。
 
+实现原理、算法细节和设计取舍见 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。
+
 ## 快速开始
 
 ```rust
