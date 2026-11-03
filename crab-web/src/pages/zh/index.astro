@@ -27,19 +27,34 @@ const t = zh;
 
 <script>
   document.addEventListener("click", (e) => {
+    if (!(e.target instanceof Element)) return;
     const btn = e.target.closest("[data-copy]");
-    if (!btn) return;
+    if (!(btn instanceof HTMLElement)) return;
 
     const id = btn.getAttribute("data-copy");
-    const el = document.getElementById(id);
+    const el = id ? document.getElementById(id) : null;
     if (!el) return;
 
     const text = el.textContent.trim();
-    navigator.clipboard.writeText(text).then(() => {
-      const original = btn.textContent;
+
+    // 原始文案只记一次。连点第二次时 btn.textContent 已经是「✓ Copied!」，
+    // 再把它当 original 会把按钮永久留在已复制状态。
+    const showCopied = () => {
+      if (btn.dataset.originalLabel === undefined) {
+        btn.dataset.originalLabel = btn.textContent ?? "";
+      }
+      const pending = btn.dataset.copyTimer;
+      if (pending) clearTimeout(Number(pending));
       btn.textContent = "✓ Copied!";
-      setTimeout(() => { btn.textContent = original; }, 2000);
-    }).catch(() => {
+      btn.dataset.copyTimer = String(
+        setTimeout(() => {
+          btn.textContent = btn.dataset.originalLabel ?? "";
+          delete btn.dataset.copyTimer;
+        }, 2000)
+      );
+    };
+
+    navigator.clipboard.writeText(text).then(showCopied).catch(() => {
       const ta = document.createElement("textarea");
       ta.value = text;
       ta.style.position = "fixed";
@@ -48,9 +63,7 @@ const t = zh;
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      const original = btn.textContent;
-      btn.textContent = "✓ Copied!";
-      setTimeout(() => { btn.textContent = original; }, 2000);
+      showCopied();
     });
   });
 </script>
