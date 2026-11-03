@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+# 职演 Web / Telegram Mini App 的静态前端。
+#
+# 构建上下文是 `rehearse-app/`，产物由 Caddy 托管，`/api` 反代到两个后端。
+#
+# ⚠️ 本容器**内部也监听 4324**。网关 `website-rs` 的上游端口是写死在
+# `resolve_upstream` 里的（只有主机名能通过环境变量覆盖），所以让本容器占用
+# 同一个端口，就只需要把 compose 里的 `PROXY_UPSTREAM_HOST_REHEARSE` 改成
+# `rehearse-web`，不用发新的 Rust tag，现有 App 的
+# `https://rehearse.0x81.uk/api/rehearse/*` 路径也完全不变。
+
+ARG NODE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/node:20-alpine
+ARG CADDY_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/caddy:2-alpine
+
+FROM ${NODE_IMAGE} AS build
+
+WORKDIR /app
+
+# patch-package 的 postinstall 需要 patches/，所以它必须和 package*.json
+# 一起先拷；否则 `npm ci` 会在 postinstall 阶段失败。
+COPY package.json package-lock.json ./
+COPY patches ./patches
+# 与其它前端 Dockerfile 一致走 npmmirror：默认 registry 在本机/国内网络下
+# 经常超时，而 replace-registry-host 会把 lockfile 里的 npmjs 地址一起改掉。
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm config set replace-registry-host always \
+    && npm ci
+
+COPY . .
+
+# 构建期注入。线上是同源：API 与 auth 都走 rehearse.0x81.uk，
+# 由 Caddyfile.web 按路径分流到两个后端。
+ARG API_URL=https://rehearse.0x81.uk
+ARG AUTH_URL=https://rehearse.0x81.uk
+ENV API_URL=${API_URL} AUTH_URL=${AUTH_URL}
+
+# Expo Router 默认输出单页应用（web.output = "single"），Caddy 用
+# try_files 做 SPA 回退。SPA 导出不读 `app/+html.tsx`，所以 Telegram SDK
+# 与 viewport 由 scripts/patch-web-html.mjs 注入（build:web 里已串好）。
+RUN npm run build:web
+
+FROM ${CADDY_IMAGE}
+
+COPY --from=build /app/dist /usr/share/caddy/html
+COPY Caddyfile.web /etc/caddy/Caddyfile
+
+EXPOSE 4324
+
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

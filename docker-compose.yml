@@ -46,6 +46,9 @@ services:
       - GOOGLE_CLIENT_ID=${MOYAN_GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${MOYAN_GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URL=${MOYAN_GOOGLE_REDIRECT_URL:-http://localhost:4323/api/auth/google/callback}
+      # Telegram Mini App 登录：@BotFather → /newbot 拿 token。留空时
+      # POST /api/auth/telegram 返回 503；普通浏览器登录不受影响。
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
       - ALLOWED_ORIGINS=${MOYAN_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk}
       - RUST_LOG=${RUST_LOG:-info}
@@ -159,8 +162,9 @@ services:
       - DATABASE_URL=${REHEARSE_DATABASE_URL:-sqlite:/data/rehearse.db}
       - JWT_SECRET=${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
       - ADMIN_TOKEN=${AUTH_ADMIN_TOKEN:?AUTH_ADMIN_TOKEN is required}
-      # Rehearse 没有 Web 客户端（§7.5），但管理端接口是被 moyan-admin 调的，
-      # 那些 Origin 必须在列表里，否则后台的「职演」区块会被 CORS 拦掉。
+      # Web 端由 rehearse-web 同源反代（浏览器看到的 Origin 是
+      # https://rehearse.0x81.uk），所以这里列的主要是管理端：moyan-admin 调
+      # /api/admin/* 时 Origin 必须在列表里，否则后台的「职演」区块会被 CORS 拦掉。
       - ALLOWED_ORIGINS=${REHEARSE_ALLOWED_ORIGINS:-http://localhost:5000,http://localhost:5001,https://moyan.0x81.uk,https://admin-moyan.0x81.uk,https://admin.moyan.0x81.uk,https://rehearse.0x81.uk}
       # LLM 配置的 env 兜底（§7.3.2）。权威来源是 DB 里的 rehearse_settings；
       # 这三个只保证「DB 还没配 / 不可达」时服务仍能起来。
@@ -186,6 +190,34 @@ services:
       retries: 3
       start_period: 5s
 
+  rehearse-web:
+    # 职演 Web / Telegram Mini App 前端（Expo Web 产物 + Caddy）。
+    #
+    # ⚠️ **本容器内部也监听 4324**：网关的上游端口写死在 website-rs 的
+    # `resolve_upstream` 里，改端口要发新的 Rust tag；让本容器占用同一个端口，
+    # 只改 `PROXY_UPSTREAM_HOST_REHEARSE` 的主机名即可。现有 App 打的
+    # `https://rehearse.0x81.uk/api/rehearse/*` 路径完全不变。
+    #
+    # Caddyfile.web 负责分流：
+    #   /api/rehearse/*、/health → rehearse-backend:4324
+    #   /api/auth/*              → moyan-backend:4323
+    #   其它                     → SPA（try_files 回退到 index.html）
+    #
+    # Web 构建时 API_URL / AUTH_URL 都填 rehearse.0x81.uk，浏览器侧因此同源，
+    # 不需要给两个后端加 CORS 白名单。
+    build:
+      context: ./rehearse-app
+      dockerfile: Dockerfile.web
+      args:
+        API_URL: https://rehearse.0x81.uk
+        AUTH_URL: https://rehearse.0x81.uk
+    ports:
+      - "5002:4324"
+    depends_on:
+      - rehearse-backend
+      - moyan-backend
+    restart: unless-stopped
+
   website-rs:
     # 同上：runtime stage 只装 ca-certificates/curl，二进制由 fetch-rust.sh 拉取后挂载。
     image: 0x81/website-rs-runtime:local
@@ -209,8 +241,10 @@ services:
       # （直接指向后端）。将来 auth 抽成独立服务时只改这一个键。
       # 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
       - PROXY_UPSTREAM_AUTH=moyan-backend
-      # 职演（Rehearse）的 API 入口，直连后端（它没有 Web 前端）。
-      - PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend
+      # 职演（Rehearse）的入口：指向 Web 容器，而不是后端。rehearse-web 内部
+      # 监听 4324，并把 /api 反代到 rehearse-backend；网关的端口表因此不用改，
+      # 也就不需要为这次改动发新的 Rust tag。
+      - PROXY_UPSTREAM_HOST_REHEARSE=rehearse-web
       - TLS_CERT_PATH=/certs/origin.pem
       - TLS_KEY_PATH=/certs/origin-key.pem
     volumes:
@@ -225,7 +259,7 @@ services:
       - crab-web
       - moyan-web
       - moyan-admin
-      - rehearse-backend
+      - rehearse-web
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

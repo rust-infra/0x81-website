@@ -36,6 +36,9 @@ jobs:
           - name: moyan-admin
             context: ./moyan-admin
             debian_image: debian:bookworm-slim
+          - name: rehearse-web
+            context: ./rehearse-app
+            debian_image: debian:bookworm-slim
           - name: moyan-backend
             context: ./moyan-backend
             debian_image: debian:trixie-slim

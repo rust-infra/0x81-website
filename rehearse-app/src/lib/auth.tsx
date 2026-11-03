@@ -4,10 +4,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { setUnauthorizedHandler, TOKEN_KEY } from './api';
+import { Platform } from 'react-native';
+import { setUnauthorizedHandler, telegramLogin, TOKEN_KEY } from './api';
+import { getTelegramInitData } from './telegram';
 import type { User } from './types';
 
 const USER_KEY = 'rehearse_user';
@@ -50,14 +53,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const signIn = async (nextToken: string, nextUser: User) => {
+  const signIn = useCallback(async (nextToken: string, nextUser: User) => {
     await AsyncStorage.multiSet([
       [TOKEN_KEY, nextToken],
       [USER_KEY, JSON.stringify(nextUser)],
     ]);
     setToken(nextToken);
     setUser(nextUser);
-  };
+  }, []);
+
+  // Telegram Mini App：打开即登录。initData 只有 Telegram 会注入，普通浏览器
+  // 里为空，所以这里对其他入口没有影响；验签失败就留在登录页，不打断用户。
+  const telegramAttempted = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // 即使已经登录也调用一次：ready/expand 是 SDK 握手，不是登录动作。
+    const initData = getTelegramInitData();
+    if (!ready || token || telegramAttempted.current || !initData) return;
+    telegramAttempted.current = true;
+    void (async () => {
+      try {
+        const login = await telegramLogin(initData);
+        await signIn(login.token, login.user);
+      } catch {
+        // bot token 没配 / initData 过期 / 不在 Mini App 里：交给登录页。
+      }
+    })();
+  }, [ready, token, signIn]);
 
   const signOut = useCallback(async () => {
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);

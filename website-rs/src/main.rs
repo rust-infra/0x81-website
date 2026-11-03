@@ -114,11 +114,11 @@ fn resolve_upstream(host: &str) -> Option<(&'static str, u16)> {
         // 所有客户端不用发版。
         // 设计：docs/superpowers/specs/2026-10-02-gateway-auth-design.md
         "auth.0x81.uk" => Some(("PROXY_UPSTREAM_AUTH", 4323)),
-        // 职演（Rehearse）的 API 入口。注意它和 `rehearse-app` 的关系与墨言那对
-        // 恰好相反：墨言是「产品域名指前端、auth 指后端」，职演**没有 Web 前端**
-        // （§3.3 只做 App），所以这个域名直接指向后端 `rehearse-backend:4324`。
-        // App 打的就是它（`API_URL=https://rehearse.0x81.uk`）。
-        // 设计：docs/superpowers/specs/2026-10-02-rehearse-design.md §6.3
+        // 职演（Rehearse）的入口。现在指向 Web 容器 `rehearse-web`，它内部
+        // **也监听 4324**，并把 `/api/rehearse/*` 反代到 `rehearse-backend`。
+        // 端口保持 4324 是刻意的：这张表的端口写死在二进制里，改端口要发新的
+        // Rust tag；让 Web 容器占用同一个端口，就只需要改 compose 里的上游主机名。
+        // 现有 App 打的就是它（`API_URL=https://rehearse.0x81.uk`），路径不变。
         "rehearse.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_REHEARSE", 4324)),
         "0x81.uk" | "www.0x81.uk" => Some(("PROXY_UPSTREAM_HOST_INDEX", 4320)),
         _ => None,
@@ -393,7 +393,7 @@ mod tests {
             ),
             // 统一登录入口，直连后端而不是前端
             ("auth.0x81.uk", "PROXY_UPSTREAM_AUTH", 4323),
-            // 职演 API（App 打这个域名，它直连后端）
+            // 职演入口（rehearse-web，内部监听 4324，/api 再反代到后端）
             ("rehearse.0x81.uk", "PROXY_UPSTREAM_HOST_REHEARSE", 4324),
             ("0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),
             ("www.0x81.uk", "PROXY_UPSTREAM_HOST_INDEX", 4320),

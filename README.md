@@ -10,7 +10,7 @@ Host 分流网关 + 多个产品站点与服务：
 | `moyan.0x81.uk` | `moyan-web` | 墨言（词汇 / 打字训练） |
 | `admin-moyan.0x81.uk` | `moyan-admin` | 墨言管理后台（网关也认旧名 `admin.moyan.0x81.uk`，两者都路由到 5001；**旧名已无 DNS 记录**，实测见「管理后台的域名与 TLS」） |
 | `auth.0x81.uk` | `moyan-backend` | **统一登录入口**。跨产品的能力域名，直连后端 `:4323`（不经前端）。与 `moyan.0x81.uk` 现在指向同一个后端，但语义不同——前者是「登录」这个能力，后者是墨言这个产品。客户端只认前者，所以将来 auth 抽成独立服务时只改网关一条路由，App 不用发版。设计见 `docs/superpowers/specs/2026-10-02-gateway-auth-design.md` |
-| `rehearse.0x81.uk` | `rehearse-backend` | **职演 API**。只做 App、没有 Web 前端，所以域名直连后端 `:4324`（与墨言「产品域名指前端」相反）。App 的生产 `API_URL` 就是它，设计见 `docs/superpowers/specs/2026-10-02-rehearse-design.md` |
+| `rehearse.0x81.uk` | `rehearse-web` | **职演 Web / API**。域名指向 Caddy（`rehearse-web`，容器内部监听 `:4324`）：`/api/rehearse/*` 反代到 `rehearse-backend:4324`，其余路径是 Expo Web 产物（Telegram Mini App）。App 的生产 `API_URL` 仍是它，路径不变，设计见 `docs/superpowers/specs/2026-10-02-rehearse-design.md` |
 
 ## 架构
 
@@ -27,7 +27,7 @@ website-rs :80/:443     Axum 网关
       │  （旧名 admin.moyan.0x81.uk 网关也收、同样路由到 5001，但它已无 DNS 记录，
       │    现状见「管理后台的域名与 TLS」）
       ├─ Host: auth.0x81.uk           →  moyan-backend :4323（统一登录入口，不经前端）
-      ├─ Host: rehearse.0x81.uk       →  rehearse-backend :4324（职演 API，只做 App，无 Web 前端）
+      ├─ Host: rehearse.0x81.uk       →  rehearse-web :4324（/api → rehearse-backend :4324；其余为 Expo Web / Telegram Mini App）
       └─ 其它 Host                      →  本地路由（/health 等）
               │
               ▼
@@ -68,13 +68,13 @@ Compose 环境变量：
 - `PROXY_UPSTREAM_HOST_MOYAN=moyan-web`
 - `PROXY_UPSTREAM_HOST_MOYAN_ADMIN=moyan-admin`
 - `PROXY_UPSTREAM_AUTH=moyan-backend`（统一登录入口，直连后端）
-- `PROXY_UPSTREAM_HOST_REHEARSE=rehearse-backend`（职演 API，直连后端）
+- `PROXY_UPSTREAM_HOST_REHEARSE=rehearse-web`（职演 Web/API 入口；容器内部监听 4324，`/api` 再反代到后端）
 
 ### 网关横切能力
 
 | 能力 | 说明 |
 |------|------|
-| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001，**`auth` → 4323（直连后端）**，**`rehearse` → 4324（直连后端）**。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
+| Host 路由 | `0x81.uk` → 4320，`tact` → 4321，`crab` → 4322，`moyan` → 5000，`admin-moyan` → 5001，**`auth` → 4323（直连后端）**，**`rehearse` → 4324（rehearse-web；`/api` 再反代到后端）**。**HTTP/1.1 看 `Host` 头、HTTP/2 看 URI authority（h2 没有 `Host` 头）**——只读其一会让整条 HTTPS 流量静默落到本地占位路由（见「细节与约束」） |
 | TLS | rustls 监听 443（`TLS_CERT_PATH` / `TLS_KEY_PATH`，Cloudflare Origin Certificate）；未配置则仅 HTTP |
 | 压缩 | `CompressionLayer` |
 | CORS | `CorsLayer::permissive()` |
@@ -159,7 +159,9 @@ Dockerfile 默认使用官方镜像名（前端 `node:20-alpine` / `caddy:2-alpi
 
 ### `rehearse-backend` / `rehearse-app`（职演）
 
-- 定位：职场演练（面试 / 汇报答辩 / 高压对话 / 日常协作），**只做 App，没有 Web 前端**
+- 定位：职场演练（面试 / 汇报答辩 / 高压对话 / 日常协作）；原生 App + Telegram Mini App（Expo Web），共用一个后端
+- Web / Telegram Mini App：`rehearse-web`（`rehearse-app/Dockerfile.web`，Expo Web 产物 + Caddy）。容器内部监听 **4324**，所以网关的端口表不用改，compose 只把 `PROXY_UPSTREAM_HOST_REHEARSE` 指向它。构建注入的 `API_URL` / `AUTH_URL` 都是 `https://rehearse.0x81.uk`，`/api/auth/*` 由 Caddy 反代到 `moyan-backend:4323`，浏览器侧同源。部署：`docker compose build rehearse-web && docker compose up -d rehearse-web website-rs`——改了网关 env 必须 `up -d`，`restart` 只会用旧值重启
+- Telegram 登录：客户端在 `rehearse-app/src/lib/auth.tsx` 检测到 `initData` 后自动调 `POST /api/auth/telegram`，服务端用 `TELEGRAM_BOT_TOKEN` 验 HMAC-SHA256（24h 防重放）。**服务器根 `.env` 必须设 `TELEGRAM_BOT_TOKEN`**（@BotFather → `/newbot`），否则该接口返回 503，Mini App 会退回普通登录页。入口在 @BotFather 的 `/setmenubutton` 或 `/newapp` 填 `https://rehearse.0x81.uk`
 - 后端：**Go（gin）**，`:4324`；自己的三张表 `rehearse_usage` / `rehearse_settings` / `rehearse_user_settings`，**与墨言零共享**
 - 构建方式与两个 Rust 服务不同：Go 编译便宜，compose 直接多阶段构建出成品镜像（`golang:alpine` → `scratch`），不走「CI 出二进制 → release 资产 → `fetch-rust.sh` → 挂载」那一套。镜像里没有 shell，healthcheck 是 `/rehearse -healthcheck`
 - **迁移不在启动路径上**：新库第一次起来必须手动跑一次，否则 `/health` 报 ok、业务接口全是 `no such table`：
@@ -219,7 +221,7 @@ workflow 的 matrix。
       ├─ scripts/fetch-rust.sh v0.1.0      ← 匿名即可（仓库 public），走 api.github.com
       │    └ 下到临时目录 → 校验 sha256 + ELF 架构 → bin/x.new → rename 覆盖
       └─ docker compose up -d              ← 只建 runtime 层（apt/pip，之后走缓存）
-           └ 8 个容器起来：2 个 Rust 服务挂载 bin/，1 个 Go 服务（职演）直接构建，5 个前端照常构建
+           └ 9 个容器起来：2 个 Rust 服务挂载 bin/，1 个 Go 服务（职演）直接构建，6 个前端照常构建
 ```
 
 ### 服务器上的落盘与容器拓扑
