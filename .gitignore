@@ -20,6 +20,8 @@ certs/
 /data
 moyan-backend/data/
 rehearse-backend/data/
+x402-gateway/data/
+x402-gateway/target/
 .env
 bin/
 
