@@ -38,6 +38,9 @@ jobs:
             debian_image: debian:bookworm-slim
           - name: rehearse-web
             context: ./rehearse-app
+            # 构建文件不是默认名（compose 里用 build.dockerfile 指定），
+            # build step 通过下面的 matrix.service.dockerfile 传入。
+            dockerfile: Dockerfile.web
             debian_image: debian:bookworm-slim
           - name: moyan-backend
             context: ./moyan-backend
@@ -57,6 +60,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service.context }}
+          # 未填 dockerfile 的服务沿用默认名；rehearse-web 用 Dockerfile.web。
+          file: ${{ matrix.service.dockerfile || 'Dockerfile' }}
           push: false
           load: false
           build-args: |
