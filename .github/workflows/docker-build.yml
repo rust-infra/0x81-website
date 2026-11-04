@@ -60,8 +60,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service.context }}
-          # 未填 dockerfile 的服务沿用默认名；rehearse-web 用 Dockerfile.web。
-          file: ${{ matrix.service.dockerfile || 'Dockerfile' }}
+          # buildx 的 --file 是相对仓库根解析的，不是相对 context；不拼前缀会在
+          # 仓库根找 Dockerfile 并报 "open Dockerfile: no such file or directory"。
+          # 未填 dockerfile 的服务沿用默认名，rehearse-web 用 Dockerfile.web。
+          file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile || 'Dockerfile' }}
           push: false
           load: false
           build-args: |
