@@ -1,4 +1,6 @@
-ARG RUST_IMAGE=rust:latest
+# 钉住工具链版本，避免 rust:latest 漂移导致同一 commit 构建失败。
+# 与 Cargo.toml 的 rust-version = "1.85" 对齐；CI 的 x402-checks.yml 也用同一个值。
+ARG RUST_IMAGE=rust:1.85
 
 FROM ${RUST_IMAGE} AS build
 
