@@ -35,7 +35,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # eas-cli 27.x 的 @oclif/plugin-autocomplete 要求 Node >=22；
+          # runner 默认 Node 20 会在 Set up EAS 的 yarn add 阶段失败。
+          node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.app }}/package-lock.json
 
@@ -45,7 +47,8 @@ jobs:
       - name: Set up EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          # 钉版本：latest 可能再提高 Node 要求，CI 会突然坏掉。
+          eas-version: 27.5.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       # 没有 extra.eas.projectId 时这里会失败；先在本地跑 `eas init` 并提交。
