@@ -1,7 +1,9 @@
 # Rust / Cargo
 /target
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock **必须提交**：这是二进制项目，构建要可复现。Dockerfile 用
+# `cargo build --locked`，没有锁文件会解析到 zip 2.6.1，而 calamine 0.26.1
+# 的 ZipFile API 与之不兼容（E0107）。
 
 # SQLx offline mode query metadata (optional)
 .sqlx/
