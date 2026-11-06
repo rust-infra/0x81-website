@@ -9,10 +9,20 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "API_URL": "https://rehearse.0x81.uk",
+        "AUTH_URL": "https://auth.0x81.uk"
+      }
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "API_URL": "https://rehearse.0x81.uk",
         "AUTH_URL": "https://auth.0x81.uk"

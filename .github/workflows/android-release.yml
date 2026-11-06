@@ -1,0 +1,85 @@
+name: Android Release
+
+# 用 EAS Build 在云端构建 Android 包，GitHub Actions 负责触发、下载并保存产物。
+#
+# 一次性准备（Expo 账号、eas init、Android keystore、EXPO_TOKEN）见
+# docs/android-release.md。没有这些前置，`eas project:info` 会直接失败。
+#
+# 产物：
+#   moyan-app-aab.aab / moyan-app-apk.apk
+#   rehearse-app-aab.aab / rehearse-app-apk.apk
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "android-v*"
+
+jobs:
+  build:
+    name: ${{ matrix.app }} (${{ matrix.kind }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [moyan-app, rehearse-app]
+        kind: [aab, apk]
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # eas-cli 27.x 的 @oclif/plugin-autocomplete 要求 Node >=22；
+          # runner 默认 Node 20 会在 Set up EAS 的 yarn add 阶段失败。
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          # 钉版本：latest 可能再提高 Node 要求，CI 会突然坏掉。
+          eas-version: 27.5.0
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # 没有 extra.eas.projectId 时这里会失败；先在本地跑 `eas init` 并提交。
+      - name: Verify EAS project
+        run: eas project:info
+
+      - name: Build ${{ matrix.kind }}
+        env:
+          PROFILE: ${{ matrix.kind == 'aab' && 'production' || 'preview' }}
+        run: |
+          eas build \
+            --platform android \
+            --profile "$PROFILE" \
+            --non-interactive \
+            --wait \
+            --json > "$RUNNER_TEMP/build.json"
+
+      - name: Download artifact
+        run: |
+          url=$(jq -r '.[0].artifacts.buildUrl' "$RUNNER_TEMP/build.json")
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            echo "EAS build did not return an artifact URL"
+            cat "$RUNNER_TEMP/build.json"
+            exit 1
+          fi
+          ext=${{ matrix.kind == 'aab' && 'aab' || 'apk' }}
+          curl -fL "$url" -o "$RUNNER_TEMP/${{ matrix.app }}-${{ matrix.kind }}.$ext"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-${{ matrix.kind }}
+          path: ${{ runner.temp }}/${{ matrix.app }}-${{ matrix.kind }}.*
+          if-no-files-found: error

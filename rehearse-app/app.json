@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "uk.0x81.rehearse",
+      "bundleIdentifier": "uk.x81.rehearse",
       "deploymentTarget": "16.4",
       "supportsTablet": true,
       "infoPlist": {
@@ -33,14 +33,18 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "uk.0x81.rehearse"
+      "package": "uk.x81.rehearse"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "googleClientId": "",
-      "googleRedirectUri": "rehearse://auth/google"
+      "googleRedirectUri": "rehearse://auth/google",
+      "router": {},
+      "eas": {
+        "projectId": "a1e2521a-bbc1-4024-8f0c-62c50de1e136"
+      }
     },
     "plugins": [
       "expo-router",
@@ -66,6 +70,7 @@
         }
       ],
       "expo-document-picker"
-    ]
+    ],
+    "owner": "rg0x80s-team"
   }
 }

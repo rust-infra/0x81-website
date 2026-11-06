@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "com.anonymous.moyanapp",
+      "bundleIdentifier": "uk.x81.moyan",
       "deploymentTarget": "16.4",
       "supportsTablet": true,
       "infoPlist": {
@@ -38,14 +38,18 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.moyanapp"
+      "package": "uk.x81.moyan"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "googleClientId": "",
-      "googleRedirectUri": "moyan://auth/google"
+      "googleRedirectUri": "moyan://auth/google",
+      "router": {},
+      "eas": {
+        "projectId": "4a20390a-e380-47e0-86f9-5c4e7e8f6acf"
+      }
     },
     "plugins": [
       "expo-router",
@@ -71,6 +75,7 @@
         }
       ],
       "expo-document-picker"
-    ]
+    ],
+    "owner": "rg0x80s-team"
   }
 }
