@@ -17,8 +17,9 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g; s/security.debian.org/mirrors
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
-COPY Cargo.toml ./
+# Copy manifests. Cargo.lock 必须一起拷：否则 cargo 会重新解析依赖，
+# zip 会选到 2.6.1，而 calamine 0.26.1 的 ZipFile API 不兼容（E0107）。
+COPY Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 
 # Copy source code and compile-time assets
@@ -26,8 +27,8 @@ COPY src ./src
 COPY migrations ./migrations
 COPY data ./data
 
-# Build release binary
-RUN cargo build --release
+# Build release binary. --locked 让构建严格使用提交的 Cargo.lock。
+RUN cargo build --release --locked
 
 # Runtime stage — 只装运行时依赖（ffmpeg / python3 / yt-dlp 等），不含源码、
 # 不含 Rust 工具链。部署时由 scripts/build-rust.sh 在本地编译出二进制，
