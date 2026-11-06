@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "uk.0x81.moyan",
+      "bundleIdentifier": "uk.x81.moyan",
       "deploymentTarget": "16.4",
       "supportsTablet": true,
       "infoPlist": {
@@ -38,7 +38,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "uk.0x81.moyan"
+      "package": "uk.x81.moyan"
     },
     "web": {
       "favicon": "./assets/favicon.png"

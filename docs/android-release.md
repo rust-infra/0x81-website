@@ -17,11 +17,12 @@
 
 包名：
 
-- 墨言：`uk.0x81.moyan`
-- 职演：`uk.0x81.rehearse`
+- 墨言：`uk.x81.moyan`
+- 职演：`uk.x81.rehearse`
 
-⚠️ Google Play 首次上传后包名不能改。墨言原来 `com.anonymous.moyanapp` 是占位，已改成
-`uk.0x81.moyan`，iOS bundle id 同步改了。
+⚠️ Google Play 首次上传后包名不能改。墨言原来 `com.anonymous.moyanapp` 是占位；另外
+Android applicationId 的每一段必须以字母开头，`uk.0x81.*` 里的 `0x81` 非法，所以统一用
+`uk.x81.*`。iOS bundleIdentifier 同步改了。
 
 ## 一次性准备
 
@@ -59,7 +60,7 @@ cd ../rehearse-app && npx eas-cli@latest credentials -p android
 
 ### 4. Google Play Console（手动，一次性）
 
-- 创建两个应用，包名必须是上面的 `uk.0x81.moyan` / `uk.0x81.rehearse`
+- 创建两个应用，包名必须是上面的 `uk.x81.moyan` / `uk.x81.rehearse`
 - 启用 Play App Signing
 - 完成 Data safety（麦克风、相机）、内容分级、隐私政策
 - 先手动上传一次 AAB，之后每次从 workflow artifact 下载新 AAB 再上传
