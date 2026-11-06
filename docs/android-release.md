@@ -55,20 +55,21 @@ cd ../rehearse-app && npx eas-cli@latest credentials -p android
 在 GitHub 仓库 Settings → Secrets and variables → Actions 添加：
 
 - `EXPO_TOKEN`：Expo 账号设置 → Access tokens 创建
-
-`android-release.yml` 只使用这一个 secret。
+- `GOOGLE_SERVICE_ACCOUNT_JSON`：只有要自动提交 Google Play 时才需要，内容见下面「自动提交到 Google Play」
 
 ### 4. Google Play Console（手动，一次性）
 
 - 创建两个应用，包名必须是上面的 `uk.x81.moyan` / `uk.x81.rehearse`
 - 启用 Play App Signing
 - 完成 Data safety（麦克风、相机）、内容分级、隐私政策
-- 先手动上传一次 AAB，之后每次从 workflow artifact 下载新 AAB 再上传
+- **先手动上传一次 AAB**（可以用 workflow artifact），之后 API 才能自动提交
 
 ## 触发构建
 
-- GitHub Actions → **Android Release** → Run workflow
+- GitHub Actions → **Android Release** → Run workflow（可勾选 submit）
 - 或推送 tag：
+  - `android-v*`：只构建，不提交
+  - `android-release-v*`：构建 + 提交 Google Play
 
 ```bash
 git tag android-v0.1.0 && git push origin android-v0.1.0
@@ -76,6 +77,22 @@ git tag android-v0.1.0 && git push origin android-v0.1.0
 
 构建在 EAS 云端跑，GitHub job 会等它完成，然后把 AAB/APK 下载到 workflow artifact。
 EAS 构建页同时保留一份可下载产物。
+
+## 自动提交到 Google Play
+
+工作流支持在 AAB 构建后执行 `eas submit`：
+
+- 手动 Run workflow 时勾选 **submit**
+- 或推 `android-release-v*` tag（构建 + 提交；普通 `android-v*` 只构建，不提交）
+
+准备：
+
+1. Google Cloud 创建 service account，启用 **Google Play Android Developer API**，下载 JSON key
+2. Play Console → Users and permissions → 邀请 service account 邮箱，授予 **Release manager**（或 Admin），只给这两个应用
+3. GitHub secret `GOOGLE_SERVICE_ACCOUNT_JSON` = JSON 全文
+4. `eas.json` 的 `submit.production.android` 已指向 `./google-service-account.json`，默认 `track: internal`；要直接上生产就改成 `production`
+
+注意：Google Play 通常要求应用先在 Console 创建并手动上传过一次 AAB，API 才能提交；第一次先用 artifact 手动上传。
 
 ## 版本号
 
@@ -93,5 +110,8 @@ EAS 构建页同时保留一份可下载产物。
 | `eas project:info` 报 no project | 没跑 `eas init`，或 `extra.eas.projectId` 没提交 |
 | `--non-interactive` 报 credentials | 没跑 `eas credentials -p android` |
 | `EXPO_TOKEN is not set` | 没配 GitHub secret |
+| `GOOGLE_SERVICE_ACCOUNT_JSON is not set` | 要自动提交时没配 secret |
+| `eas submit` 报 service account | secret 内容不对，或 service account 没在 Play Console 授权 |
+| `eas submit` 报 app not found | Play Console 还没创建应用，或还没首次手动上传 |
 | AAB 下载为空 | EAS build 失败；看 workflow 里 `build.json` 或 EAS 构建页 |
 | Google Play 拒绝包名 | 包名和 Play Console 里创建的不一致，或首次上传后试图修改 |
