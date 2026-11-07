@@ -8,11 +8,22 @@ name: Android Release
 # 产物：
 #   moyan-app-aab.aab / moyan-app-apk.apk
 #   rehearse-app-aab.aab / rehearse-app-apk.apk
+#
+# AAB 可以选择提交到 Google Play：
+#   - workflow_dispatch 勾选 submit
+#   - 或推 android-release-v* tag（构建 + 提交；android-v* 只构建）
+# 提交需要 GitHub secret GOOGLE_SERVICE_ACCOUNT_JSON，配置见 docs/android-release.md。
 on:
   workflow_dispatch:
+    inputs:
+      submit:
+        description: Submit the AAB to Google Play after build
+        type: boolean
+        default: false
   push:
     tags:
       - "android-v*"
+      - "android-release-v*"
 
 jobs:
   build:
@@ -27,6 +38,10 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.app }}
+
+    env:
+      # 手动触发时勾选 submit；android-release-v* tag 默认提交，android-v* 只构建。
+      SUBMIT: ${{ (github.event_name == 'workflow_dispatch' && inputs.submit) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/android-release-v')) }}
 
     steps:
       - name: Checkout
@@ -83,3 +98,25 @@ jobs:
           name: ${{ matrix.app }}-${{ matrix.kind }}
           path: ${{ runner.temp }}/${{ matrix.app }}-${{ matrix.kind }}.*
           if-no-files-found: error
+
+      # 只有 AAB 提交 Play；APK 只做内测。
+      - name: Write Google service account
+        if: matrix.kind == 'aab' && env.SUBMIT == 'true'
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GOOGLE_SERVICE_ACCOUNT_JSON secret is not set"
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+
+      - name: Submit AAB to Google Play
+        if: matrix.kind == 'aab' && env.SUBMIT == 'true'
+        run: |
+          eas submit \
+            --platform android \
+            --profile production \
+            --path "$RUNNER_TEMP/${{ matrix.app }}-aab.aab" \
+            --non-interactive \
+            --wait
