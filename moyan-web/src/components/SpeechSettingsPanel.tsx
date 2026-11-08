@@ -364,6 +364,44 @@ export default function SpeechSettingsPanel() {
         </div>
       </section>
 
+      {/* 自动朗读 */}
+      <section>
+        <h3 className="text-xs uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--ink-muted)' }}>{t('settings.voice.autoplay.title')}</h3>
+        <button
+          onClick={() => updateSetting('autoPlay', !settings.autoPlay)}
+          className="w-full text-left rounded-2xl p-4 flex items-center justify-between transition"
+          style={{ backgroundColor: 'var(--card)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+        >
+          <div className="flex items-center gap-3">
+            {settings.autoPlay ? (
+              <Volume2 size={18} style={{ color: 'var(--accent)' }} />
+            ) : (
+              <VolumeX size={18} style={{ color: 'var(--ink-muted)' }} />
+            )}
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                {settings.autoPlay ? t('settings.voice.autoplay.on') : t('settings.voice.autoplay.off')}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+                {t('settings.voice.autoplay.desc')}
+              </p>
+            </div>
+          </div>
+          <div
+            className="w-11 h-6 rounded-full relative transition"
+            style={{ backgroundColor: settings.autoPlay ? 'var(--accent)' : 'var(--divider)' }}
+          >
+            <div
+              className="absolute top-0.5 w-5 h-5 rounded-full transition-all shadow-sm"
+              style={{
+                backgroundColor: '#fff',
+                left: settings.autoPlay ? '22px' : '2px',
+              }}
+            />
+          </div>
+        </button>
+      </section>
+
       {/* 缓存设置 */}
       <section>
         <h3 className="text-xs uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--ink-muted)' }}>{t('settings.voice.cache.title')}</h3>
