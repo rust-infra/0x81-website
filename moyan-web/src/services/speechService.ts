@@ -272,17 +272,20 @@ async function fetchElevenLabsAudio(
 
 async function speakWithElevenLabs(
   text: string,
-  settings: SpeechSettings
+  settings: SpeechSettings,
+  lang: 'en' | 'zh'
 ): Promise<void> {
-  const { elevenLabsKey, elevenLabsVoiceId, elevenLabsModel, cacheEnabled } = settings;
+  const { elevenLabsKey, elevenLabsVoiceId, elevenLabsZhVoiceId, elevenLabsModel, cacheEnabled } =
+    settings;
   if (!elevenLabsKey) {
     throw new Error('请先配置 ElevenLabs API Key');
   }
+  const voiceId = (lang === 'zh' ? elevenLabsZhVoiceId : elevenLabsVoiceId) || elevenLabsVoiceId;
 
   // 停止当前播放
   stopAllAudio();
 
-  const cacheKey = getCacheKey(text, elevenLabsVoiceId);
+  const cacheKey = getCacheKey(text, voiceId);
 
   // 检查缓存（仅当 cacheEnabled 为 true 时）
   let audio = cacheEnabled ? audioCache.get(cacheKey) : undefined;
@@ -292,7 +295,7 @@ async function speakWithElevenLabs(
       const audioData = await fetchElevenLabsAudio(
         text,
         elevenLabsKey,
-        elevenLabsVoiceId,
+        voiceId,
         elevenLabsModel
       );
       const blob = new Blob([audioData], { type: 'audio/mpeg' });
@@ -329,15 +332,29 @@ async function speakWithElevenLabs(
 
 // ==================== Google Cloud TTS ====================
 
-async function speakWithGoogle(text: string, settings: SpeechSettings): Promise<void> {
-  const { googleKey, googleVoice, googleLanguage, rate, cacheEnabled } = settings;
+async function speakWithGoogle(
+  text: string,
+  settings: SpeechSettings,
+  lang: 'en' | 'zh'
+): Promise<void> {
+  const { googleKey, googleVoice, googleZhVoice, googleLanguage, rate, cacheEnabled } = settings;
   if (!googleKey) {
     throw new Error('请先配置 Google Cloud API Key');
   }
 
+  const voice =
+    (lang === 'zh' ? googleZhVoice : googleVoice) ||
+    (lang === 'zh' ? 'cmn-CN-Neural2-D' : 'en-US-Neural2-D');
+  // Google 要求 languageCode 与 voice 匹配：从选中的音色反推语言，
+  // 避免英文音色配 en-US 语言码却念中文这类错配。
+  const voiceList = lang === 'zh' ? GOOGLE_ZH_VOICES : GOOGLE_VOICES;
+  const languageCode =
+    voiceList.find((v) => v.id === voice)?.language ||
+    (lang === 'zh' ? 'cmn-CN' : googleLanguage || 'en-US');
+
   stopAllAudio();
 
-  const cacheKey = `google_${googleVoice}_${text.slice(0, 50)}`;
+  const cacheKey = `google_${voice}_${text.slice(0, 50)}`;
   let audio = cacheEnabled ? audioCache.get(cacheKey) : undefined;
 
   if (!audio) {
@@ -350,8 +367,8 @@ async function speakWithGoogle(text: string, settings: SpeechSettings): Promise<
           body: JSON.stringify({
             input: { text },
             voice: {
-              languageCode: googleLanguage,
-              name: googleVoice,
+              languageCode,
+              name: voice,
             },
             audioConfig: {
               audioEncoding: 'MP3',
@@ -502,95 +519,20 @@ function splitByLanguage(text: string): LangSegment[] {
   return segments;
 }
 
-/** Check if text contains both Chinese and English */
-function isBilingual(text: string): boolean {
-  const segments = splitByLanguage(text);
-  return segments.length > 1 && segments.some(s => s.lang === 'zh') && segments.some(s => s.lang === 'en');
-}
-
-/** Speak with Google TTS using the configured Chinese voice */
-async function speakWithGoogleZh(text: string, settings: SpeechSettings): Promise<void> {
-  const { googleKey, googleZhVoice, rate } = settings;
-  if (!googleKey) {
-    await speakWithWebSpeech(text, settings.rate);
-    return;
-  }
-
-  // Don't stop audio here - we're playing a sequence
-  const cacheKey = `google_${googleZhVoice}_${text.slice(0, 50)}`;
-  let audio = settings.cacheEnabled ? audioCache.get(cacheKey) : undefined;
-
-  if (!audio) {
-    try {
-      const voiceOpt = GOOGLE_ZH_VOICES.find(v => v.id === googleZhVoice);
-      const languageCode = voiceOpt?.language || 'cmn-CN';
-      const response = await fetch(
-        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { text },
-            voice: {
-              languageCode,
-              name: googleZhVoice || 'cmn-CN-Neural2-D',
-            },
-            audioConfig: {
-              audioEncoding: 'MP3',
-              speakingRate: rate,
-              pitch: 0,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google TTS Chinese error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const audioData = atob(data.audioContent);
-      const arrayBuffer = new Uint8Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
-        arrayBuffer[i] = audioData.charCodeAt(i);
-      }
-      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-      const url = URL.createObjectURL(blob);
-      audio = new Audio(url);
-      audioCache.set(cacheKey, audio);
-    } catch {
-      await speakWithWebSpeech(text, rate);
-      return;
-    }
-  }
-
-  if (audio) {
-    currentAudio = audio;
-    audio.currentTime = 0;
-    return new Promise((resolve, reject) => {
-      audio!.onended = () => {
-        currentAudio = null;
-        resolve();
-      };
-      audio!.onerror = () => {
-        currentAudio = null;
-        reject(new Error('音频播放失败'));
-      };
-      audio!.play().catch(reject);
-    });
-  }
-}
-
-/** Speak a single segment without splitting (internal, no bilingual detection) */
-async function speakSegment(text: string, settings: SpeechSettings): Promise<void> {
+/** Speak one language segment with the voice configured for that language */
+async function speakSegment(
+  text: string,
+  settings: SpeechSettings,
+  lang: 'en' | 'zh' = detectLanguage(text)
+): Promise<void> {
   if (!text.trim()) return;
 
   switch (settings.provider) {
     case 'elevenlabs':
-      await speakWithElevenLabs(text, settings);
+      await speakWithElevenLabs(text, settings, lang);
       break;
     case 'google':
-      await speakWithGoogle(text, settings);
+      await speakWithGoogle(text, settings, lang);
       break;
     case 'aliyun':
       await speakWithAliyun(text, settings);
@@ -602,26 +544,6 @@ async function speakSegment(text: string, settings: SpeechSettings): Promise<voi
   }
 }
 
-/** Speak Chinese segment with correct voice per provider */
-async function speakZhSegment(text: string, settings: SpeechSettings): Promise<void> {
-  if (!text.trim()) return;
-
-  switch (settings.provider) {
-    case 'google':
-      // Use dedicated Chinese voice for Google TTS
-      await speakWithGoogleZh(text, settings);
-      break;
-    case 'webspeech':
-      // Web Speech picks voice by utterance.lang, works well for Chinese
-      await speakWithWebSpeech(text, settings.rate);
-      break;
-    default:
-      // ElevenLabs/Aliyun handle Chinese reasonably in their multilingual voices
-      await speakSegment(text, settings);
-      break;
-  }
-}
-
 // ==================== 统一接口 ====================
 
 export async function speak(text: string): Promise<void> {
@@ -629,23 +551,16 @@ export async function speak(text: string): Promise<void> {
 
   if (!text.trim()) return;
 
-  // If text is bilingual (mixed Chinese + English), split and speak each segment
-  if (isBilingual(text)) {
-    const segments = splitByLanguage(text);
-    for (const seg of segments) {
-      if (seg.lang === 'zh') {
-        await speakZhSegment(seg.text, settings);
-      } else {
-        await speakSegment(seg.text, settings);
-      }
+  // 每一段都按它自己的语言选音色，单语文本也走这里：
+  // 否则纯中文会落到英文音色上，被念成一串听不懂的词。
+  const segments = splitByLanguage(text);
+  for (let i = 0; i < segments.length; i++) {
+    if (i > 0) {
       // Small pause between language segments
       await new Promise(r => setTimeout(r, 200));
     }
-    return;
+    await speakSegment(segments[i].text, settings, segments[i].lang);
   }
-
-  // Single language - direct playback
-  await speakSegment(text, settings);
 }
 
 export function stopAllAudio(): void {
