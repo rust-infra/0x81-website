@@ -45,6 +45,16 @@ export default function SpeechSettingsPanel() {
     }
   };
 
+  const handleTestZh = async () => {
+    setTestResult(null);
+    try {
+      await speak('你好，欢迎使用墨言单词。');
+      setTestResult('success');
+    } catch {
+      setTestResult('error');
+    }
+  };
+
   const handleReset = () => {
     if (window.confirm(t('settings.voice.reset') + '?')) {
       resetSpeechSettings();
@@ -423,6 +433,14 @@ export default function SpeechSettingsPanel() {
             >
               <Volume2 size={16} />
               {t('settings.voice.test')}
+            </button>
+            <button
+              onClick={handleTestZh}
+              className="flex-1 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition hover:opacity-90"
+              style={{ backgroundColor: 'var(--btn-bg)', color: 'var(--btn-text)' }}
+            >
+              <Volume2 size={16} />
+              {t('settings.voice.test.zh')}
             </button>
             {testResult && (
               <div
