@@ -6,6 +6,7 @@ import type { Card as LocalCard, SRSData } from "../db";
 import { calculateSRS, getIntervalPreview } from "../services/srs";
 import SpeakButton from "../components/SpeakButton";
 import {
+  speak,
   speakSequence,
   stopAllAudio,
   preloadWebSpeechVoices,
@@ -235,6 +236,14 @@ export default function Study() {
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [autoPlay, setAutoPlay] = useState(() => getSpeechSettings().autoPlay);
+
+  // 自动朗读开关在设置页，这里跟随它的变化实时生效
+  useEffect(() => {
+    const onSettingsChange = () => setAutoPlay(getSpeechSettings().autoPlay);
+    window.addEventListener('moyan:speech-settings-change', onSettingsChange);
+    return () =>
+      window.removeEventListener('moyan:speech-settings-change', onSettingsChange);
+  }, []);
   const [deckName, setDeckName] = useState<string>("");
   const [studyMode, setStudyModeState] = useState<StudyMode>(getStudyMode);
   const [, setAvgFlipTime] = useState(0);
@@ -763,23 +772,6 @@ export default function Study() {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setAutoPlay(!autoPlay)}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition"
-            style={
-              autoPlay
-                ? { backgroundColor: `${c.accent}20`, color: c.accent }
-                : {
-                    backgroundColor: `${c.studyText}15`,
-                    color: c.studyMuted,
-                  }
-            }
-            title={
-              autoPlay ? t("study.auto.play.on") : t("study.auto.play.off")
-            }
-          >
-            <Volume2 size={16} />
-          </button>
-          <button
             onClick={revealAnswer}
             className="w-9 h-9 rounded-full flex items-center justify-center transition"
             style={{
@@ -804,10 +796,20 @@ export default function Study() {
               >
                 {isZhEn ? currentCard.back : currentCard.front}
               </h1>
-              <SpeakButton
-                text={isZhEn ? currentCard.back : currentCard.front}
-                size={22}
-              />
+              <button
+                onClick={() =>
+                  void speak(isZhEn ? currentCard.back : currentCard.front)
+                }
+                className="w-11 h-11 rounded-full flex items-center justify-center transition hover:opacity-80 active:scale-95"
+                style={{
+                  backgroundColor: `${c.accent}18`,
+                  color: c.accent,
+                }}
+                title={t("study.speak")}
+                aria-label={t("study.speak")}
+              >
+                <Volume2 size={20} />
+              </button>
             </div>
             {!isZhEn && currentCard.pronunciation && (
               <p
