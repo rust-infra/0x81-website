@@ -42,7 +42,7 @@ const DEFAULT_SETTINGS: SpeechSettings = {
   elevenLabsModel: 'eleven_turbo_v2_5',
   googleKey: '',
   googleVoice: 'en-US-Neural2-D',
-  googleZhVoice: 'cmn-CN-Neural2-D',
+  googleZhVoice: 'cmn-CN-Wavenet-A',
   googleLanguage: 'en-US',
   aliyunKey: '',
   aliyunVoice: 'Cherry',
@@ -72,8 +72,8 @@ export const ELEVENLABS_VOICES: VoiceOption[] = [
 export const GOOGLE_VOICES: VoiceOption[] = [
   { id: 'en-US-Neural2-D', name: 'Neural2-D (Male)', language: 'en-US' },
   { id: 'en-US-Neural2-F', name: 'Neural2-F (Female)', language: 'en-US' },
-  { id: 'en-US-Neural2-A', name: 'Neural2-A (Male)', language: 'en-US' },
-  { id: 'en-US-Neural2-C', name: 'Neural2-C (Male)', language: 'en-US' },
+  { id: 'en-US-Neural2-A', name: 'Neural2-A (Female)', language: 'en-US' },
+  { id: 'en-US-Neural2-C', name: 'Neural2-C (Female)', language: 'en-US' },
   { id: 'en-US-Neural2-E', name: 'Neural2-E (Female)', language: 'en-US' },
   { id: 'en-US-Journey-D', name: 'Journey-D (Male)', language: 'en-US' },
   { id: 'en-US-Journey-F', name: 'Journey-F (Female)', language: 'en-US' },
@@ -88,20 +88,24 @@ export const GOOGLE_VOICES: VoiceOption[] = [
 ];
 
 // Google Cloud TTS 中文语音列表
+// 依据官方列表（cloud.google.com/text-to-speech/docs/voices）：cmn-CN 只有
+// Standard 与 Wavenet，没有 Neural2；粤语是 yue-HK，不是 yue-CN。
 export const GOOGLE_ZH_VOICES: VoiceOption[] = [
-  { id: 'cmn-CN-Neural2-D', name: 'Neural2-D (中文男声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-A', name: 'Neural2-A (中文女声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-B', name: 'Neural2-B (中文男声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-C', name: 'Neural2-C (中文女声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Wavenet-B', name: 'Wavenet-B (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-A', name: 'Wavenet-A (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-D', name: 'Wavenet-D (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-B', name: 'Wavenet-B (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Wavenet-C', name: 'Wavenet-C (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-A', name: 'Standard-A (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Standard-D', name: 'Standard-D (中文女声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-B', name: 'Standard-B (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-C', name: 'Standard-C (中文男声)', language: 'cmn-CN' },
-  { id: 'yue-CN-Standard-A', name: '粤语-Standard-A', language: 'yue-CN' },
-  { id: 'yue-CN-Standard-B', name: '粤语-Standard-B', language: 'yue-CN' },
-  { id: 'cmn-TW-Standard-A', name: '台湾-Standard-A', language: 'cmn-TW' },
-  { id: 'cmn-TW-Standard-B', name: '台湾-Standard-B', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-A', name: '台湾-Wavenet-A (女声)', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-B', name: '台湾-Wavenet-B (男声)', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-C', name: '台湾-Wavenet-C (男声)', language: 'cmn-TW' },
+  { id: 'yue-HK-Standard-A', name: '粤语-Standard-A (女声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-C', name: '粤语-Standard-C (女声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-B', name: '粤语-Standard-B (男声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-D', name: '粤语-Standard-D (男声)', language: 'yue-HK' },
 ];
 
 // 阿里云百炼 TTS 音色列表
@@ -135,6 +139,16 @@ const SETTINGS_KEY = 'speech_settings';
 let audioCache = new Map<string, HTMLAudioElement>();
 let currentAudio: HTMLAudioElement | null = null;
 
+/**
+ * 旧版本存过不存在的音色名（cmn-CN-Neural2-*、yue-CN-*），请求会 400 并
+ * 静默回退到浏览器音色。这里把无效值换成当前列表里的默认音色。
+ */
+function normalizeZhVoice(voice: string | undefined): string {
+  return GOOGLE_ZH_VOICES.some((v) => v.id === voice)
+    ? (voice as string)
+    : DEFAULT_SETTINGS.googleZhVoice;
+}
+
 // ==================== 设置管理 ====================
 
 export function getSpeechSettings(): SpeechSettings {
@@ -143,7 +157,11 @@ export function getSpeechSettings(): SpeechSettings {
     if (stored) {
       const parsed = JSON.parse(stored);
       // 合并默认值（处理新增字段）
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        googleZhVoice: normalizeZhVoice(parsed.googleZhVoice),
+      };
     }
   } catch {
     // ignore

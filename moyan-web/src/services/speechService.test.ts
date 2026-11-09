@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  GOOGLE_ZH_VOICES,
   getSpeechSettings,
   saveSpeechSettings,
   speak,
@@ -49,6 +50,8 @@ let requests: TtsRequest[] = [];
 beforeEach(() => {
   requests = [];
   vi.stubGlobal("localStorage", new MemoryStorage());
+  // 关掉音频缓存：同一段文本在前面用例里被缓存过后，这里就不会再发请求
+  localStorage.setItem("speech_settings", JSON.stringify({ cacheEnabled: false }));
   vi.stubGlobal("window", {
     speechSynthesis: { cancel: vi.fn(), getVoices: () => [] },
     dispatchEvent: vi.fn(),
@@ -83,13 +86,13 @@ describe("speechService voice routing", () => {
       provider: "google",
       googleKey: "test-key",
       googleVoice: "en-US-Neural2-D",
-      googleZhVoice: "cmn-CN-Neural2-A",
+      googleZhVoice: "cmn-CN-Wavenet-A",
     });
 
     await speak("亲自动手的；实操的");
 
     expect(requests).toHaveLength(1);
-    expect(requests[0].voiceName).toBe("cmn-CN-Neural2-A");
+    expect(requests[0].voiceName).toBe("cmn-CN-Wavenet-A");
     expect(requests[0].languageCode).toBe("cmn-CN");
   });
 
@@ -98,7 +101,7 @@ describe("speechService voice routing", () => {
       provider: "google",
       googleKey: "test-key",
       googleVoice: "en-US-Neural2-D",
-      googleZhVoice: "cmn-CN-Neural2-A",
+      googleZhVoice: "cmn-CN-Wavenet-A",
     });
 
     await speak("hands-on");
@@ -113,14 +116,14 @@ describe("speechService voice routing", () => {
       provider: "google",
       googleKey: "test-key",
       googleVoice: "en-US-Neural2-D",
-      googleZhVoice: "cmn-CN-Neural2-A",
+      googleZhVoice: "cmn-CN-Wavenet-A",
     });
 
     await speak("hands-on 亲自动手的");
 
     expect(requests.map((r) => r.voiceName)).toEqual([
       "en-US-Neural2-D",
-      "cmn-CN-Neural2-A",
+      "cmn-CN-Wavenet-A",
     ]);
   });
 
@@ -141,5 +144,37 @@ describe("speechService voice routing", () => {
   it("stops playback cleanly between requests", () => {
     stopAllAudio();
     expect(window.speechSynthesis.cancel).toBeDefined();
+  });
+
+  it("ships only Chinese voice ids that Google Cloud actually provides", () => {
+    // cmn-CN 只有 Standard / Wavenet；粤语是 yue-HK。写成 Neural2 或 yue-CN
+    // 会让请求返回 400，再静默回退到浏览器音色。
+    for (const voice of GOOGLE_ZH_VOICES) {
+      expect(voice.id).toMatch(/^(cmn-CN|cmn-TW)-(Standard|Wavenet)-[A-D]$|^yue-HK-Standard-[A-D]$/);
+      expect(voice.id).not.toContain("Neural2");
+    }
+  });
+
+  it("replaces a stale saved voice with a valid one", () => {
+    localStorage.setItem(
+      "speech_settings",
+      JSON.stringify({ provider: "google", googleZhVoice: "cmn-CN-Neural2-A" })
+    );
+
+    const settings = getSpeechSettings();
+
+    expect(GOOGLE_ZH_VOICES.some((v) => v.id === settings.googleZhVoice)).toBe(true);
+  });
+
+  it("falls back to the default voice when a stale one is sent", async () => {
+    configure({
+      provider: "google",
+      googleKey: "test-key",
+      googleZhVoice: "cmn-CN-Neural2-A",
+    });
+
+    await speak("亲自动手的");
+
+    expect(requests[0].voiceName).toBe("cmn-CN-Wavenet-A");
   });
 });
