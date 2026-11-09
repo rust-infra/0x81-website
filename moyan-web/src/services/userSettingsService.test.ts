@@ -122,7 +122,8 @@ describe("userSettingsService", () => {
     expect(getLanguage()).toBe("en");
     expect(speech.provider).toBe("google");
     expect(speech.googleVoice).toBe("en-US-Neural2-F");
-    expect(speech.googleZhVoice).toBe("cmn-CN-Neural2-A");
+    // 远端存的是不存在的 cmn-CN-Neural2 音色，读取时归一化为有效音色
+    expect(speech.googleZhVoice).toBe("cmn-CN-Wavenet-A");
     expect(speech.googleLanguage).toBe("en-GB");
     expect(speech.rate).toBe(1.1);
     expect(speech.autoPlay).toBe(true);

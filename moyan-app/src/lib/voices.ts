@@ -73,8 +73,8 @@ export const ELEVENLABS_VOICES: VoiceOption[] = [
 export const GOOGLE_VOICES: VoiceOption[] = [
   { id: 'en-US-Neural2-D', name: 'Neural2-D (Male)', language: 'en-US' },
   { id: 'en-US-Neural2-F', name: 'Neural2-F (Female)', language: 'en-US' },
-  { id: 'en-US-Neural2-A', name: 'Neural2-A (Male)', language: 'en-US' },
-  { id: 'en-US-Neural2-C', name: 'Neural2-C (Male)', language: 'en-US' },
+  { id: 'en-US-Neural2-A', name: 'Neural2-A (Female)', language: 'en-US' },
+  { id: 'en-US-Neural2-C', name: 'Neural2-C (Female)', language: 'en-US' },
   { id: 'en-US-Journey-D', name: 'Journey-D (Male)', language: 'en-US' },
   { id: 'en-US-Journey-F', name: 'Journey-F (Female)', language: 'en-US' },
   { id: 'en-US-Studio-O', name: 'Studio-O (Female)', language: 'en-US' },
@@ -86,19 +86,21 @@ export const GOOGLE_VOICES: VoiceOption[] = [
 ];
 
 export const GOOGLE_ZH_VOICES: VoiceOption[] = [
-  { id: 'cmn-CN-Neural2-D', name: 'Neural2-D (中文男声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-A', name: 'Neural2-A (中文女声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-B', name: 'Neural2-B (中文男声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Neural2-C', name: 'Neural2-C (中文女声)', language: 'cmn-CN' },
-  { id: 'cmn-CN-Wavenet-B', name: 'Wavenet-B (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-A', name: 'Wavenet-A (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-D', name: 'Wavenet-D (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Wavenet-B', name: 'Wavenet-B (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Wavenet-C', name: 'Wavenet-C (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-A', name: 'Standard-A (中文女声)', language: 'cmn-CN' },
+  { id: 'cmn-CN-Standard-D', name: 'Standard-D (中文女声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-B', name: 'Standard-B (中文男声)', language: 'cmn-CN' },
   { id: 'cmn-CN-Standard-C', name: 'Standard-C (中文男声)', language: 'cmn-CN' },
-  { id: 'yue-CN-Standard-A', name: '粤语-Standard-A', language: 'yue-CN' },
-  { id: 'yue-CN-Standard-B', name: '粤语-Standard-B', language: 'yue-CN' },
-  { id: 'cmn-TW-Standard-A', name: '台湾-Standard-A', language: 'cmn-TW' },
-  { id: 'cmn-TW-Standard-B', name: '台湾-Standard-B', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-A', name: '台湾-Wavenet-A (女声)', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-B', name: '台湾-Wavenet-B (男声)', language: 'cmn-TW' },
+  { id: 'cmn-TW-Wavenet-C', name: '台湾-Wavenet-C (男声)', language: 'cmn-TW' },
+  { id: 'yue-HK-Standard-A', name: '粤语-Standard-A (女声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-C', name: '粤语-Standard-C (女声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-B', name: '粤语-Standard-B (男声)', language: 'yue-HK' },
+  { id: 'yue-HK-Standard-D', name: '粤语-Standard-D (男声)', language: 'yue-HK' },
 ];
 
 export const ALIYUN_VOICES: VoiceOption[] = [

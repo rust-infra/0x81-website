@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import type { UserSettings } from './types';
+import { GOOGLE_ZH_VOICES } from './voices';
 
 export type SttProvider = 'system' | 'google-cloud' | 'gemini';
 
@@ -38,12 +39,12 @@ const SETTINGS_KEY = 'speech_settings';
 const DEFAULTS: SpeechSettings = {
   provider: 'webspeech',
   speech_voice: 'en-US-Neural2-D',
-  speech_zh_voice: 'cmn-CN-Neural2-D',
+  speech_zh_voice: 'cmn-CN-Wavenet-A',
   speech_speed: 0.9,
   auto_play: false,
   googleKey: '',
   googleVoice: 'en-US-Neural2-D',
-  googleZhVoice: 'cmn-CN-Neural2-D',
+  googleZhVoice: 'cmn-CN-Wavenet-A',
   googleLanguage: 'en-US',
   elevenLabsKey: '',
   elevenLabsVoiceId: 'XB0fDUnXU5powFXDhCwa',
@@ -66,7 +67,18 @@ const DEFAULTS: SpeechSettings = {
 export async function getSpeechSettings(): Promise<SpeechSettings> {
   try {
     const stored = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (stored) return { ...DEFAULTS, ...JSON.parse(stored) };
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<SpeechSettings>;
+      const merged = { ...DEFAULTS, ...parsed };
+      // 旧版本存过不存在的音色名（cmn-CN-Neural2-*、yue-CN-*），请求会 400
+      if (!GOOGLE_ZH_VOICES.some((v) => v.id === merged.googleZhVoice)) {
+        merged.googleZhVoice = DEFAULTS.googleZhVoice;
+      }
+      if (!GOOGLE_ZH_VOICES.some((v) => v.id === merged.speech_zh_voice)) {
+        merged.speech_zh_voice = DEFAULTS.speech_zh_voice;
+      }
+      return merged;
+    }
   } catch {
     // ignore
   }
