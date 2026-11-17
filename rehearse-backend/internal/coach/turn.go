@@ -23,6 +23,7 @@ type Service struct {
 	llmSettings *LLMSettingsService
 	catalog     *scenarios.Catalog
 	client      *llm.Client
+	interpret   *interpretLimiter
 }
 
 // NewService 组装演练编排。
@@ -32,7 +33,13 @@ func NewService(
 	catalog *scenarios.Catalog,
 	client *llm.Client,
 ) *Service {
-	return &Service{quota: quota, llmSettings: llmSettings, catalog: catalog, client: client}
+	return &Service{
+		quota:       quota,
+		llmSettings: llmSettings,
+		catalog:     catalog,
+		client:      client,
+		interpret:   &interpretLimiter{},
+	}
 }
 
 // Turn 跑一轮对话。
@@ -49,6 +56,16 @@ func (s *Service) Turn(ctx context.Context, userID string, req model.TurnRequest
 	scenario, err := ValidateScenario(req.Scenario)
 	if err != nil {
 		return model.TurnResponse{}, middleware.BadRequest(err.Error())
+	}
+	scriptedReply := ""
+	if req.ScriptedReply != nil {
+		scriptedReply = strings.TrimSpace(*req.ScriptedReply)
+		if scriptedReply == "" {
+			return model.TurnResponse{}, middleware.BadRequest("scripted_reply must not be empty")
+		}
+		if err := checkLen("scripted_reply", scriptedReply, MaxDialogueTurnChars); err != nil {
+			return model.TurnResponse{}, middleware.BadRequest(err.Error())
+		}
 	}
 	if err := ValidateHistory(req.History, req.UserText); err != nil {
 		return model.TurnResponse{}, middleware.BadRequest(err.Error())
@@ -92,6 +109,14 @@ func (s *Service) Turn(ctx context.Context, userID string, req model.TurnRequest
 		// 可以修正的输入问题，不是服务故障。
 		return model.TurnResponse{}, middleware.BadRequest(err.Error())
 	}
+	if scriptedReply != "" {
+		system += "\n\nSCRIPTED COACH REPLY (fixed, must be used verbatim):\n" +
+			escapePromptDelimiters(scriptedReply) +
+			"\nFor this turn, \"reply\" must be exactly this fixed line. " +
+			"\"reply_translation\" must be its natural Simplified Chinese translation. " +
+			"Still evaluate the learner's latest message and return feedback, better_phrasing, " +
+			"expressions, and next_lines. Do not invent a different coach line."
+	}
 	transcript := BuildTranscript(req.History, req.UserText)
 
 	raw, err := s.client.ChatJSON(ctx, settings, system, transcript, MaxTurnTokens)
@@ -113,7 +138,12 @@ func (s *Service) Turn(ctx context.Context, userID string, req model.TurnRequest
 	if parseErr != nil {
 		// ⚠️ 刻意不报错：模型偶尔吐出不合法 JSON，把它当服务故障会让用户
 		// 看到错误页，而实际上对话还能继续。退化成「只有 reply、没有反馈」。
-		return DegradedResponse(raw, turnIndex, limitReached), nil
+		degraded := DegradedResponse(raw, turnIndex, limitReached)
+		if scriptedReply != "" {
+			degraded.Reply = scriptedReply
+			degraded.ReplyTranslation = nil
+		}
+		return degraded, nil
 	}
 	if mode == model.ModeImmersion {
 		// 沉浸模式只聊天、不逐轮纠错（§7.6 的 mode 语义）。
@@ -121,6 +151,14 @@ func (s *Service) Turn(ctx context.Context, userID string, req model.TurnRequest
 	}
 	// 这里传 feedback：推荐表达不能和纠错里的原句/改句/更地道的说法重复。
 	parsed.NextLines = SanitizeNextLines(parsed.NextLines, parsed.Feedback, parsed.Reply)
+	if scriptedReply != "" {
+		if strings.TrimSpace(parsed.Reply) != scriptedReply {
+			parsed.ReplyTranslation = nil
+		}
+		parsed.Reply = scriptedReply
+		// 下一句用户台词由客户端按脚本决定，不让模型自编。
+		parsed.NextLines = nil
+	}
 	parsed.TurnIndex = turnIndex
 	parsed.LimitReached = limitReached
 	return parsed, nil

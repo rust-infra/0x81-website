@@ -51,6 +51,31 @@ test('starts recognition with the required native options', async () => {
   });
 });
 
+test('continuous mode is forwarded for live captions', async () => {
+  const fake = fakeModule();
+  const adapter = createSttAdapter(fake.module);
+  await adapter.start(
+    'en-GB',
+    {
+      onInterim: () => {},
+      onFinal: () => {},
+      onVolume: () => {},
+      onError: () => {},
+      onEnd: () => {},
+    },
+    ['FOB', 'MOQ'],
+    { continuous: true }
+  );
+  const options = fake.options[0] as {
+    lang: string;
+    continuous: boolean;
+    contextualStrings: string[];
+  };
+  assert.equal(options.lang, 'en-GB');
+  assert.equal(options.continuous, true);
+  assert.deepEqual(options.contextualStrings, ['FOB', 'MOQ']);
+});
+
 test('forwards interim, final and volume events', async () => {
   const fake = fakeModule();
   const interim: string[] = [];

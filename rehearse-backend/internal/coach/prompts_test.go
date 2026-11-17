@@ -46,6 +46,7 @@ func TestUserDataCannotCloseDataBlock(t *testing.T) {
 		"setting":      func(s *model.Scenario) { s.Setting = attack },
 		"opening_line": func(s *model.Scenario) { s.OpeningLine = attack },
 		"focus_points": func(s *model.Scenario) { s.FocusPoints = []string{attack} },
+		"dialogue":     func(s *model.Scenario) { s.Dialogue = []model.Turn{{Role: model.RoleCoach, Content: attack}} },
 		"persona.tone": func(s *model.Scenario) { s.Persona.Tone = attack },
 	}
 
@@ -65,6 +66,20 @@ func TestUserDataCannotCloseDataBlock(t *testing.T) {
 			assert.Contains(t, prompt, "［END SCENARIO DATA］", "分隔符没有被转义成全角")
 		})
 	}
+}
+
+func TestDialogueScriptAppearsInPrompt(t *testing.T) {
+	scenario := scenarioForPrompt()
+	scenario.Dialogue = []model.Turn{
+		{Role: model.RoleCoach, Content: "Tell me about yourself."},
+		{Role: model.RoleUser, Content: "I am a backend developer."},
+	}
+	prompt, err := BuildSystemPrompt(scenario, nil, nil, model.LanguageEnUS)
+	require.NoError(t, err)
+	assert.Contains(t, prompt, "dialogue_script:")
+	assert.Contains(t, prompt, "COACH: Tell me about yourself.")
+	assert.Contains(t, prompt, "USER: I am a backend developer.")
+	assert.Contains(t, prompt, "Dialogue script rule:")
 }
 
 // 材料是最容易被塞注入的地方——用户直接粘贴一大段文本。

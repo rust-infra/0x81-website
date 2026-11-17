@@ -29,6 +29,7 @@ import {
 } from '../../lib/speech';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
+import { translations } from '../../lib/translations';
 import { screen, serif } from '../../lib/ui';
 import {
   getWebspeechVoices,
@@ -268,7 +269,7 @@ export default function SettingsScreen() {
     langRef.current = next;
     setLang(next);
     void pushSettings();
-    toast(t('saved'));
+    toast(translations[next].saved ?? t('saved'));
   };
 
   const speed = speech?.speech_speed ?? 0.9;

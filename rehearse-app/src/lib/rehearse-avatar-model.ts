@@ -13,6 +13,7 @@ const MOODS: CoachMood[] = [
 export interface AvatarMotion {
   mood: CoachMood;
   animated: boolean;
+  blink: boolean;
   breathing: boolean;
   pulse: boolean;
   dots: boolean;
@@ -30,6 +31,7 @@ export function avatarMotion(
   return {
     mood: safeMood,
     animated: !reduceMotion,
+    blink: !reduceMotion,
     breathing: !reduceMotion && state === 'idle',
     pulse: !reduceMotion && state === 'listening',
     dots: !reduceMotion && state === 'thinking',

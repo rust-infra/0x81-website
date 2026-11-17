@@ -8,6 +8,7 @@ import type {
   CoachSummaryResponse,
   CoachTurnRequest,
   CoachTurnResponse,
+  InterpretTranslateResponse,
   InterviewProfileRequest,
   InterviewProfileResponse,
   InterviewTextResult,
@@ -30,6 +31,7 @@ export interface CoachApi {
   draftScenario: (description: string, language: Lang) => Promise<CoachScenario>;
   turn: (body: CoachTurnRequest, signal?: AbortSignal) => Promise<CoachTurnResponse>;
   summary: (body: CoachSummaryRequest) => Promise<CoachSummaryResponse>;
+  translateInterpret: (text: string, signal?: AbortSignal) => Promise<InterpretTranslateResponse>;
   extractInterviewText: (body: FormData) => Promise<InterviewTextResult>;
   profile: (body: InterviewProfileRequest) => Promise<InterviewProfileResponse>;
   getSettings: () => Promise<SyncedUserSettings>;
@@ -58,6 +60,12 @@ export function createCoachApi(request: ApiRequest): CoachApi {
       request<CoachSummaryResponse>('/api/rehearse/summary', {
         method: 'POST',
         body: JSON.stringify(body),
+      }),
+    translateInterpret: (text, signal) =>
+      request<InterpretTranslateResponse>('/api/rehearse/interpret/translate', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+        signal,
       }),
     extractInterviewText: (body) =>
       request<InterviewTextResult>('/api/rehearse/material/text', {

@@ -42,6 +42,9 @@ function RootNavigator() {
         <Stack.Protected guard={!!token}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="rehearse/session" />
+          <Stack.Screen name="rehearse/english" />
+          <Stack.Screen name="rehearse/podcast" />
+          <Stack.Screen name="rehearse/podcast-player" />
           <Stack.Screen name="rehearse/summary" />
           <Stack.Screen name="rehearse/editor" />
           <Stack.Screen name="rehearse/settings" />

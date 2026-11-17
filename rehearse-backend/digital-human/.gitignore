@@ -1,0 +1,8 @@
+.venv/
+models/
+outputs/
+third_party/
+state*/
+assets/
+*.log
+

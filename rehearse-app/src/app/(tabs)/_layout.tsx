@@ -2,7 +2,13 @@ import { Tabs } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabIcon } from '../../components/TabIcons';
-import { TAB_SCREENS, type TabIconName } from '../../lib/navigation-contract';
+import {
+  TAB_BAR_BOTTOM_GAP,
+  TAB_BAR_HEIGHT,
+  TAB_BAR_TOP_RESERVE,
+  TAB_SCREENS,
+  type TabIconName,
+} from '../../lib/navigation-contract';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 
@@ -55,13 +61,13 @@ function AppTabBar({ state, descriptors, navigation }: AppTabBarProps) {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.outer, { height: 58 + insets.bottom + 14 }]}
+      style={[styles.outer, { height: TAB_BAR_HEIGHT + TAB_BAR_TOP_RESERVE + insets.bottom }]}
     >
       <View
         style={[
           styles.bar,
           {
-            marginBottom: insets.bottom + 8,
+            marginBottom: insets.bottom + TAB_BAR_BOTTOM_GAP,
             backgroundColor: c.navBg,
             borderColor: c.border,
           },
@@ -127,7 +133,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bar: {
-    height: 58,
+    height: TAB_BAR_HEIGHT,
     marginHorizontal: 22,
     borderWidth: 1,
     borderRadius: 999,

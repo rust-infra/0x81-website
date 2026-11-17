@@ -52,6 +52,9 @@ type Deps struct {
 	LLMSettings        *coach.LLMSettingsService
 	OCR                *material.OCRService
 	Profile            *material.ProfileService
+	// DigitalHumanURL 是数字人片段服务的内部地址。为空时相关端点回 503，
+	// 客户端继续走 TTS。见 internal/httpapi/podcast.go。
+	DigitalHumanURL string
 }
 
 // NewRouter 组装全部路由，返回 http.Handler（`*gin.Engine` 满足它）。
@@ -81,6 +84,8 @@ func NewRouter(deps Deps) http.Handler {
 	api.GET("/scenarios", listScenarios(deps.Catalog))
 	api.GET("/quota", quotaHandler(deps.Quota, deps.LLMSettings))
 	api.POST("/turn", authedJSON(deps.Coach.Turn))
+	// 同传字幕：客户端按断句边界逐句来翻，服务端无会话状态。
+	api.POST("/interpret/translate", authedJSON(deps.Coach.Translate))
 	api.POST("/scenario/draft", authedJSON(deps.Coach.DraftScenario))
 	api.POST("/material/profile", authedJSON(deps.Profile.Profile))
 	// 复盘不需要 user id：它不计额度、不写任何按用户的数据（`controllers/coach.rs:57-63`
@@ -95,6 +100,10 @@ func NewRouter(deps Deps) http.Handler {
 	// 用户设置文档：客户端全量写、服务端只校验形状（user_settings.go）。
 	api.GET("/settings", userSettingsGetHandler(deps.Store))
 	api.PUT("/settings", userSettingsPutHandler(deps.Store))
+	api.POST("/podcast/clips", podcastClipCreateHandler(deps.DigitalHumanURL))
+	api.GET("/podcast/clips/:key", podcastClipStatusHandler(deps.DigitalHumanURL))
+	api.GET("/podcast/clips/:key/video", podcastClipVideoHandler(deps.DigitalHumanURL))
+	api.GET("/podcast/poster", podcastPosterHandler(deps.DigitalHumanURL))
 
 	admin := engine.Group("/api/admin", middleware.RequireAdminToken(deps.Config.AdminToken))
 	admin.GET("/settings/rehearse", adminGetSettingsHandler(deps.Quota, deps.LLMSettings))

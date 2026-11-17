@@ -80,6 +80,10 @@ type Config struct {
 	// 留着只是为将来留口子（§7.7）。
 	AllowedOrigins []string
 
+	// DigitalHumanURL 是本地数字人生成服务的地址。空值表示未配置，
+	// 播客播放器会回退到 TTS。
+	DigitalHumanURL string
+
 	LLMFallback LLMFallback
 	LogLevel    string
 }
@@ -131,6 +135,8 @@ func Load() (*Config, error) {
 			}
 		}
 	}
+
+	cfg.DigitalHumanURL = strings.TrimSpace(os.Getenv("DIGITAL_HUMAN_URL"))
 
 	cfg.LLMFallback = LLMFallback{
 		BaseURL: envOr("REHEARSE_LLM_BASE_URL", envOr("OPENAI_BASE_URL", "")),

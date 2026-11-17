@@ -36,6 +36,8 @@ export interface CoachScenario {
   opening_line_translation?: string;
   /** 首句对应的推荐表达，由场景目录预置，加载场景时立即展示。 */
   opening_next_lines?: CoachExpression[];
+  /** 可选的对白脚本。英语学习场景用它让教练按原对话演对手。 */
+  dialogue?: CoachTurn[];
   focus_points: string[];
   difficulty: CoachDifficulty;
   max_turns: number;
@@ -53,6 +55,11 @@ export interface CoachQuotaStatus {
   resets_at: string;
   enabled: boolean;
   llm_configured: boolean;
+}
+
+/** 同传字幕：一句已断句文本的译文。 */
+export interface InterpretTranslateResponse {
+  translation: string;
 }
 
 /** 挂载的材料（原 `InterviewContext`，§7.6 改名）。 */
@@ -102,6 +109,8 @@ export interface CoachTurnRequest {
   language?: CoachLanguage;
   /** 挂载的材料（原 `interview`，§7.6 改名）。 */
   material?: MaterialContext;
+  /** 英语学习场景的固定教练台词。后端强制用它作为 reply，只做翻译与纠错。 */
+  scripted_reply?: string;
 }
 
 export interface CoachTurnResponse {

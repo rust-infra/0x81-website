@@ -64,6 +64,11 @@ func ServiceUnavailable(msg string) *APIError {
 	return &APIError{Status: http.StatusServiceUnavailable, Message: msg}
 }
 
+// TooManyRequests 是不带配额快照的 429（例如按分钟限流）。
+func TooManyRequests(msg, reason string) *APIError {
+	return &APIError{Status: http.StatusTooManyRequests, Message: msg, Reason: reason}
+}
+
 // Internal 的 message 永远不下发——上游错误可能含连接串等敏感信息（§13）。
 // 细节只进日志。
 func Internal(err error) *APIError {

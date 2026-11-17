@@ -62,6 +62,34 @@ func TestValidateScenarioRejectsBadEnums(t *testing.T) {
 	}
 }
 
+func TestValidateScenarioDialogue(t *testing.T) {
+	scenario := validScenario()
+	scenario.Dialogue = []model.Turn{
+		{Role: model.RoleCoach, Content: "Tell me about yourself."},
+		{Role: model.RoleUser, Content: "I am a backend developer."},
+	}
+	got, err := ValidateScenario(scenario)
+	require.NoError(t, err)
+	assert.Len(t, got.Dialogue, 2)
+
+	scenario.Dialogue = make([]model.Turn, MaxDialogueTurns+1)
+	for i := range scenario.Dialogue {
+		scenario.Dialogue[i] = model.Turn{Role: model.RoleCoach, Content: "Hi"}
+	}
+	_, err = ValidateScenario(scenario)
+	assert.Error(t, err, "超过轮次上限应当报错")
+
+	scenario = validScenario()
+	scenario.Dialogue = []model.Turn{{Role: model.RoleCoach, Content: "   "}}
+	_, err = ValidateScenario(scenario)
+	assert.Error(t, err, "空台词应当报错")
+
+	scenario = validScenario()
+	scenario.Dialogue = []model.Turn{{Role: "narrator", Content: "Hi"}}
+	_, err = ValidateScenario(scenario)
+	assert.Error(t, err, "非法角色应当报错")
+}
+
 // ⚠️ 长度按**字符数**算，不是字节数。用 len() 的话中文一个字算 3 字节，
 // 60 字的中文标题会被误判成 180 而拒绝——这是最容易写错的一处。
 func TestValidateScenarioCountsRunesNotBytes(t *testing.T) {

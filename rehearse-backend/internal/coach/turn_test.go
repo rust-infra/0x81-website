@@ -8,6 +8,7 @@ import (
 
 	"github.com/0x81/rehearse-backend/internal/middleware"
 	"github.com/0x81/rehearse-backend/internal/model"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,6 +92,20 @@ func TestTurnHappyPath(t *testing.T) {
 	require.Equal(t, uint32(1), out.TurnIndex, "turn_index")
 	require.False(t, out.LimitReached, "第一轮不该 limit_reached")
 	require.Equal(t, 1, h.calls, "LLM 调用次数")
+}
+
+func TestTurnUsesScriptedReply(t *testing.T) {
+	h := newHarness(t, validTurnPayload)
+	req := fixtureTurnRequest()
+	scripted := "Welcome, Alex."
+	req.ScriptedReply = &scripted
+
+	out, err := h.service.Turn(ctx(), "usr_1", req)
+	require.NoError(t, err)
+	assert.Equal(t, scripted, out.Reply, "必须使用固定台词")
+	assert.Nil(t, out.ReplyTranslation, "模型台词与固定台词不同，译文不能冒充")
+	assert.NotNil(t, out.Feedback, "纠错仍然保留")
+	assert.Empty(t, out.NextLines, "下一句用户台词由客户端脚本决定")
 }
 
 // 沉浸模式只聊天、不逐轮纠错：feedback 必须为 null。

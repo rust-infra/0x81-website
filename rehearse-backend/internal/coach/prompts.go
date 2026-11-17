@@ -96,6 +96,19 @@ func BuildSystemPrompt(
 		accent = string(*scenario.Persona.Accent)
 	}
 
+	script := "(none)"
+	if len(scenario.Dialogue) > 0 {
+		var b strings.Builder
+		for _, turn := range scenario.Dialogue {
+			role := "COACH"
+			if turn.Role == model.RoleUser {
+				role = "USER"
+			}
+			fmt.Fprintf(&b, "%s: %s\n", role, escapePromptDelimiters(turn.Content))
+		}
+		script = strings.TrimSpace(b.String())
+	}
+
 	base := fmt.Sprintf(
 		"You are role-playing a colleague for an English speaking coach.\n"+
 			"Stay in character. Reply in natural spoken English using 1-2 short sentences, usually under 40 words, and keep the conversation going.\n"+
@@ -111,6 +124,7 @@ func BuildSystemPrompt(
 			"setting: %s\n"+
 			"opening_line: %s\n"+
 			"focus_points: %s\n"+
+			"dialogue_script: %s\n"+
 			"[END SCENARIO DATA]\n\n"+
 			"Server guidance: %s\n\n"+
 			"Output JSON only, no markdown fences, matching exactly this shape:\n"+
@@ -137,8 +151,15 @@ func BuildSystemPrompt(
 		escapePromptDelimiters(scenario.Setting),
 		escapePromptDelimiters(scenario.OpeningLine),
 		escapePromptDelimiters(focus),
+		escapePromptDelimiters(script),
 		escapePromptDelimiters(guidanceLine),
 	)
+
+	if script != "(none)" {
+		base += "\n\nDialogue script rule: use dialogue_script as the intended flow. " +
+			"Stay close to the COACH lines, adapt naturally to what the learner actually says, " +
+			"and steer back if they drift. Never speak the USER lines yourself."
+	}
 
 	base = appendMaterial(base, material)
 

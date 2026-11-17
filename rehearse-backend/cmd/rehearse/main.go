@@ -169,6 +169,7 @@ func run() error {
 			LLMSettings:        llmSettings,
 			OCR:                material.NewOCRService(quota, llmSettings, llmClient),
 			Profile:            material.NewProfileService(quota, llmSettings, llmClient),
+			DigitalHumanURL:    cfg.DigitalHumanURL,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

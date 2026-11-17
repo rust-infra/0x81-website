@@ -31,6 +31,7 @@ import { InlineFeedback } from '../../components/rehearse/InlineFeedback';
 import { NextLinesPanel } from '../../components/rehearse/NextLinesPanel';
 import { ApiError } from '../../lib/api-error';
 import { CLOUD_RECORDING_OPTIONS, readRecordingBase64 } from '../../lib/rehearse-recorder';
+import { ENGLISH_SCENARIOS } from '../../lib/english-learning-data';
 import { getCoachQuota, listCoachScenarios, postCoachTurn } from '../../lib/rehearse-api-runtime';
 import {
   appendHistory,
@@ -98,6 +99,33 @@ function scenarioSttHints(scenario: CoachScenario): string[] {
     ...scenario.focus_points,
     ...(scenario.opening_next_lines ?? []).map((line) => line.text),
   ];
+}
+
+/**
+ * 英语学习场景按原对话推进：history 里已有几句教练台词，就取脚本里的下一句。
+ * 返回的 nextUserLine 是这句之后用户要说的原文，用来替换模型自编的推荐语。
+ */
+function scriptedTurnsFor(
+  scenario: CoachScenario,
+  history: SessionTurn[]
+): { reply?: string; nextUserLine?: string } {
+  const dialogue = scenario.dialogue;
+  if (!dialogue?.length) return {};
+  const coachCount = history.filter((turn) => turn.role === 'coach').length;
+  let seen = 0;
+  let replyIndex = -1;
+  for (let i = 0; i < dialogue.length; i += 1) {
+    if (dialogue[i].role !== 'coach') continue;
+    if (seen === coachCount) {
+      replyIndex = i;
+      break;
+    }
+    seen += 1;
+  }
+  if (replyIndex < 0) return {};
+  const reply = dialogue[replyIndex]?.content;
+  const nextUserLine = dialogue.slice(replyIndex + 1).find((turn) => turn.role === 'user')?.content;
+  return { reply, nextUserLine };
 }
 
 /**
@@ -445,7 +473,9 @@ export default function CoachSessionScreen() {
         loadSessionDraft().catch(() => null),
       ]);
       if (cancelled) return;
-      const found = [...presets, ...custom].find((item) => item.id === params.scenarioId);
+      const found = [...presets, ...custom, ...ENGLISH_SCENARIOS].find(
+        (item) => item.id === params.scenarioId
+      );
       if (!found) return;
       setScenario(found);
       // Locale changes may refresh localized scenario metadata, but must not
@@ -463,7 +493,11 @@ export default function CoachSessionScreen() {
           setMode(resume.mode ?? 'feedback');
           setStartedAt(resume.startedAt);
           setPendingRetryText(resume.pendingText ?? '');
-          setLimitReached(turnLimitReached(resume.turnIndex ?? 0, found.max_turns));
+          const scriptCoachLines = found.dialogue?.filter((turn) => turn.role === 'coach').length ?? 0;
+          const scriptDone =
+            scriptCoachLines > 0 &&
+            resume.history.filter((turn) => turn.role === 'coach').length >= scriptCoachLines;
+          setLimitReached(scriptDone || turnLimitReached(resume.turnIndex ?? 0, found.max_turns));
         } else {
           setPendingRetryText('');
           setLimitReached(false);
@@ -638,6 +672,7 @@ export default function CoachSessionScreen() {
       content: text,
       matchedSuggestion,
     });
+    const scripted = scriptedTurnsFor(scenario, history);
     shouldScrollRef.current = true;
     setHistory(nextHistory);
     await stopSpeaking();
@@ -653,19 +688,26 @@ export default function CoachSessionScreen() {
           mode,
           language: scenario.language,
           material: material(),
+          scripted_reply: scripted.reply,
         },
         request.controller.signal
       );
       if (!turnGate.isCurrent(request)) return;
       const turnFeedback = mode === 'immersion' ? null : response.feedback ?? null;
-      const nextLines = filterNextLines(
-        response.next_lines ?? [],
-        turnFeedback,
-        response.reply
-      );
+      const nextLines: CoachExpression[] = scenario.dialogue
+        ? scripted.nextUserLine
+          ? [{ text: scripted.nextUserLine, translation: '' }]
+          : []
+        : filterNextLines(response.next_lines ?? [], turnFeedback, response.reply);
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setTurnIndex(response.turn_index);
-      setLimitReached(response.limit_reached || turnLimitReached(response.turn_index, scenario.max_turns));
+      const scriptCoachLines = scenario.dialogue?.filter((turn) => turn.role === 'coach').length ?? 0;
+      const scriptDone =
+        scriptCoachLines > 0 &&
+        history.filter((turn) => turn.role === 'coach').length + 1 >= scriptCoachLines;
+      setLimitReached(
+        scriptDone || response.limit_reached || turnLimitReached(response.turn_index, scenario.max_turns)
+      );
       shouldScrollRef.current = true;
       const tagged = nextHistory.map((turn, index) =>
         index === nextHistory.length - 1
@@ -1119,7 +1161,7 @@ export default function CoachSessionScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.studyBg }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <View style={styles.topBar}>
           <BackButton onPress={requestExit} color={c.studyText} />

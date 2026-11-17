@@ -59,7 +59,8 @@ export function createSttAdapter(module: SpeechModuleLike) {
     async start(
       locale: string,
       callbacks: SttCallbacks,
-      contextualStrings: string[] = []
+      contextualStrings: string[] = [],
+      options: { continuous?: boolean } = {}
     ): Promise<SttSession> {
       const permission = await this.requestPermissions();
       if (!permission.granted) {
@@ -107,7 +108,9 @@ export function createSttAdapter(module: SpeechModuleLike) {
       module.start({
         lang: locale,
         interimResults: true,
-        continuous: false,
+        // 默认仍是「说一句就停」：对话教练按住说话依赖它在松手后收尾。
+        // 同传字幕要的是持续监听，由调用方显式传 true。
+        continuous: options.continuous ?? false,
         addsPunctuation: true,
         requiresOnDeviceRecognition: false,
         maxAlternatives: 1,
@@ -154,5 +157,6 @@ export const requestMicPermissions = async () =>
 export const startListening = async (
   locale: string,
   callbacks: SttCallbacks,
-  contextualStrings: string[] = []
-) => (await defaultAdapter()).start(locale, callbacks, contextualStrings);
+  contextualStrings: string[] = [],
+  options: { continuous?: boolean } = {}
+) => (await defaultAdapter()).start(locale, callbacks, contextualStrings, options);

@@ -210,6 +210,40 @@ export default function CoachScreen() {
             <CoachGlyph name="arrowRight" color={c.accent} size={18} />
           </Pressable>
 
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/rehearse/english')}
+            style={[styles.entry, { backgroundColor: c.card, borderColor: c.border }]}
+          >
+            <View style={[styles.entryIcon, { backgroundColor: c.accentLight }]}>
+              <CoachGlyph name="chat" color={c.accent} size={20} />
+            </View>
+            <View style={styles.entryBody}>
+              <Text style={[styles.entryTitle, { color: c.ink }]}>{t('englishLearningTitle')}</Text>
+              <Text numberOfLines={1} style={[styles.entryDesc, { color: c.inkMuted }]}>
+                {t('englishLearningDesc')}
+              </Text>
+            </View>
+            <CoachGlyph name="arrowRight" color={c.accent} size={18} />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/rehearse/podcast')}
+            style={[styles.entry, { backgroundColor: c.card, borderColor: c.border }]}
+          >
+            <View style={[styles.entryIcon, { backgroundColor: c.accentLight }]}>
+              <CoachGlyph name="mic" color={c.accent} size={20} />
+            </View>
+            <View style={styles.entryBody}>
+              <Text style={[styles.entryTitle, { color: c.ink }]}>{t('podcastTitle')}</Text>
+              <Text numberOfLines={1} style={[styles.entryDesc, { color: c.inkMuted }]}>
+                {t('podcastEntryDesc')}
+              </Text>
+            </View>
+            <CoachGlyph name="arrowRight" color={c.accent} size={18} />
+          </Pressable>
+
           {groups.map((group) => (
             <View key={group.category}>
               <SectionLabel>{t(CATEGORY_LABEL[group.category])}</SectionLabel>

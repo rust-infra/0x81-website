@@ -16,14 +16,17 @@ import (
 // 输入上限。全部与 moyan-backend 的 `models/coach.rs` 一致——
 // 这些数字不是随便定的，改小会误拒合法输入，改大会让 prompt 撑爆上下文。
 const (
-	MaxHistoryTurns   = 40
-	MaxTotalChars     = 12_000
-	MaxUserTextChars  = 2_000
-	MaxMaterialChars  = 3_000
-	MaxReplyChars     = 240
-	MaxFocusPoints    = 5
-	MaxFocusPointSize = 40
-	MaxNextLines      = 2
+	MaxHistoryTurns      = 40
+	MaxTotalChars        = 12_000
+	MaxUserTextChars     = 2_000
+	MaxMaterialChars     = 3_000
+	MaxReplyChars        = 240
+	MaxFocusPoints       = 5
+	MaxFocusPointSize    = 40
+	MaxNextLines         = 2
+	MaxDialogueTurns     = 40
+	MaxDialogueTurnChars = 1_200
+	MaxDialogueChars     = 12_000
 
 	// MaxTurnTokens 是单轮 LLM 输出的 token 上限（Rust: MAX_TURN_TOKENS）。
 	MaxTurnTokens = 3_000
@@ -127,6 +130,25 @@ func ValidateScenario(input model.Scenario) (model.Scenario, error) {
 		if err := checkLen("focus_points[]", point, MaxFocusPointSize); err != nil {
 			return model.Scenario{}, err
 		}
+	}
+	if len(input.Dialogue) > MaxDialogueTurns {
+		return model.Scenario{}, fmt.Errorf("dialogue must have at most %d turns", MaxDialogueTurns)
+	}
+	dialogueChars := 0
+	for _, turn := range input.Dialogue {
+		if !turn.Role.Valid() {
+			return model.Scenario{}, fmt.Errorf("dialogue[].role must be one of coach, user")
+		}
+		if strings.TrimSpace(turn.Content) == "" {
+			return model.Scenario{}, fmt.Errorf("dialogue[].content must not be empty")
+		}
+		if err := checkLen("dialogue[].content", turn.Content, MaxDialogueTurnChars); err != nil {
+			return model.Scenario{}, err
+		}
+		dialogueChars += len([]rune(turn.Content))
+	}
+	if dialogueChars > MaxDialogueChars {
+		return model.Scenario{}, fmt.Errorf("dialogue must be at most %d characters", MaxDialogueChars)
 	}
 
 	out := input

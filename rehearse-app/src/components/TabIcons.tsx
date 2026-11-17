@@ -29,6 +29,15 @@ function renderIcon(name: TabIconName, color: string) {
           <Path {...common} d="M12 7v5l3 2" />
         </Svg>
       );
+    case 'interpret':
+      // 同传：闭路字幕框 + 两个 C（CC 的通用形态）
+      return (
+        <Svg width={22} height={22} viewBox="0 0 24 24">
+          <Rect x={3} y={5} width={18} height={14} rx={2.5} {...common} />
+          <Path {...common} d="M11 10.2a2.2 2.2 0 100 3.6" />
+          <Path {...common} d="M17 10.2a2.2 2.2 0 100 3.6" />
+        </Svg>
+      );
     case 'settings':
       // 设计稿屏 15 的「设置」：齿轮（中心圆 + 八根辐条）
       return (

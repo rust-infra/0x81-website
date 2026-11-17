@@ -70,6 +70,24 @@ test('coach api uses the exact quota and turn paths', async () => {
   assert.equal(calls[2]?.path, '/api/rehearse/material/profile');
 });
 
+test('interpret translate posts the committed sentence to its own endpoint', async () => {
+  const calls: Array<{ path: string; options?: RequestInit }> = [];
+  const api = createCoachApi(async <T>(path: string, options?: RequestInit) => {
+    calls.push({ path, options });
+    return { translation: '交期四十五天。' } as T;
+  });
+
+  const controller = new AbortController();
+  const result = await api.translateInterpret('The lead time is forty five days.', controller.signal);
+  assert.equal(result.translation, '交期四十五天。');
+  assert.equal(calls[0]?.path, '/api/rehearse/interpret/translate');
+  assert.equal(calls[0]?.options?.method, 'POST');
+  assert.equal(calls[0]?.options?.signal, controller.signal);
+  assert.deepEqual(JSON.parse(String(calls[0]?.options?.body)), {
+    text: 'The lead time is forty five days.',
+  });
+});
+
 test('scenario requests map the UI language to a supported rehearsal language', async () => {
   const paths: string[] = [];
   const bodies: string[] = [];

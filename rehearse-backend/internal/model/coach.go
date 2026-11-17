@@ -157,10 +157,26 @@ type Scenario struct {
 	// OpeningNextLines 是开场白对应的首轮推荐表达：场景加载后立即展示，
 	// 不必等第一轮 AI 响应。
 	OpeningNextLines []Expression `json:"opening_next_lines"`
+	// Dialogue 是可选的对白脚本。英语学习场景用它约束教练按原对话演对手；
+	// 普通场景为空。
+	Dialogue []Turn `json:"dialogue,omitempty"`
 
 	FocusPoints []string `json:"focus_points"`
 	Difficulty  string   `json:"difficulty"`
 	MaxTurns    uint32   `json:"max_turns"`
+}
+
+// TranslateRequest 是 `POST /api/rehearse/interpret/translate` 的请求体。
+//
+// 只翻「已提交」的完整句，不做流式增量——同传的增量由客户端按断句
+// 边界切好后逐句发来（见 rehearse-app/src/lib/rehearse-interpret.ts）。
+type TranslateRequest struct {
+	Text string `json:"text"`
+}
+
+// TranslateResponse 是一句的译文。
+type TranslateResponse struct {
+	Translation string `json:"translation"`
 }
 
 // Role 是对话里的一方。
@@ -253,6 +269,9 @@ type TurnRequest struct {
 	Language *Language `json:"language"`
 	// Material 原为 `interview`（§7.6 改名）。
 	Material *MaterialContext `json:"material"`
+	// ScriptedReply 是英语学习场景的固定教练台词。有值时服务端强制
+	// 使用这句作为 reply，只让模型做翻译与纠错。
+	ScriptedReply *string `json:"scripted_reply,omitempty"`
 }
 
 // TurnResponse 是 `POST /api/rehearse/turn` 的响应。
