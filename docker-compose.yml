@@ -137,10 +137,7 @@ services:
       - "4324:4324"
     environment:
       - PORT=4324
-      # ⚠️ 迁移**不在启动路径上**（§7.9：server 运行时无 DDL 权限）。新卷第一次
-      # 起来必须先跑一次迁移，否则 `/health` 报 ok、业务接口却全是
-      # `no such table`——一个「健康但不可用」的假象：
-      #   docker compose run --rm --entrypoint /migrate rehearse-backend up
+      # 服务启动时会自动应用未执行的迁移，新卷第一次启动即可建表。
       #
       # ⚠️ JWT_SECRET / ADMIN_TOKEN 仍然用 `${VAR:?}`——**这是刻意的**。
       #
