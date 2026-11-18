@@ -27,6 +27,7 @@ import (
 	"github.com/0x81/rehearse-backend/internal/httpapi"
 	"github.com/0x81/rehearse-backend/internal/llm"
 	"github.com/0x81/rehearse-backend/internal/material"
+	"github.com/0x81/rehearse-backend/internal/migrate"
 	"github.com/0x81/rehearse-backend/internal/scenarios"
 	"github.com/0x81/rehearse-backend/internal/store"
 )
@@ -106,7 +107,7 @@ func run() error {
 	// Postgres 侧是**惰性**的，`pgxpool` 不会在创建时真连；SQLite 侧会真开
 	// 一次连接（`sql.Open` 不建连接，所以那里显式 Ping 了一次）——本地文件
 	// 打不开属于配置错误，早失败比晚失败好。
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	backend, err := store.Open(ctx, cfg.DatabaseURL)
@@ -119,6 +120,16 @@ func run() error {
 
 	st := backend.Store
 	slog.Info("storage backend", "dialect", backend.Dialect)
+
+	migrationRunner, err := migrate.New(backend)
+	if err != nil {
+		return fmt.Errorf("build migration runner: %w", err)
+	}
+
+	// 服务启动前应用尚未执行的迁移。迁移失败直接退出，避免旧 schema 上接流量。
+	if err := applyMigrations(ctx, migrationRunner); err != nil {
+		return err
+	}
 
 	// 启动探测：连不上**不退出**，只记一条 error。
 	//

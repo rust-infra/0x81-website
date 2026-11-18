@@ -53,8 +53,7 @@ go run ./cmd/rehearse   # DATABASE_URL 未设置时自动回落到 sqlite:./data
 ```sh
 export DATABASE_URL='postgres://...:6543/postgres?sslmode=require'   # 见下
 export JWT_SECRET='与 moyan-backend 相同的值'
-go run ./cmd/migrate up
-go run ./cmd/rehearse
+go run ./cmd/rehearse   # 启动时自动应用未执行的迁移
 ```
 
 然后：
