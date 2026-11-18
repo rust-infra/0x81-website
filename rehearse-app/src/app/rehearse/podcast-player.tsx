@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import {
   Animated,
@@ -8,21 +9,22 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Polygon, Rect } from 'react-native-svg';
-import Segmented from '../../components/Segmented';
 import { CoachAvatar } from '../../components/rehearse/CoachAvatar';
 import { CoachHeader } from '../../components/rehearse/CoachUi';
+import { PodcastSettingsSheet } from '../../components/rehearse/PodcastSettingsSheet';
 import { useAuth } from '../../lib/auth';
 import { getApiBase } from '../../lib/config';
 import {
   buildPodcastEpisodes,
   createPodcastPlayer,
   episodeMinutes,
+  estimateWordRange,
+  type WordRange,
   type PodcastPlayer,
   type PodcastState,
 } from '../../lib/podcast';
@@ -31,14 +33,19 @@ import {
   resolvePodcastClipSource,
   type PodcastClipSource,
 } from '../../lib/podcast-video';
-import { requestPodcastClip } from '../../lib/rehearse-api-runtime';
-import { speak, stopSpeaking } from '../../lib/speech';
+import {
+  getCachedPodcastTranslation,
+  translatePodcastLines,
+} from '../../lib/podcast-translation';
+import {
+  requestPodcastClip,
+  translateInterpretText,
+} from '../../lib/rehearse-api-runtime';
+import { getSpeechSettings, speak, stopSpeaking } from '../../lib/speech';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { serif } from '../../lib/ui';
-
-const RATES = ['0.9', '1.0', '1.2'] as const;
 
 export default function PodcastPlayerScreen() {
   const router = useRouter();
@@ -69,6 +76,7 @@ export default function PodcastPlayerScreen() {
   const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoPlayer = useVideoPlayer(null, (player) => {
     player.loop = false;
+    player.timeUpdateEventInterval = 0.1;
   });
   const [playback, setPlayback] = useState<PodcastState>({
     episodeIndex: initialIndex,
@@ -77,7 +85,23 @@ export default function PodcastPlayerScreen() {
     rate: 1,
     autoplay: true,
   });
+  const [transportVisible, setTransportVisible] = useState(!playback.autoplay);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [translationEnabled, setTranslationEnabled] = useState(true);
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [manualPinned, setManualPinned] = useState(false);
+  const [wordRange, setWordRange] = useState<
+    (WordRange & { turnIndex: number }) | null
+  >(null);
   const playerRef = useRef<PodcastPlayer | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const turnLayoutRef = useRef<Record<number, { y: number; height: number }>>({});
+  const chatOffsetRef = useRef(0);
+  const [layoutTick, setLayoutTick] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const activeTextRef = useRef<{ turnIndex: number; text: string } | null>(null);
+  const startedRef = useRef(false);
+  const transportAnim = useRef(new Animated.Value(transportVisible ? 1 : 0)).current;
 
   useEffect(() => {
     if (!token) return;
@@ -93,6 +117,14 @@ export default function PodcastPlayerScreen() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    AsyncStorage.getItem('podcast_translation_enabled')
+      .then((value) => {
+        if (value === '0') setTranslationEnabled(false);
+      })
+      .catch(() => {});
+  }, []);
 
   const clearStartTimer = () => {
     if (startTimerRef.current) {
@@ -159,6 +191,8 @@ export default function PodcastPlayerScreen() {
       // 页面卸载时原生播放器可能已经释放，不再需要暂停。
     }
     finishVideo();
+    activeTextRef.current = null;
+    setWordRange(null);
     await stopSpeaking();
   };
 
@@ -166,6 +200,9 @@ export default function PodcastPlayerScreen() {
     text: string,
     opts: { rate: number; language?: string }
   ) => {
+    const turnIndex = playerRef.current?.state().turnIndex ?? 0;
+    activeTextRef.current = { turnIndex, text };
+    setWordRange(null);
     if (token) {
       try {
         const clip = await requestPodcastClip(text, { enqueue: false });
@@ -184,7 +221,19 @@ export default function PodcastPlayerScreen() {
       // 播放器已释放时直接走 TTS。
     }
     setVideoActive(false);
-    await speak(text, opts);
+    const settings = await getSpeechSettings();
+    await speak(text, {
+      ...opts,
+      voiceId: /[\u4e00-\u9fff]/.test(text)
+        ? settings.speech_zh_voice
+        : settings.speech_voice,
+      onBoundary: (event) =>
+        setWordRange({
+          turnIndex,
+          start: event.charIndex,
+          length: event.charLength,
+        }),
+    });
   };
 
   const handlersRef = useRef({ playTurn, stopPlayback });
@@ -215,9 +264,18 @@ export default function PodcastPlayerScreen() {
       if (status !== 'error') return;
       finishVideo(new Error(error?.message || 'video failed'));
     });
+    const onTime = videoPlayer.addListener('timeUpdate', () => {
+      if (!videoStartedRef.current) return;
+      const active = activeTextRef.current;
+      const duration = videoPlayer.duration;
+      if (!active || duration <= 0) return;
+      const range = estimateWordRange(active.text, videoPlayer.currentTime / duration);
+      if (range) setWordRange({ turnIndex: active.turnIndex, ...range });
+    });
     return () => {
       onEnd.remove();
       onStatus.remove();
+      onTime.remove();
       clearStartTimer();
     };
   }, [videoPlayer]);
@@ -231,6 +289,51 @@ export default function PodcastPlayerScreen() {
   }, [playback.rate, videoPlayer]);
 
   useEffect(() => {
+    if (playback.playing) startedRef.current = true;
+    if (!playback.playing) {
+      if (startedRef.current) setTransportVisible(true);
+      return;
+    }
+    if (playback.autoplay && !manualPinned) setTransportVisible(false);
+    else setTransportVisible(true);
+  }, [playback.playing, playback.autoplay, manualPinned]);
+
+  useEffect(() => {
+    Animated.timing(transportAnim, {
+      toValue: transportVisible ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [transportAnim, transportVisible]);
+
+  useEffect(() => {
+    setWordRange(null);
+  }, [playback.turnIndex, playback.episodeIndex]);
+
+  useEffect(() => {
+    const layout = turnLayoutRef.current[playback.turnIndex];
+    if (!layout || viewportHeight <= 0) return;
+    const timer = setTimeout(() => {
+      const target =
+        chatOffsetRef.current +
+        layout.y +
+        layout.height / 2 -
+        viewportHeight / 2;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, target),
+        animated: true,
+      });
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [playback.turnIndex, playback.episodeIndex, layoutTick, viewportHeight]);
+
+  const handleTurnLayout = useCallback((index: number, y: number, height: number) => {
+    turnLayoutRef.current[index] = { y, height };
+    setLayoutTick((tick) => tick + 1);
+  }, []);
+
+  useEffect(() => {
     const player = playerRef.current;
     if (!player || episodes.length === 0) return;
     player.play(initialIndexRef.current);
@@ -241,9 +344,6 @@ export default function PodcastPlayerScreen() {
   }, [episodes.length]);
 
   const episode = episodes[playback.episodeIndex];
-  const turn = episode?.turns[playback.turnIndex];
-  const speaker =
-    turn?.role === 'user' ? t('podcastYou') : episode?.coachName || t('podcastCoach');
   const anchorName = t('podcastAnchorName');
   const progress =
     episode && episode.turns.length > 0
@@ -253,6 +353,42 @@ export default function PodcastPlayerScreen() {
     !!episode &&
     !playback.playing &&
     playback.turnIndex === episode.turns.length - 1;
+
+  useEffect(() => {
+    if (!episode) return;
+    const cached: Record<string, string> = {};
+    const pending: Array<{ key: string; text: string }> = [];
+    episode.turns.forEach((turn, index) => {
+      const key = `${episode.id}:${index}`;
+      const hit = getCachedPodcastTranslation(key);
+      if (hit) cached[key] = hit;
+      else if (translationEnabled && !/[\u4e00-\u9fff]/.test(turn.content)) {
+        pending.push({ key, text: turn.content });
+      }
+    });
+    if (Object.keys(cached).length > 0) {
+      setTranslations((prev) => ({ ...prev, ...cached }));
+    }
+    if (!translationEnabled || pending.length === 0) return;
+    let cancelled = false;
+    void translatePodcastLines(
+      pending,
+      async (text) => (await translateInterpretText(text)).translation,
+      (key, text) => {
+        if (!cancelled) setTranslations((prev) => ({ ...prev, [key]: text }));
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [episode, translationEnabled]);
+
+  const changeTranslation = (value: boolean) => {
+    setTranslationEnabled(value);
+    AsyncStorage.setItem('podcast_translation_enabled', value ? '1' : '0').catch(
+      () => {}
+    );
+  };
 
   const generateEpisode = async () => {
     if (!episode || generating) return;
@@ -271,15 +407,15 @@ export default function PodcastPlayerScreen() {
     }
   };
 
-  const rateOptions = RATES.map((rate) => ({
-    key: rate,
-    label: `${rate}×`,
-  }));
-
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
       <CoachHeader title={t('podcastTitle')} onBack={goBack} />
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.body}
+        onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.metaRow}>
           <Text style={[styles.lesson, { color: c.inkMuted }]}>
             Lesson {episode?.lessonNumber ?? 0} · {episode?.lessonTitle ?? ''}
@@ -363,6 +499,20 @@ export default function PodcastPlayerScreen() {
                 <Text style={[styles.stageName, { color: c.ink, fontFamily: serif }]}>
                   {anchorName}
                 </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('podcastSettings')}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    setSheetOpen(true);
+                  }}
+                  style={styles.stageSettings}
+                >
+                  <SlidersIcon color={c.inkMuted} />
+                  <Text style={[styles.stageSettingsText, { color: c.inkMuted }]}>
+                    {t('podcastSettings')}
+                  </Text>
+                </Pressable>
               </View>
             </>
           ) : (
@@ -394,70 +544,58 @@ export default function PodcastPlayerScreen() {
                   {anchorName}
                 </Text>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastSettings')}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setSheetOpen(true);
+                }}
+                style={styles.stripAction}
+              >
+                <SlidersIcon color={c.inkMuted} />
+              </Pressable>
               <StageChevron up={false} color={c.inkMuted} />
             </>
           )}
         </Pressable>
 
-        <View style={[styles.nowCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.lineHead}>
-            <Text style={[styles.speaker, { color: c.accent }]}>{speaker}</Text>
-            <Text style={[styles.progressText, { color: c.inkMuted }]}>
-              {episode ? `${playback.turnIndex + 1} / ${episode.turns.length}` : '0 / 0'} ·{' '}
-              {playback.episodeIndex + 1} / {episodes.length}
-            </Text>
-          </View>
-          <Text numberOfLines={5} style={[styles.line, { color: c.ink }]}>
-            {turn?.content ?? t('podcastEmpty')}
-          </Text>
-          <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: c.accent, width: `${progress * 100}%` },
-              ]}
-            />
-          </View>
+        <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
+          <View
+            style={[
+              styles.progressFill,
+              { backgroundColor: c.accent, width: `${progress * 100}%` },
+            ]}
+          />
         </View>
 
-        <View style={styles.controls}>
-          <Control
-            icon="prevEpisode"
-            hint={t('podcastPrevEpisode')}
-            onPress={() => playerRef.current?.prevEpisode()}
-            color={c.ink}
-          />
-          <Control
-            icon="prevLine"
-            hint={t('podcastPrevLine')}
-            onPress={() => playerRef.current?.prevTurn()}
-            color={c.ink}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={playback.playing ? t('podcastPause') : t('podcastPlay')}
-            onPress={() => playerRef.current?.toggle()}
-            style={[styles.playButton, { backgroundColor: c.buttonBg }]}
-          >
-            <TransportIcon
-              name={playback.playing ? 'pause' : 'play'}
-              color={c.buttonText}
-              size={26}
+        <View
+          style={styles.chat}
+          onLayout={(event) => {
+            chatOffsetRef.current = event.nativeEvent.layout.y;
+          }}
+        >
+          {episode?.turns.map((item, index) => (
+            <ChatTurn
+              key={`${episode.id}-${index}`}
+              index={index}
+              role={item.role}
+              speaker={episode.coachName || t('podcastCoach')}
+              content={item.content}
+              active={index === playback.turnIndex}
+              playing={playback.playing}
+              highlight={wordRange?.turnIndex === index ? wordRange : null}
+              translation={
+                translationEnabled ? translations[`${episode.id}:${index}`] : undefined
+              }
+              colors={c}
+              youLabel={t('podcastYou')}
+              onLayout={handleTurnLayout}
             />
-          </Pressable>
-          <Control
-            icon="nextLine"
-            hint={t('podcastNextLine')}
-            onPress={() => playerRef.current?.nextTurn()}
-            color={c.ink}
-          />
-          <Control
-            icon="nextEpisode"
-            hint={t('podcastNextEpisode')}
-            onPress={() => playerRef.current?.nextEpisode()}
-            color={c.ink}
-          />
+          ))}
         </View>
+
+        <View style={{ height: Math.max(0, viewportHeight * 0.4) }} />
 
         {atEpisodeEnd ? (
           <Pressable
@@ -468,46 +606,223 @@ export default function PodcastPlayerScreen() {
             <Text style={{ color: c.ink, fontWeight: '700' }}>{t('podcastReplay')}</Text>
           </Pressable>
         ) : null}
-
-        <View style={styles.settingsRow}>
-          <Text style={[styles.settingLabel, { color: c.inkMuted }]}>{t('podcastSpeed')}</Text>
-          <Segmented
-            options={rateOptions}
-            value={
-              RATES.includes(playback.rate.toFixed(1) as (typeof RATES)[number])
-                ? (playback.rate.toFixed(1) as (typeof RATES)[number])
-                : '1.0'
-            }
-            onChange={(rate) => playerRef.current?.setRate(Number(rate))}
-            style={styles.rateSegmented}
-          />
-        </View>
-        <View style={styles.settingsRow}>
-          <Text style={[styles.settingLabel, { color: c.inkMuted }]}>
-            {t('podcastAutoplay')}
-          </Text>
-          <Switch
-            value={playback.autoplay}
-            onValueChange={(value) => playerRef.current?.setAutoplay(value)}
-            trackColor={{ false: c.border, true: c.accentLight }}
-            thumbColor={playback.autoplay ? c.accent : c.inkMuted}
-          />
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          disabled={generating || !episode}
-          onPress={() => void generateEpisode()}
-          style={[styles.generate, { borderColor: c.border, backgroundColor: c.card }]}
-        >
-          <Text style={[styles.generateText, { color: c.ink }]}>
-            {generating ? t('podcastGenerating') : t('podcastGenerateEpisode')}
-          </Text>
-        </Pressable>
-        <Text style={[styles.hint, { color: c.inkMuted }]}>{t('podcastForegroundHint')}</Text>
       </ScrollView>
+      <Animated.View
+        style={[
+          styles.transportShell,
+          {
+            backgroundColor: c.paper,
+            borderTopColor: c.border,
+            height: transportAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [26, 76],
+            }),
+          },
+        ]}
+      >
+        <Animated.View
+          pointerEvents={transportVisible ? 'auto' : 'none'}
+          style={[
+            styles.transportFull,
+            {
+              opacity: transportAnim,
+              transform: [
+                {
+                  translateY: transportAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.controls}>
+            <Control
+              icon="prevEpisode"
+              hint={t('podcastPrevEpisode')}
+              onPress={() => playerRef.current?.prevEpisode()}
+              color={c.ink}
+            />
+            <Control
+              icon="prevLine"
+              hint={t('podcastPrevLine')}
+              onPress={() => playerRef.current?.prevTurn()}
+              color={c.ink}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={playback.playing ? t('podcastPause') : t('podcastPlay')}
+              onPress={() => {
+                setManualPinned(true);
+                setTransportVisible(true);
+                playerRef.current?.toggle();
+              }}
+              style={[styles.playButton, { backgroundColor: c.buttonBg }]}
+            >
+              <TransportIcon
+                name={playback.playing ? 'pause' : 'play'}
+                color={c.buttonText}
+                size={26}
+              />
+            </Pressable>
+            <Control
+              icon="nextLine"
+              hint={t('podcastNextLine')}
+              onPress={() => playerRef.current?.nextTurn()}
+              color={c.ink}
+            />
+            <Control
+              icon="nextEpisode"
+              hint={t('podcastNextEpisode')}
+              onPress={() => playerRef.current?.nextEpisode()}
+              color={c.ink}
+            />
+          </View>
+        </Animated.View>
+        <Animated.View
+          pointerEvents={transportVisible ? 'none' : 'auto'}
+          style={[
+            styles.transportHandle,
+            {
+              opacity: transportAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0],
+              }),
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('podcastShowControls')}
+            onPress={() => {
+              setManualPinned(true);
+              setTransportVisible(true);
+            }}
+            style={styles.handleTouch}
+          >
+            <View style={[styles.handleBar, { backgroundColor: c.border }]} />
+          </Pressable>
+        </Animated.View>
+      </Animated.View>
+      <PodcastSettingsSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        rate={playback.rate}
+        onRate={(rate) => playerRef.current?.setRate(rate)}
+        autoplay={playback.autoplay}
+        onAutoplay={(value) => {
+          playerRef.current?.setAutoplay(value);
+          setManualPinned(false);
+          if (!value) setTransportVisible(true);
+        }}
+        translation={translationEnabled}
+        onTranslation={changeTranslation}
+        generating={generating}
+        onGenerate={() => void generateEpisode()}
+      />
     </SafeAreaView>
   );
 }
+
+type ChatColors = {
+  card: string;
+  border: string;
+  accent: string;
+  accentLight: string;
+  ink: string;
+  inkMuted: string;
+};
+
+const ChatTurn = memo(function ChatTurn({
+  index,
+  role,
+  speaker,
+  content,
+  active,
+  playing,
+  highlight,
+  translation,
+  colors,
+  youLabel,
+  onLayout,
+}: {
+  index: number;
+  role: 'coach' | 'user';
+  speaker: string;
+  content: string;
+  active: boolean;
+  playing: boolean;
+  highlight: WordRange | null;
+  translation?: string;
+  colors: ChatColors;
+  youLabel: string;
+  onLayout: (index: number, y: number, height: number) => void;
+}) {
+  const mine = role === 'user';
+  const valid =
+    !!highlight &&
+    highlight.length > 0 &&
+    highlight.start >= 0 &&
+    highlight.start < content.length;
+  return (
+    <View
+      onLayout={(event) =>
+        onLayout(
+          index,
+          event.nativeEvent.layout.y,
+          event.nativeEvent.layout.height
+        )
+      }
+      style={[styles.chatRow, mine ? styles.chatRowMine : styles.chatRowOther]}
+    >
+      {!mine ? (
+        <CoachAvatar
+          state={active && playing ? 'speaking' : 'idle'}
+          mood="friendly"
+          size={30}
+        />
+      ) : null}
+      <View
+        style={[
+          styles.bubble,
+          mine ? styles.bubbleMine : styles.bubbleOther,
+          {
+            backgroundColor: active ? colors.accentLight : colors.card,
+            borderColor: active ? colors.accent : colors.border,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.bubbleSpeaker,
+            { color: active ? colors.accent : colors.inkMuted },
+          ]}
+        >
+          {mine ? youLabel : speaker}
+        </Text>
+        <Text style={[styles.bubbleText, { color: colors.ink }]}>
+          {valid ? (
+            <>
+              {content.slice(0, highlight.start)}
+              <Text style={{ color: colors.accent, fontWeight: '800' }}>
+                {content.slice(highlight.start, highlight.start + highlight.length)}
+              </Text>
+              {content.slice(highlight.start + highlight.length)}
+            </>
+          ) : (
+            content
+          )}
+        </Text>
+        {translation ? (
+          <Text style={[styles.bubbleTranslation, { color: colors.inkMuted }]}>
+            {translation}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+});
 
 function StageChevron({ up, color }: { up: boolean; color: string }) {
   return (
@@ -590,6 +905,21 @@ function TransportIcon({
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       {content}
+    </Svg>
+  );
+}
+
+function SlidersIcon({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path
+        d="M4 7h8M16 7h4M4 17h4M12 17h8"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <Rect x="12" y="4" width="4" height="6" rx="2" fill={color} />
+      <Rect x="8" y="14" width="4" height="6" rx="2" fill={color} />
     </Svg>
   );
 }
@@ -734,13 +1064,59 @@ const styles = StyleSheet.create({
   lesson: { fontSize: 12, fontWeight: '600' },
   duration: { fontSize: 11.5 },
   episodeTitle: { fontSize: 19, fontWeight: '700', lineHeight: 25 },
-  nowCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 7 },
-  lineHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  speaker: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5 },
-  line: { fontSize: 16, lineHeight: 24, fontWeight: '500' },
   progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: 1 },
   progressFill: { height: 3 },
-  progressText: { fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  chat: { gap: 10, paddingTop: 4, paddingBottom: 8 },
+  chatRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
+  chatRowMine: { justifyContent: 'flex-end' },
+  chatRowOther: { justifyContent: 'flex-start' },
+  bubble: {
+    maxWidth: '82%',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 3,
+  },
+  bubbleMine: { borderBottomRightRadius: 5 },
+  bubbleOther: { borderBottomLeftRadius: 5 },
+  bubbleSpeaker: { fontSize: 10.5, fontWeight: '700' },
+  bubbleText: { fontSize: 14.5, lineHeight: 21 },
+  bubbleTranslation: { fontSize: 12.5, lineHeight: 18, marginTop: 2 },
+  stageSettings: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  stageSettingsText: { fontSize: 11.5 },
+  stripAction: { padding: 8 },
+  transportShell: {
+    overflow: 'hidden',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  transportFull: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 76,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
+    justifyContent: 'center',
+  },
+  transportHandle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  handleTouch: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  handleBar: { width: 40, height: 4, borderRadius: 2 },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -770,23 +1146,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
   },
-  settingsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 1,
-  },
-  settingLabel: { fontSize: 12.5 },
-  rateSegmented: { minWidth: 156 },
-  generate: {
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    marginTop: 6,
-  },
-  generateText: { fontSize: 12, fontWeight: '600' },
-  hint: { fontSize: 10, textAlign: 'center', marginTop: 6, lineHeight: 15 },
 });

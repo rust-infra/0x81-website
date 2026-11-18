@@ -216,7 +216,8 @@ function speakNativeAndWait(
   text: string,
   rate: number,
   language: string,
-  voiceId?: string
+  voiceId?: string,
+  onBoundary?: (event: { charIndex: number; charLength: number }) => void
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     let settled = false;
@@ -234,6 +235,7 @@ function speakNativeAndWait(
         language,
         rate,
         voice: voiceId,
+        onBoundary,
         onDone: finish,
         onStopped: finish,
         onError: finish,
@@ -250,7 +252,8 @@ async function speakWithNative(
   rate: number,
   language?: string,
   voiceId?: string,
-  token?: number
+  token?: number,
+  onBoundary?: (event: { charIndex: number; charLength: number }) => void
 ) {
   if (Platform.OS === 'web') {
     await ensureWebVoices();
@@ -306,7 +309,8 @@ async function speakWithNative(
     text,
     rate,
     language || (detectLanguage(text) === 'zh' ? 'zh-CN' : 'en-US'),
-    resolvedVoice
+    resolvedVoice,
+    onBoundary
   );
 }
 
@@ -523,7 +527,12 @@ async function speakWithProvider(
 
 export async function speak(
   text: string,
-  opts?: { language?: string; rate?: number; voiceId?: string }
+  opts?: {
+    language?: string;
+    rate?: number;
+    voiceId?: string;
+    onBoundary?: (event: { charIndex: number; charLength: number }) => void;
+  }
 ): Promise<void> {
   if (!text.trim()) return;
   const token = ++speakToken;
@@ -556,8 +565,11 @@ export async function speak(
       )}`
     );
   }
+  let cursor = 0;
   for (const seg of segments) {
     const segLang = seg.lang;
+    const segmentStart = cursor;
+    cursor += seg.text.length;
     let played = false;
     try {
       played = await speakWithProvider(seg.text, settings, segLang, token);
@@ -576,7 +588,20 @@ export async function speak(
           : opts?.voiceId ??
             (settings.provider === 'webspeech' ? settings.speech_voice : undefined);
       try {
-        await speakWithNative(seg.text, rate, segLanguage, voiceId, token);
+        await speakWithNative(
+          seg.text,
+          rate,
+          segLanguage,
+          voiceId,
+          token,
+          opts?.onBoundary
+            ? (event) =>
+                opts.onBoundary?.({
+                  charIndex: segmentStart + event.charIndex,
+                  charLength: event.charLength,
+                })
+            : undefined
+        );
       } catch {
         // 原生 TTS 失败时静默跳过，不中断后续 segment
       }

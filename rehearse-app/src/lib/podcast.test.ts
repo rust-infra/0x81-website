@@ -4,6 +4,7 @@ import {
   buildPodcastEpisodes,
   createPodcastPlayer,
   episodeMinutes,
+  estimateWordRange,
   type PodcastEpisode,
 } from './podcast';
 import type { CoachTurn } from './rehearse-types';
@@ -128,4 +129,20 @@ test('podcast: 从英语学习对话生成剧集', () => {
   assert.ok(all.every((item) => item.turns.length > 0));
   assert.ok(buildPodcastEpisodes('第一册').every((item) => item.deck === '第一册'));
   assert.ok(episodeMinutes(all[0]!.turns) >= 1);
+});
+
+test('podcast: 按播放进度估算当前单词', () => {
+  assert.deepEqual(estimateWordRange('Alex, please introduce yourself.', 0), {
+    start: 0,
+    length: 5,
+  });
+  assert.deepEqual(estimateWordRange('Alex, please introduce yourself.', 1), {
+    start: 23,
+    length: 9,
+  });
+  assert.deepEqual(estimateWordRange('Alex, please introduce yourself.', 0.45), {
+    start: 13,
+    length: 9,
+  });
+  assert.equal(estimateWordRange('   ', 0.5), null);
 });

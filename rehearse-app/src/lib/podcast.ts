@@ -46,6 +46,26 @@ export interface PodcastPlayer {
   state: () => PodcastState;
 }
 
+export interface WordRange {
+  start: number;
+  length: number;
+}
+
+export function estimateWordRange(text: string, progress: number): WordRange | null {
+  const matches = [...text.matchAll(/\S+/g)];
+  if (matches.length === 0) return null;
+  const total = matches.reduce((sum, match) => sum + match[0].length, 0);
+  const target = Math.min(Math.max(progress, 0), 1) * total;
+  let acc = 0;
+  for (const match of matches) {
+    acc += match[0].length;
+    if (target <= acc || match === matches[matches.length - 1]) {
+      return { start: match.index ?? 0, length: match[0].length };
+    }
+  }
+  return null;
+}
+
 export function buildPodcastEpisodes(deck?: string): PodcastEpisode[] {
   return ENGLISH_LESSONS.filter((lesson) => !deck || lesson.deck === deck)
     .flatMap((lesson) =>
