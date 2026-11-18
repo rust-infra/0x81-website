@@ -1,0 +1,1326 @@
+牌组,类型,正面,背面
+课件1 · L01 Talking About Yourself,对话,"New Colleague Introduction
+新同事入职介绍","Team Lead: Alex, please introduce yourself.
+You/Alex: Hi everyone. I'm Alex. I'm a developer. I've worked for 8 years. I'm good at web development. I like working with teams. I'm glad to join you.
+Team Lead: Welcome, Alex."
+课件1 · L01 Talking About Yourself,对话,"Introduction in a Tech Interview
+面试自我介绍","Interviewer: Tell me about yourself.
+You: My name is Lisa. I'm an engineer. I've worked for 6 years. I'm good at backend work. I'm a quick learner. I want this job. Practical Dialogues （实用对话）"
+课件1 · L01 Talking About Yourself,对话,"Talking About Strengths in an Interview
+面试中谈论优势","PM: What's one strength you bring to our team?
+You: I'm skilled at organizing tasks and keeping projects on track.
+Tom: That's great. I think my strength is supporting teammates when they need help.
+PM: You're really reliable. Our different strengths make us work well together."
+课件1 · L01 Talking About Yourself,短句,I'm [Name].,我是[姓名]
+课件1 · L01 Talking About Yourself,短句,I'm a [Job Title].,我是一名[职位]
+课件1 · L01 Talking About Yourself,短句,I've worked for [X years].,我已经工作了[X年]
+课件1 · L01 Talking About Yourself,短句,I'm good at [Skill].,我擅长[技能]
+课件1 · L01 Talking About Yourself,短句,I'm a [Trait].,我是一个[特质]的人
+课件1 · L01 Talking About Yourself,短句,My biggest strength is [Strength].,我最大的优势是[优势内容]
+课件1 · L01 Talking About Yourself,短句,I'm good at [Skill/Area] and perform well in it.,我擅长[技能/领域]，且在这方面表现出色
+课件1 · L01 Talking About Yourself,短句,He is skilled at building efficient backend systems with C#.,他擅长用C#构建高效的后端系统
+课件1 · L01 Talking About Yourself,短句,I excel at technical English communication which means I can handle the scrum meeting well.,我在技术英语交流方面表现出色，这意味着我能很好地主持敏捷会议
+课件1 · L01 Talking About Yourself,短句,My job is to [Work Content].,我的工作是[工作内容]
+课件1 · L01 Talking About Yourself,短句,I'm in charge of [Responsibility].,我负责[工作职责]
+课件1 · L01 Talking About Yourself,短句,I work on [Work Content] every day.,我每天从事[工作内容]
+课件1 · L01 Talking About Yourself,短句,I also [Action] with my team.,我还和团队一起[动作]
+课件1 · L01 Talking About Yourself,短句,I fix [Problem] to make programs run well.,我修复[问题]以确保程序正常运行
+课件1 · L01 First-Day Onboarding & Team Introductions,对话,"HR Introduces the New Tech Hire to the Team
+HR 向团队介绍新技术同事","HR: Good morning, everyone. Could I have your attention, please? Let's welcome our new backend developer, Leo. He just joined us today, and he has 3 years of experience in backend development. Leo (You): Hello everyone, I'm Leo. It's really nice to meet all of you. I'm honored to join the tech team here. I mainly work with Java and Spring Boot before, and I'm looking forward to learning and working with all of you on our projects.
+Team Lead: Welcome aboard, Leo! We're a small but efficient tech team, and we're currently focused on two web development projects. Your backend experience will be a great help to us.
+Jack: Hi Leo! Welcome! I'm Jack, another backend developer here. If you have any questions about our project framework, feel free to ask me.
+Leo: Thank you so much, Jack! That's very kind of you. And thank you for the welcome, everyone. I'll try my best to fit in and contribute to the team soon."
+课件1 · L01 First-Day Onboarding & Team Introductions,对话,"Team Lead Shows the New Hire the Tech Team & Work
+组长带新人熟悉技术团队与工作","Team Lead: Leo, after the team greeting, let me introduce our team members and our current work in detail. First, this is Lisa, our frontend developer—she's in charge of the user interface and interacts closely with the backend team every day. And this is Mike, our QA engineer—he tests all the code we write to make sure there are no bugs. Leo (You): Hi Lisa, hi Mike. Nice to meet you both. I'm Leo, the new backend developer. I heard we're working on web projects, so I'm sure we'll cooperate a lot.
+Lisa: Nice to meet you too, Leo! Welcome! Yes, we'll work closely—when you finish the backend interface, I'll connect it to the frontend page. If you have any questions about frontend requirements, just let me know.
+Mike: Welcome to the team, Leo! I'll test your backend code later, and I'll send you the test report if I find any issues. It's great to have another backend colleague to work with.
+Team Lead: Perfect. Our main tech stack for the current projects is React for frontend, Node.js and Java for backend, and MySQL for the database. Right now, we're working on a new user system project, which needs to add login and user information management features.
+Leo: Got it, thank you for the detailed introduction. I'm familiar with Java, MySQL and a little Node.js, so I think I can keep up quickly. Do I need to read the project document first before starting work?
+Team Lead: Yes, I'll send you the project document via the team chat later. Lisa will also help you understand the frontend requirements. Take your time today, and we can start the specific work tomorrow.
+Leo: OK, that sounds good. Thank you so much for your help!"
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,"I'm [Name], the new [Tech Job Title].",重点句型
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,It's nice to meet you all. I'm glad to join the tech team.,我是[姓名]，新来的[技术职位]
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,"This is [Name], our [Tech Job Title] in the team.",很高兴认识大家，我很荣幸加入技术团队
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,Our tech team uses [Tech Stack] for our projects.,这是[姓名]，我们团队的[技术职位]
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,We're currently working on a [Tech Project] now.,我们技术团队用[技术栈]做项目
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,I have [X] years of experience in [Tech Field].,重点句型
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,I mainly work with [Tech Tool/Framework] for development.,我在[技术领域]有[X]年经验
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,Could you help me with the project framework?,我主要用[技术工具/框架]做开发
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,I'll read the project document carefully before starting work.,你能帮我了解一下项目框架吗？
+课件1 · L01 First-Day Onboarding & Team Introductions,短句,I'm looking forward to cooperating with the whole team.,开始工作前，我会仔细阅读项目文档
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),对话,"Standup with Team Lead & Critical Blocker Discussion
+与组长站会并讨论关键阻塞","Scrum Master: Thanks, everyone. Lisa, I'll follow up with the design team directly to get the icon set—they might have missed your message. [Your Name], prioritize the API performance optimization so Mike can start testing it as soon as possible. Remember, our sprint goal is to have the user management module ready for UAT by the end of this week, so let's stay on track. Any other quick updates? No? Alright, the standup is over. If you have any detailed issues, let's discuss them after this.
+Team Members: Got it. Thanks."
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),对话,"Handling a Code Mistake
+处理代码失误","Team Lead: I appreciate you reporting this promptly. Hiding mistakes only makes them worse. Can you explain what happened in detail? How severe is the impact, and have you identified the root cause?
+You: Absolutely. Yesterday afternoon, I was merging my code for the user profile query API into the main branch. I was in a hurry to finish before the end of the workday and forgot to run the full integration test—only did a quick unit test. The bug is in the SQL query statement: I missed a WHERE clause when joining two tables, which causes the query to return all user data instead of the specific user's data. Right now, it only affects the test environment; the production environment isn't impacted because we haven't deployed the latest code yet.
+Team Lead: Good, at least it's not in production. What's your plan to fix it? And how will you prevent this from happening again?
+You: I've already identified the error and written the fix— I added the missing WHERE clause and tested it locally; all test cases pass. I'll submit a patch to the main branch in 10 minutes, then run the full integration test to ensure there are no other issues. After that, I'll notify the QA team to retest the user data query function. To prevent this, I'll set a reminder to run full integration tests before every merge, and I'll ask a colleague to do a quick code review for critical modules. I'm truly sorry for the delay this has caused to the test schedule.
+Team Lead: That's a solid plan. Taking responsibility and acting quickly is what matters. Make sure you follow through on the prevention measures—code reviews and full tests are non-negotiable for backend development. Keep me updated once the patch is submitted and tested.
+You: Thank you for your understanding. I will definitely follow through, and I'll update you as soon as it's done."
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),对话,"Handling a Technical Incident
+处理技术故障事件","Team Lead: This is critical—our users rely on the platform for daily operations. What's the current status? Have you found any clues about the cause? And how long do you estimate it will take to resolve?
+You: We're still in the initial troubleshooting phase. So far, we've checked the server logs and found that the crash was caused by a memory leak in the latest feature we deployed yesterday— the new data processing module is not releasing memory properly, which led to the server running out of memory and crashing. We've temporarily restarted the application server to restore access for users—service should be back up in 5 minutes. However, this is a temporary fix; we need to fix the memory leak to prevent the outage from happening again.
+Team Lead: Good, restoring service first is the priority. Assign one member of the team to monitor the server after the restart, and the rest focus on fixing the memory leak. Have you notified the product team to inform users about the temporary outage?
+You: Yes, I've already informed the product manager—they're drafting a notification to send to users via email and in-app message, explaining the situation and apologizing for the inconvenience. As for the memory leak fix, our backend developers are reviewing the code for the data processing module now. We estimate we can identify the exact location of the leak in 30 minutes, fix it in an hour, and deploy the patch to production within 2 hours.
+Team Lead: Keep me updated every 15 minutes. Once the patch is deployed, run a full load test to ensure the memory leak is completely fixed. Also, after this incident, we need to conduct a root cause analysis and update our deployment process—we should add a load test for new features before deploying to production to catch issues like this early.
+You: Understood. I'll send you updates every 15 minutes, and we'll start the root cause analysis once the incident is resolved. We'll also revise the deployment process to include load testing for new modules.
+Team Lead: Great. Focus on resolving the incident first—let's minimize the impact on users.
+You: Will do."
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,Let's kick off our daily scrum / standup meeting.,我们开始今天的每日站会
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,Yesterday I finished… and did…,昨天我完成了……并且做了……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,Today I'll tackle… / focus on… / work on…,今天我将处理/专注于/做……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I have a blocker:…,我有一个阻碍:……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I'm stuck on… and need help with it.,我卡在……上，需要帮助解决……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I might need to sync / coordinate with… later.,我稍后可能需要和……同步/协调
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,This blocker is preventing me from completing…,这个阻碍让我无法完成……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I logged the bugs in Jira and assigned them to…,我在Jira上记录了bug，并分配给了……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,Let's address blockers early to stay on track.,我们尽早解决阻碍，确保进度正常
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,The daily standup is over—let's get to work.,今日站会结束，开始工作吧
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I made a mistake / introduced a code bug.,我犯了一个错误/引入了一个代码漏洞
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I take full responsibility for this mistake / incident.,我为这个错误/事故承担全部责任
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,We are experiencing a system outage / technical incident.,我们正遭遇系统宕机/技术事故
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I've started troubleshooting / debugging the issue.,我已经开始排查/调试这个问题
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,The root cause of the problem is…,这个问题的根本原因是……
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I will fix the error and submit a patch / fix.,我会修复错误并提交补丁/修复包
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,We need to restore service / resolve the incident as soon as possible.,我们需要尽快恢复服务/解决事故
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I will prevent this from happening again by…,我会通过……防止这种情况再次发生
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,Let's conduct a root cause analysis after the incident.,事故结束后，我们进行根本原因分析
+课件1 · L02 Daily Standup Meetings (Agile/Scrum),短句,I apologize for the inconvenience caused by the mistake / incident.,我为错误/事故造成的不便道歉
+课件1 · L04 Talking About Work Experience,对话,"Talking About Work Experience in an Interview
+面试中谈论工作经历","Interviewer: Tell me about your work experience.
+You: I have 5 years of work experience as an engineer. I worked at two companies before.
+Interviewer: What did you do in your last job?
+You: I wrote code and fixed bugs. I worked with a small team. Practical Dialogues （实用对话）"
+课件1 · L04 Talking About Work Experience,短句,I have [X] years of work experience.,我有[X]年工作经历
+课件1 · L04 Talking About Work Experience,短句,I worked at [Company Name] before.,我以前在[公司名称]工作
+课件1 · L04 Talking About Work Experience,短句,I was a [Job Title] there.,我在那里是一名[职位]
+课件1 · L04 Talking About Work Experience,短句,I have worked as a [Job Title] for [X] years.,我做[职位]已经[X]年了
+课件1 · L04 Talking About Work Experience,短句,I [did] [Work Content] in my last job.,我上一份工作做[工作内容]
+课件1 · L05 Explaining Why You Applied for the Position,对话,"Explaining Application Reason in an Interview
+面试中说明求职理由","Interviewer: Why do you apply for this position?
+You: I apply for this position because I want to learn new skills.
+Interviewer: Do you like our company?
+You: Yes. I hope to work here and improve myself."
+课件1 · L05 Explaining Why You Applied for the Position,对话,"Talking About Application Reason with a Friend
+与朋友聊求职理由","Friend: Why do you want this engineer position?
+You: Because I like this job and I'm good at it.
+Friend: That's a good reason. I wish you good luck.
+You: Thank you! Practical Dialogues （实用对话）"
+课件1 · L05 Explaining Why You Applied for the Position,短句,I apply for this position because [Reason].,重点句型
+课件1 · L05 Explaining Why You Applied for the Position,短句,I want this job because I [Wish/Action].,我申请这个职位是因为[原因]
+课件1 · L05 Explaining Why You Applied for the Position,短句,I hope to work here to [Improve/Learn].,我想要这份工作是因为我[愿望/动作]
+课件1 · L05 Explaining Why You Applied for the Position,短句,The reason I apply is [reason].,我希望在这里工作来[提升/学习]
+课件1 · L05 Explaining Why You Applied for the Position,短句,"I'm good at this job, so I apply for it.",我还和团队一起[动作]
+课件1 · L06 Orientation (medium),对话,"Orientation Process for New Hires
+新员工入职流程","Lily: Hi [Your Name], welcome! You can use either English or Chinese version. You don't need to submit any documents today—we'll give you a company ID card this afternoon.
+You: Thank you. Will we visit the office later? I want to know where the IT support office is.
+Lily: Yes! After the company introduction, we'll take a short tour. Then our IT specialist will show you how to use the internal system.
+You: Great. When will I meet my mentor and department leader?
+Lily: After the orientation this morning, you'll meet them at 2 PM. Now let's start the training.
+You: Sure, thank you, Lily!"
+课件1 · L06 Orientation (medium),对话,"Post-Orientation Follow-Up
+入职培训后的跟进","You: Good afternoon, Lily. I'm [Your Name]. I have a few questions after the training.
+Lily: Hi [Your Name]! Feel free to ask—I'm here to help you.
+You: Thank you. I didn't catch how to apply for office supplies through the internal system. Could you help me?
+Lily: Of course! Log in to the internal platform, click ""Office Management"", select ""Office Supplies Application"", choose the items you need and submit. I'll send you a simple guide too.
+You: That's helpful. Also, could you confirm tomorrow's training time and place?
+Lily: It starts at 9 AM in Meeting Room 3. Arrive 10 minutes early, and you don't need to prepare anything.
+You: Perfect, that's all. Thank you so much!
+Lily: You're welcome! Contact me anytime if you have other questions."
+课件1 · L06 Orientation (medium),短句,Welcome to the company's orientation session.,重点句型
+课件1 · L06 Orientation (medium),短句,Could you confirm which orientation manual I should use?,欢迎参加公司的入职培训
+课件1 · L06 Orientation (medium),短句,Will we have a tour of the office later?,您能确认我应该使用哪版入职手册吗？
+课件1 · L06 Orientation (medium),短句,Could you explain the company's rules?,我们之后会参观办公室吗？
+课件1 · L06 Orientation (medium),短句,I need help with the internal system.,您能讲解一下公司的规章制度吗？
+课件1 · L06 Orientation (medium),短句,Could you guide me to apply for office supplies?,重点句型
+课件1 · L06 Orientation (medium),短句,What time does the training start tomorrow?,您能指导我申请办公用品吗？
+课件1 · L06 Orientation (medium),短句,When will I meet my mentor?,明天的培训什么时候开始？
+课件1 · L06 Orientation (medium),短句,Thank you for your help with my onboarding.,我什么时候能见到我的导师？
+课件1 · L06 Orientation (medium),短句,I have a few questions after the orientation.,感谢您在我入职时提供的帮助
+课件1 · L06 Orientation,短句,I will join the company orientation.,重点句型
+课件1 · L06 Orientation,短句,We learn [Content] in the orientation.,我将要参加公司的入职培训
+课件1 · L06 Orientation,短句,I know the company rules from the orientation.,我们在入职培训中学习[内容]
+课件1 · L06 Orientation,短句,The orientation helps me know the team.,我从入职培训中了解了公司规则
+课件1 · L06 Orientation,短句,I take part in the onboarding this morning.,入职培训帮我了解了团队
+课件1 · L07 Work Schedules,对话,"Asking About Daily Work Schedule
+询问日常工作时间","Team Lead: Hi! Welcome again. Our daily working hours are from 9 AM to 6 PM, and we have a one-hour lunch break from 12 PM to 1 PM. During the break, you can go to the pantry for meals or rest in the office.
+You: Thank you so much. That's clear. Do we have any fixed daily tasks to finish? And when do we usually have team meetings? I want to make sure I won't miss anything important.
+Team Lead: Don't worry. We have a short team meeting every morning at 9:10 AM, right after we start working. At the meeting, we'll go over the daily tasks and progress. Your main daily task is to finish the work assigned to you, and you need to report your progress to me before 5:30 PM every day.
+You: Got it. What if I can't finish the assigned work on time? Should I inform you in advance?
+Team Lead: Yes, if you have any difficulty in finishing the work on time, please let me know as soon as possible. We can adjust the task arrangement together. Also, if there's any change to the daily schedule, I'll inform you in time.
+You: Understood. Thank you for your detailed explanation. I'll follow the schedule and inform you if I have any problems.
+Team Lead: You're welcome. Let me know if you have other questions about the work schedule or anything else."
+课件1 · L07 Work Schedules,对话,"Asking About Daily Work Schedule
+再次确认日常工作时间","Team Lead: Hey! Welcome again. We work from 9 AM to 6 PM every day, and lunch break is from 12 to 1 PM—an hour total. You can grab food from the pantry or just chill in the office during that time, whatever's easier.
+You: Thanks so much, that makes sense! Do we have any daily tasks we have to get done? And when do we usually have team meetings? I don't wanna miss anything important.
+Team Lead: No worries! We have a quick team meeting every morning at 9:10, right after we start. We'll go over what we need to do that day and how we're progressing. Your main job each day is to finish the tasks I assign you, and just check in with me before 5:30 PM to let me know how you're doing.
+You: Got it. What if I can't finish my tasks on time? Should I tell you ahead of time?
+Team Lead: Yeah, if you're having trouble finishing on time, just let me know as soon as you can. We can tweak the task list together. Also, if the schedule changes for any reason, I'll hit you up right away.
+You: Got it, thanks for breaking it down for me! I'll stick to the schedule and let you know if I run into any issues."
+课件1 · L07 Work Schedules,短句,My work schedule is [Content].,我的工作安排是[内容]
+课件1 · L07 Work Schedules,短句,I start work at [Time].,我在[时间]开始工作
+课件1 · L07 Work Schedules,短句,I need to finish [Task] today.,我今天需要完成[任务]
+课件1 · L07 Work Schedules,短句,I will [Action] with my team this afternoon.,我今天下午要和团队一起[动作]
+课件1 · L07 Work Schedules,短句,My daily work is to [Work Content].,我的日常工作是[工作内容]
+课件1 · L07 Work Schedules,短句,Could you tell me our working hours and break time?,您能告诉我我们的工作时间和休息时间吗？
+课件1 · L07 Work Schedules,短句,Are there any special rules about the schedule?,关于工作安排有什么特殊规定吗？
+课件1 · L07 Work Schedules,短句,Do we have any fixed daily tasks to finish?,我们有需要完成的固定日常任务吗？
+课件1 · L07 Work Schedules,短句,When do we usually have team meetings?,我们通常什么时候开团队会议？
+课件1 · L07 Work Schedules,短句,What if I can't finish the assigned work on time?,如果我不能按时完成分配的工作怎么办？
+课件1 · L07 Work Schedules,短句,Should I inform you in advance?,我需要提前通知您吗？
+课件1 · L07 Work Schedules,短句,Please let me know as soon as possible.,请尽快告诉我
+课件1 · L07 Work Schedules,短句,I'll follow the schedule and inform you if I have any problems.,我会遵守安排，有问题会通知您
+课件1 · L07 Work Schedules,短句,Can you tell me our work hours and break time?,能告诉我我们的工作时间和休息时间吗？
+课件1 · L07 Work Schedules,短句,I'll stick to the schedule and let you know if I run into any issues.,我会遵守安排，遇到问题会告诉你
+课件1 · L08 Give Information,短句,Let me tell you [Information].,重点句型
+课件1 · L08 Give Information,短句,The [Information] is [Detail].,让我告诉你[信息]
+课件1 · L08 Give Information,短句,I will inform you of the [Information].,[信息]是[细节]
+课件1 · L08 Give Information,短句,I can show you the [Information/Thing].,我会通知你[信息]
+课件1 · L08 Give Information,短句,I'll let you know when it's ready.,我可以给你展示[信息/东西]
+课件1 · L08 Give Information,短句,I need to give you some information about…,重点句型
+课件1 · L08 Give Information,短句,I'd like to share some details with you.,我需要向您提供一些关于......的资料
+课件1 · L08 Give Information,短句,Let me tell you the latest update.,我想与您分享一些细节
+课件1 · L08 Give Information,短句,I'm informing you that…,让我来告诉你们最新的消息
+课件1 · L08 Give Information,短句,I want to let you know about…,我在此告知您......
+课件1 · L08 Give Information,短句,Do you need any further information?,重点句型
+课件1 · L08 Give Information,短句,I'll keep you updated if there's anything new.,您还需要其他信息吗？
+课件1 · L08 Give Information,短句,Thank you for letting me know.,如果有任何新情况，我会及时通知你
+课件1 · L08 Give Information,短句,Please pass this information to others.,感谢您告知我此事
+课件1 · L08 Give Information,短句,I'll send a notice to remind you later.,请将此信息转告给其他人
+课件1 · L09 Arranging a Meeting,对话,"Arranging a Team Meeting
+安排团队会议","Mike: Hey, could we arrange a Teams meeting for tomorrow to go over the project updates?
+Lily: Sure! What time works for you? I'm free from 10 AM to 1 PM.
+Mike: 11 AM sounds good. Can you send the invite? Let's include Lisa and Alex too—they need to share their parts.
+Lily: Will do. Should I add a brief agenda? Like discussing the timeline and feedback.
+Mike: Perfect. Thanks! I'll make sure to join on time.
+Lily: No problem. See you then!"
+课件1 · L09 Arranging a Meeting,短句,I need to arrange a meeting for [Purpose].,重点句型
+课件1 · L09 Arranging a Meeting,短句,Let's set the meeting at [Time].,我需要为[目的]安排一场会议
+课件1 · L09 Arranging a Meeting,短句,The meeting will be in [Place].,我们把会议定在[时间]吧
+课件1 · L09 Arranging a Meeting,短句,I will inform the team about the meeting.,会议将在[地点]举行
+课件1 · L09 Arranging a Meeting,短句,I have arranged the meeting for [Time].,我会通知团队会议的事情
+课件1 · L09 Arranging a Meeting,短句,I have arranged the meeting for [Time].,我已经把会议安排在[时间]了
+课件1 · L09 Arranging a Meeting,短句,Could we arrange a Teams meeting for [Time]?,重点句型
+课件1 · L09 Arranging a Meeting,短句,What time works for you?,我们能安排一个Teams会议在[时间]吗?
+课件1 · L09 Arranging a Meeting,短句,Can you send the meeting invite?,你什么时候方便？
+课件1 · L09 Arranging a Meeting,短句,Can you send the meeting link?,你能发送一下会议邀请吗？
+课件1 · L09 Arranging a Meeting,短句,I'll make sure to join on time.,你能发送一下会议链接吗？
+课件1 · L09 Arranging a Meeting,短句,Let's hop on a Teams call this afternoon.,重点句型
+课件1 · L09 Arranging a Meeting,短句,[Time] works for me.,今天下午咱们来参加一下Teams会议吧.
+课件1 · L09 Arranging a Meeting,短句,Will loop in [someone/team].,[时间]对我来说很合适
+课件1 · L09 Arranging a Meeting,短句,Add [someone/team] to the tech meeting.,会邀请[某人/某团队]参与
+课件1 · L09 Arranging a Meeting,短句,See you on Teams at [Time].,将[某人/某团队]加入技术会议中
+课件1 · L10 Make a Request,对话,"Requesting Help with a Technical Block
+请求协助解决技术阻塞","You: Hi Jake, do you have a minute? I need to make an important request. I've been stuck on a critical API integration problem for nearly two hours, and I just can't identify the root cause.
+Jake: Sure, I'm free now. What seems to be the issue exactly?
+You: The interface keeps returning a 500 internal server error when I send POST requests. I've double-checked the request parameters, headers, and endpoint URL, but it still fails every time. Could you help me locate and fix this API error?
+Jake: No problem. Let me look at your code and the error log together. I'll help you find out which part is wrong.
+You: Also, the system doesn't give clear error messages. Could you help me read and analyze the backend error log correctly?
+Jake: Of course. I'll explain every step and teach you how to debug this kind of problem independently next time.
+You: That would be fantastic. I would appreciate your professional help."
+课件1 · L10 Make a Request,对话,"Making an Urgent Request to Your Manager
+向主管提出紧急请求","You: Excuse me, Mr. Wilson. May I speak with you about an urgent request?
+Wilson: Sure, come in and take a seat. What's going on?
+You: I've been working full-time on the payment module development, but I encountered unexpected database compatibility issues that seriously delayed my progress. I wonder if you could approve a short deadline extension to ensure the code is stable and secure before submission.
+Wilson: I understand unexpected problems often happen in development. How much more time do you really need?
+You: I need at least four more hours to finish testing and performance optimization. Could you give me some advice on how to prioritize the remaining tasks to save time?
+Wilson: Alright. I'll approve the extension. Make sure you update me once you finish every key step.
+You: Thank you so much for your understanding and support. I will keep you updated on time."
+课件1 · L10 Make a Request,短句,Can you help me [Action]?,你能帮我[动作]吗?
+课件1 · L10 Make a Request,短句,Could you do me a favor?,你能帮我个忙吗?
+课件1 · L10 Make a Request,短句,Please [Action] for me.,请帮我[动作]
+课件1 · L10 Make a Request,短句,Can you give me [Something]?,你能给我[某物]吗?
+课件1 · L10 Make a Request,短句,Could you show me how to [Action]?,你能教我怎么[动作]吗?
+课件1 · L10 Make a Request,短句,I need to make an important request about [something].,我需要提出一个关于[某事]的重要请求
+课件1 · L10 Make a Request,短句,I've been stuck on [a problem] for a long time.,我被[某个问题]卡住很久了
+课件1 · L10 Make a Request,短句,Could you help me [do something]?,你能帮我[做某事]吗？
+课件1 · L10 Make a Request,短句,Could you help me [do something] correctly?,你能帮我正确地[做某事]吗？
+课件1 · L10 Make a Request,短句,I would appreciate your [help/support].,我将非常感激你的[帮助/支持]
+课件1 · L10 Make a Request,短句,May I speak with you about [an urgent request].,我能和你谈一下[一个紧急请求]吗？
+课件1 · L10 Make a Request,短句,I encountered unexpected [problems/issues] that delayed my progress.,我遇到了意外的[问题]耽误了进度
+课件1 · L10 Make a Request,短句,I wonder if you could [do something for me].,我想知道你是否能[为我做某事]
+课件1 · L10 Make a Request,短句,Could you give me some advice on how to [do something]?,你能给我一些建议，如何[做某事]吗？
+课件1 · L10 Make a Request,短句,I will keep you updated on [something] in time.,我会及时向你同步[某事]的最新进展
+课件1 · L11 Having a Meeting,短句,We are having a meeting at [Time].,我们将在[时间]开会
+课件1 · L11 Having a Meeting,短句,I need to attend a meeting.,我需要参加一场会议
+课件1 · L11 Having a Meeting,短句,Let's discuss [Topic] in the meeting.,我们在会议中讨论[主题]吧
+课件1 · L11 Having a Meeting,短句,I'd like to speak in the meeting.,我想在会议中发言
+课件1 · L11 Having a Meeting,短句,We are discussing the [Project/Task] progress.,我们正在讨论[项目/任务]进度
+课件1 · L11 Having a Meeting,短句,We have a [team/project] meeting at [time] this afternoon.,我们今天下午[时间]有个[团队/项目]会
+课件1 · L11 Having a Meeting,短句,The meeting is about [progress/blockers/tasks].,会议是关于[进度/阻碍/任务]的
+课件1 · L11 Having a Meeting,短句,Let's get started with today's [meeting].,我们开始今天的[会议]吧
+课件1 · L11 Having a Meeting,短句,My work is [on track/behind schedule/ahead of schedule] so far.,到目前为止我的工作[进度正常/滞后/提前]
+课件1 · L11 Having a Meeting,短句,I'm facing a problem with [system/interface/code].,我在[系统/接口/代码]上遇到了问题
+课件1 · L11 Having a Meeting,短句,I haven't found the [cause/solution] yet.,我还没找到[原因/解决方案]
+课件1 · L11 Having a Meeting,短句,My plan next is to [finish/test/fix] the task.,我接下来的计划是[完成/测试/修复]任务
+课件1 · L11 Having a Meeting,短句,I need some help with [technical issue].,我在[技术问题]方面需要一些帮助
+课件1 · L11 Having a Meeting,短句,I'll keep you [updated/posted] on my progress.,我会随时跟你[同步/更新]我的进度
+课件1 · L12 Making Requests in the Meeting,对话,"Requesting Help in Daily Scrum
+在每日站会中请求协助","Team Lead: Sure. Can you briefly explain the issue first?
+You: Of course. The API keeps returning an error, and I can't find the reason. Would you mind spending 10 minutes with me after the meeting to look at the code?
+Team Lead: No problem. Let's meet at the desk right after this scrum.
+You: Thank you so much. I really appreciate your help.
+Mike: If you need extra support, I can also help after the meeting.
+You: That's great! Thank you both."
+课件1 · L12 Making Requests in the Meeting,对话,"Requesting More Time & Adjusting Tasks
+申请延期并调整任务","Team Lead: How much more time do you need?
+You: Could I have one more day? I'll finish all test cases by tomorrow afternoon. Also, could we adjust the task order so that I can focus on this first?
+Team Lead: Let's see. The sprint deadline is next week, so one more day is okay. I'll adjust the task arrangement for you.
+You: Thank you very much. I'll work hard to get it done on time.
+Team Lead: No rush. Just make sure the test cases are correct.
+You: I will. Thanks again."
+课件1 · L12 Making Requests in the Meeting,短句,Could you help me with [something] after the meeting?,重点句型
+课件1 · L12 Making Requests in the Meeting,短句,Would you mind [action] for me later?,会议结束后，你能帮我处理[某件事]吗？
+课件1 · L12 Making Requests in the Meeting,短句,I'd like to make a request about the task arrangement.,稍后你介意帮我做[某个动作]吗？
+课件1 · L12 Making Requests in the Meeting,短句,May I have more time to finish [work]?,我想就任务安排提一个请求
+课件1 · L12 Making Requests in the Meeting,短句,Could we adjust the task order to prioritize [task]?,我可以多一点时间完成[某项工作]吗？
+课件1 · L12 Making Requests in the Meeting,短句,Can you give me some guidance on [issue]?,重点句型
+课件1 · L12 Making Requests in the Meeting,短句,I need your support for the task of [sprint].,你能就[某个问题]给我一些指导吗？
+课件1 · L12 Making Requests in the Meeting,短句,Would it be possible to discuss [something] in more detail later?,我需要你为[迭代]任务提供支持
+课件1 · L12 Making Requests in the Meeting,短句,Could you spare some time to help me with [requirement]?,稍后我们能就[某件事]更详细地讨论吗？
+课件1 · L12 Making Requests in the Meeting,短句,I would appreciate it if you could assist me with [something].,你能抽出点时间帮我处理[某个需求]吗？
+课件1 · L13 Offering Help in the Meeting,短句,Do you need any help in the meeting?,重点句型
+课件1 · L13 Offering Help in the Meeting,短句,Let me [Action] you.,你在会议中需要帮忙吗？
+课件1 · L13 Offering Help in the Meeting,短句,I can [ Action] you a hand to get it done shortly.,我来帮你[做某事]
+课件1 · L13 Offering Help in the Meeting,短句,Please [Action] the report to the manager.,我可以[做某事]您尽快完成这件事
+课件1 · L13 Offering Help in the Meeting,短句,Let me give you a hand with the [Problem/Thing].,请把这份报告[做某事]经理
+课件1 · L13 Offering Help in the Meeting,短句,Can I help you troubleshoot this bug after the meeting?,重点句型
+课件1 · L13 Offering Help in the Meeting,短句,Would you like me to [Action] you with your task?,会议结束后，我能帮您排查一下这个故障吗？
+课件1 · L13 Offering Help in the Meeting,短句,I can [Action] you with troubleshooting the problem.,您希望我[做某事]您来完成您的任务吗？
+课件1 · L13 Offering Help in the Meeting,短句,Let me [Action] you finish part of your work.,我可以[做某事]您排查这个问题
+课件1 · L13 Offering Help in the Meeting,短句,I'm glad to [Action] you meet the deadline.,让我[做某事]您完成一部分工作吧
+课件1 · L14 Leaving a Message,短句,I left a [message/note] for you on the desk.,我在桌上给你留了[留言/便条]
+课件1 · L14 Leaving a Message,短句,Please tell [Name] to call me back.,请告诉[姓名]给我回电
+课件1 · L14 Leaving a Message,短句,Can you pass this message to [Name]?,你能把这个留言转给[姓名]吗？
+课件1 · L14 Leaving a Message,短句,"This note is for [Name], about the [work/task].",这张便条是给[姓名]的，关于[工作/任务]的
+课件1 · L14 Leaving a Message,短句,I left word for you to contact me soon.,我留了口信让你尽快联系我
+课件1 · L14 Leaving a Message,短句,You can leave a [message/note] for her at the front of the desk.,我在桌上给你留了[留言/便条]
+课件1 · L14 Leaving a Message,短句,Please leave a [message/note] in the group chat once it's done.,任务完成后，请在群聊中留下一条[留言/通知]
+课件1 · L14 Leaving a Message,短句,She left a [message/note] reminding herself of the meeting.,她留下了一条[留言/便条]，以提醒自己要参加这次会议
+课件1 · L14 Leaving a Message,短句,Leave a note on the notice board about the change you made.,在公告板上留下关于你所做的更改的说明
+课件1 · L14 Leaving a Message,短句,"If you meet the IT staff on - site, leave a word about the network problem in our area.",如果你在现场遇到信息技术人员，就向他们提及我们区域的网络问题吧
+课件1 · L15 Confirming Information,短句,I want to confirm [Information] with you.,重点句型
+课件1 · L15 Confirming Information,短句,Is [Information] correct?,我想和你确认[信息]
+课件1 · L15 Confirming Information,短句,Can you confirm [Something] for me?,[信息]是正确的吗？
+课件1 · L15 Confirming Information,短句,I just want to make sure about [Information].,你能帮我确认[某物/某事]吗？
+课件1 · L15 Confirming Information,短句,Thank you for confirming the [Detail/Information].,我只是想确认一下[信息]
+课件1 · L15 Confirming Information,短句,Could you double-check [details] for me?,重点句型
+课件1 · L15 Confirming Information,短句,"The deadline is [time], correct?",你能帮我再次核对[详情]吗？
+课件1 · L15 Confirming Information,短句,Can you confirm [Something] for me?,截止日期是[时间]，对吗？
+课件1 · L15 Confirming Information,短句,Correct me if I'm wrong about [something].,你能帮我确认[某物/某事]吗？
+课件1 · L15 Confirming Information,短句,Is the meeting in [place] at [time].,如果我在[某事]上错了，请纠正
+课件1 · L16 Opening a Meeting,对话,"Opening a Daily Team Meeting
+开启每日团队会议","Attendees: Good morning! Yes, everyone is here.
+You: Great. Today's agenda has two parts: review yesterday's progress and assign today's tasks. Any questions or additions to the agenda? Amy (Product Manager): Can we add a 5-minute discussion on yesterday's user feedback about frontend optimization after task assignment?
+You: Sure, Amy. Let's start with Lisa—please share your frontend progress from yesterday."
+课件1 · L16 Opening a Meeting,对话,"Opening a Project Kick-off & Problem-solving Hybrid Meeting
+开启项目启动与问题解决会议","You: The meeting agenda includes three items. 1. Backend team shares yesterday's interface error details, root cause and temporary solution. 2. Kick off the new user system project (background, goals, milestones, responsibilities). 3. Discuss process optimization to avoid similar errors. Mike (QA Engineer): Could you confirm the time allocation? We need to finalize the QA test plan this afternoon.
+You: 20 mins for error analysis, 30 mins for kick-off, 15 mins for optimization—total 65 mins. Any other questions? Jack (Backend Developer): We're ready with error logs, root cause report and solution document.
+You: Perfect, Jack. Let's start with the error analysis."
+课件1 · L16 Opening a Meeting,短句,"Good morning/afternoon, everyone. Let's start the meeting.",大家上午/下午好，我们开始会议
+课件1 · L16 Opening a Meeting,短句,Thank you for coming/your presence today.,感谢大家今天出席
+课件1 · L16 Opening a Meeting,短句,Let's call the meeting to order.,我们宣布会议正式开始
+课件1 · L16 Opening a Meeting,短句,Today's meeting agenda has [X] parts.,今天的会议议程有[X]部分
+课件1 · L16 Opening a Meeting,短句,Our main purpose for this meeting is to [Goal].,本次会议的主要目的是[目标]
+课件1 · L16 Opening a Meeting,短句,"First, let's confirm all attendees are present.",首先，我们确认所有参会人员已到齐
+课件1 · L16 Opening a Meeting,短句,"Before we start, does anyone have questions about the agenda?",开始之前，有人对议程有疑问吗？
+课件1 · L16 Opening a Meeting,短句,"Today, we'll focus on [Topic/Problem].",今天，我们将重点讨论[主题/问题]
+课件1 · L16 Opening a Meeting,短句,Let's kick off the meeting with [First Part].,我们从[第一部分内容]开始本次会议
+课件1 · L16 Opening a Meeting,短句,I'd like to welcome everyone to this [Meeting Type] meeting.,欢迎大家参加本次[会议类型]会议
+课件1 · L17 Meeting Agenda and Rules,对话,"Confirming and Explaining Meeting Agenda
+确认并说明会议议程","Attendees: Yes, that's clear.
+Colleague A: Could you adjust the order? I need to leave early, so I hope to discuss the task arrangement first.
+You: Sure. Let's adjust the agenda order: first, discuss this week's tasks; second, review last week's results; third, collect optimization suggestions. Does anyone disagree?
+Attendees: No disagreement.
+You: Great. Let's stick to this adjusted agenda and start now."
+课件1 · L17 Meeting Agenda and Rules,对话,"Reminding and Guiding to Follow Meeting Rules
+提醒并引导遵守会议规则","Attendees: No questions.
+Colleague B: (Talking loudly with others during the meeting)
+You: Excuse me, could we please keep quiet and focus on the meeting? Let's follow the rules and respect others' time. If you have questions, you can speak after the current speaker finishes.
+Colleague B: Sorry, I'll be quiet.
+You: Thank you. Let's continue with the agenda. Remember to take notes of key points for follow-up."
+课件1 · L17 Meeting Agenda and Rules,短句,Today's meeting agenda has [X] items.,今天的会议议程有[X]项
+课件1 · L17 Meeting Agenda and Rules,短句,Let's confirm the meeting agenda first.,我们先确认一下会议议程
+课件1 · L17 Meeting Agenda and Rules,短句,Can we adjust the order of the agenda items?,我们可以调整议程项的顺序吗？
+课件1 · L17 Meeting Agenda and Rules,短句,We need to stick to the agenda to save time.,我们需要遵守议程以节省时间
+课件1 · L17 Meeting Agenda and Rules,短句,Please arrive on time for the meeting.,请准时参加会议
+课件1 · L17 Meeting Agenda and Rules,短句,Let's avoid off-topic discussions during the meeting.,会议期间我们避免跑题讨论
+课件1 · L17 Meeting Agenda and Rules,短句,Speak one by one and respect others' opinions.,依次发言，尊重他人观点
+课件1 · L17 Meeting Agenda and Rules,短句,Could you keep quiet and focus on the meeting?,请保持安静，专注于会议好吗？
+课件1 · L17 Meeting Agenda and Rules,短句,Please take notes of the key points in the meeting.,请记录会议中的重点内容
+课件1 · L17 Meeting Agenda and Rules,短句,Let's follow the meeting rules to make it efficient.,我们遵守会议规则，让会议更高效
+课件1 · L18 Delivering Good News,对话,"Sharing Good News with Colleagues
+与同事分享好消息","You: Hi everyone, I have great news to share with you! Our team's project passed the client's final review this morning. They are very satisfied with our work.
+Colleague A: Really? That's wonderful news! I can't believe we made it—we worked so hard on this project for two months.
+Colleague B: Yes! I'm so excited. The client's recognition is the best reward for our efforts. Will the company announce this to the whole department?
+You: Sure. Our team lead will announce it in the department meeting this afternoon. Also, the company will give our team a small bonus as a reward. Let's keep up the good work!
+Colleagues: Great! Thank you for sharing the good news with us first."
+课件1 · L18 Delivering Good News,对话,"Announcing Good News to the Team
+向团队宣布好消息","Team Members: What's the good news? We're all looking forward to it!
+You: First, our new product was approved by the market department, and it will be officially launched next month. Second, because of our outstanding performance in the last quarter, each of us will get an extra performance bonus.
+Team Member A: That's amazing! I'm so happy to hear that. All our hard work on the new product paid off.
+Team Member B: Yes! This is such great news. Thank you for leading us well. We'll continue to work hard for the team's success.
+You: I'm glad you're all excited. This achievement belongs to every one of you. Let's celebrate this good news together and keep moving forward!"
+课件1 · L18 Delivering Good News,短句,I have good news to share with you.,重点句型
+课件1 · L18 Delivering Good News,短句,I'm pleased to announce some good news.,我有好消息要和大家分享
+课件1 · L18 Delivering Good News,短句,That's great/wonderful news!,我很荣幸宣布一些好消息
+课件1 · L18 Delivering Good News,短句,Our team succeeded in [Something].,真是个好/太棒的消息！
+课件1 · L18 Delivering Good News,短句,We got good news from [Someone/Department].,我们团队在[某事]上成功了
+课件1 · L18 Delivering Good News,短句,I'm so happy/excited to hear the good news.,重点句型
+课件1 · L18 Delivering Good News,短句,Our hard work finally paid off.,听到这个好消息我非常开心/兴奋
+课件1 · L18 Delivering Good News,短句,I'm glad to inform you that [Good News].,我们的努力终于有回报了
+课件1 · L18 Delivering Good News,短句,Let's celebrate this good news together.,我很高兴告知大家[好消息]
+课件1 · L18 Delivering Good News,短句,This good news is a reward for our efforts.,让我们一起庆祝这个好消息
+课件1 · L19 Delivering Bad News,对话,"Zoom Meeting – Delivering Technical Bad News
+Zoom 会议：传达技术坏消息","Manager: Let's synchronize the current development progress. Is everything going as planned?
+You: Honestly, I regret to inform you that we have encountered an unexpected technical setback. During the latest system integration test, we found severe data synchronization errors between the new module and the local database. Some user data cannot be stored normally, and the data rollback function also fails to work.
+Manager: That sounds serious. What caused this unexpected error?
+You: After repeated investigation, we confirmed that the incompatible database version leads to data parsing failure. This problem is more complicated than we expected, and it cannot be fixed within one day.
+Manager: I see. Will this affect the original delivery deadline?
+You: Yes. I have to honestly report that the current progress will be delayed by at least two working days. We cannot complete the testing and delivery before the original deadline. I take full responsibility for this unpredictable technical risk.
+Manager: Do you have any remedial plan to minimize the negative impact?
+You: Sure. I have arranged two extra developers to optimize the database configuration. We will shorten the testing cycle and prioritize core functions to ensure the key module goes online on time. I will keep updating the latest troubleshooting progress every six hours.
+Manager: Alright, please keep the team posted and try to reduce the loss.
+You: Got it. We will spare no effort to remedy this issue."
+课件1 · L19 Delivering Bad News,对话,"Teams Meeting – Delivering Workflow Bad News in Agile Sprint
+Teams 会议：传达敏捷迭代中的流程坏消息","Manager: How is the task completion status in this sprint?
+You: I need to break some bad news to the team. Due to the sudden requirement adjustment from the client, two important user stories have to be modified. The extra modification brings extra workload and unavoidable rework.
+Manager: Did the client confirm the adjustment officially?
+You: Yes, the product team has received the formal notice this morning. The modification involves data logic and page display, which means we have to rewrite nearly 30% percent of the existing code.
+Manager: That will definitely increase our development pressure.
+You: Exactly. Under the current staff allocation, we cannot finish all planned tasks before the sprint review. Part of the low-priority functions have to be postponed to the next iteration.
+Manager: Have you discussed this situation with other teammates?
+You: Yes. I have collected everyone's opinions and sorted out a new task priority list. We will focus on core business functions and postpone the secondary functions reasonably. Meanwhile, we will hold a short daily sync meeting to avoid further delays.
+Manager: Good. Please keep transparent communication and remind everyone to adjust their working pace.
+You: Sure. I will take responsibility for coordinating the task rearrangement and minimize the negative influence on the whole project."
+课件1 · L19 Delivering Bad News,短句,I regret to inform you that we have encountered an unexpected setback.,重点句型
+课件1 · L19 Delivering Bad News,短句,I have to honestly report that the progress will be delayed.,我很遗憾地告知我们遇到了意外挫折
+课件1 · L19 Delivering Bad News,短句,I take full responsibility for this technical risk.,我必须如实汇报进度将会延误
+课件1 · L19 Delivering Bad News,短句,I need to break some bad news to the whole team.,我愿意为这次技术风险承担全部责任
+课件1 · L19 Delivering Bad News,短句,We will rearrange tasks to minimize the negative influence.,我需要向团队传达一则坏消息
+课件1 · L19 Delivering Bad News,短句,I regret to __________ you that the task will be delayed.,重点句型
+课件1 · L19 Delivering Bad News,短句,We have met an unexpected technical __________.,我遗憾地[通知/告知]你任务将会延误
+课件1 · L19 Delivering Bad News,短句,I need to __________ the bad news to my manager frankly.,我们遇到了一场意外的技术[挫折/故障]
+课件1 · L19 Delivering Bad News,短句,I will take full __________ for this mistake.,我需要坦率地向经理[汇报/传达]坏消息
+课件1 · L19 Delivering Bad News,短句,We need a __________ plan to reduce the loss.,我将为这次失误承担全部[责任]
+课件1 · L20 Clarifying,对话,"Clarifying a misunderstanding at work
+澄清工作中的误会","Colleague: I heard you're going to change our project plan and cancel the module we developed. Is that true?
+You: Let me clarify that. That's not exactly right. I didn't say we would cancel the module. What I mean is we need to adjust its function and optimize the code, not remove it completely.
+Colleague: Oh, I misunderstood. So we still need to keep the module?
+You: Yes, exactly. We just need to improve it based on the new requirements. I'd like to make it clear so no one gets confused again.
+Colleague: Got it. Thanks for clarifying. I'll tell the team the correct information."
+课件1 · L20 Clarifying,对话,"Clarifying wrong information in a meeting
+在会议中澄清错误信息","Team Lead: Someone mentioned that the client refused all our design plans. Is that the real situation?
+You: I'd like to clarify this point. Actually, the client didn't refuse all plans. They only disagreed with two details in the interface design, and they accepted most of our content.
+Team Lead: So the misunderstanding came from incomplete information?
+You: Yes. I think someone only heard part of the feedback and spread it incorrectly. I want to state clearly that we don't need to redesign everything; we just need to revise those two small parts.
+Team Lead: Good. Thanks for clarifying in time. It helps us avoid wrong decisions."
+课件1 · L20 Clarifying,短句,Let me clarify what I really mean.,让我澄清我的真实意思
+课件1 · L20 Clarifying,短句,That's not exactly right.,那不完全正确
+课件1 · L20 Clarifying,短句,There is a misunderstanding about this.,关于这件事有个误会
+课件1 · L20 Clarifying,短句,What I mean is.,我的意思是……
+课件1 · L20 Clarifying,短句,I'd like to correct the wrong information.,我想纠正错误信息
+课件1 · L20 Clarifying,短句,Let me make it clear for everyone.,我给大家讲清楚
+课件1 · L20 Clarifying,短句,"Actually, the situation is.",事实上，情况是……
+课件1 · L20 Clarifying,短句,I didn't mean that at all.,我根本不是那个意思
+课件1 · L20 Clarifying,短句,Please allow me to explain it again.,请允许我再解释一遍
+课件1 · L20 Clarifying,短句,I hope this clarifies the confusion.,我希望这能澄清困惑
+课件1 · L21 Closing a Meeting,对话,"Closing a Daily Team Meeting
+结束每日团队会议","You: Sure, Lisa. The key requirement is to ensure that the data displayed on the frontend is consistent with the backend data, and there should be no delay or error when users operate. If you encounter any problems during the connection, you can directly communicate with Jack and Sarah. Colleague B (Mike): I have a question too. The bugs I need to fix—should I prioritize the critical ones first, or finish them in the order we listed?
+You: Great question, Mike. Please prioritize the critical bugs that affect user experience first; the minor ones can be handled after the critical ones are fixed. That way, we can ensure the system runs smoothly.
+Colleagues: Got it.
+You: Perfect. If there are no other questions, let's conclude the meeting. I'll distribute the meeting minutes to the group chat within an hour, which will include all the key points, action items, and requirements we discussed. Please check it later and let me know if there's any mistake or omission. Thank you all for your active participation and hard work today—let's keep up the good work.
+Colleagues: Thank you. See you later."
+课件1 · L21 Closing a Meeting,对话,"Closing a Project Meeting
+结束项目会议","Team Lead: I'd like to add one point—after the revision and test are completed, we need to do a small-scale internal trial to ensure there are no new issues before we submit it to the client.
+You: Thank you for the reminder, Team Lead. That's an important point I missed. So we'll add an internal trial step: after Mike finishes the test, the whole team will participate in the trial next Saturday morning, and we'll collect feedback and fix any new problems found. Colleague C (Jack): Just to confirm—if I encounter technical difficulties during the code revision, who should I consult?
+You: You can consult Sarah first, as she has rich experience in this type of code revision. If you still can't solve it, we'll hold a short emergency meeting to discuss it together. Also, our next project meeting will be held next Monday morning at 10 AM, where we'll check the progress of each task, discuss any problems encountered, and adjust the plan if necessary.
+Team Lead: Everyone must remember the deadline and the action items clearly. If you think you can't finish the task on time, please inform me and the host in advance so we can make adjustments.
+Colleagues: Understood.
+You: Great. If no one has anything else to add or ask, the meeting is adjourned. I'll sort out the detailed meeting minutes, including all decisions, action items, deadlines, and the added internal trial step, and distribute them to everyone's email before the end of today. Thank you all for your active participation and valuable suggestions—let's work together to ensure the project goes smoothly.
+Team Members: Thank you."
+课件1 · L21 Closing a Meeting,短句,Let's wrap up / conclude the meeting.,我们结束会议吧
+课件1 · L21 Closing a Meeting,短句,Let me summarize / recap the key points.,我来总结一下要点
+课件1 · L21 Closing a Meeting,短句,These are the main decisions we made today.,这些是我们今天做出的主要决定
+课件1 · L21 Closing a Meeting,短句,Please finish your task by the deadline.,请在截止日前完成任务
+课件1 · L21 Closing a Meeting,短句,I'll distribute the meeting minutes later.,我稍后会分发会议纪要
+课件1 · L21 Closing a Meeting,短句,Our next meeting is on [date] at [time].,我们下次会议在[日期][时间]
+课件1 · L21 Closing a Meeting,短句,Please follow up on your action items.,请跟进你的行动项
+课件1 · L21 Closing a Meeting,短句,"If you have no questions, we can stop here.",如果大家没有问题，我们就到这里
+课件1 · L21 Closing a Meeting,短句,Thank you all for your time / participation.,谢谢大家的时间/参与
+课件1 · L21 Closing a Meeting,短句,The meeting is adjourned / dismissed.,会议到此结束
+课件1 · L22 Starting a Presentation,对话,"Starting a Team Progress Presentation
+开始团队进度汇报","Team Lead: Before you begin, could you please outline the key sections of your presentation? We have a tight schedule this afternoon, with another meeting scheduled in an hour, so we need to keep things efficient.
+You: Absolutely, Team Lead. I fully understand, and I'll make sure to keep the presentation concise, focused, and within the allocated time. The presentation will cover three main parts: first, a quick recap of our monthly objectives—what we set out to achieve at the beginning of the month, including the key modules we planned to complete and the performance metrics we aimed to reach. Second, a detailed breakdown of our current progress, including specific tasks we've finished, key milestones we've hit, and relevant data such as task completion rates, system efficiency improvements, and any delays we've encountered. Third, a discussion of the issues we're facing right now, the solutions we've proposed, and our detailed work plan for the next two weeks, including assigned tasks, responsible personnel, and clear deadlines. Additionally, I'll leave 5 to 10 minutes at the end for questions and discussions, so everyone can raise any doubts or suggestions.
+Colleague A: That sounds comprehensive. Just to confirm—will you share the specific performance metrics, like system stability rates or the efficiency improvements compared to last month? Those data points will help us better understand the value of our work.
+You: Great question, and I'm glad you asked. I'll definitely present relevant charts and specific data in the second section to show our progress clearly and intuitively. I've prepared a few slides with comparison data, so everyone can easily see how far we've come. I'll also briefly explain the data to ensure everyone understands what it means for our team's goals. Now, without further ado, let's kick off the presentation with the first part—our monthly objectives and what we set out to achieve.
+Attendees: Okay, let's start. We're all ready."
+课件1 · L22 Starting a Presentation,对话,"Starting a Client Product Introduction
+开始客户产品介绍","Client: Thank you for the warm welcome. We're very interested in learning more about your product, as we've been struggling with some user management issues recently. Before you start, could you please tell us how long the presentation will take? We have another important meeting scheduled in an hour and a half, so we need to manage our time accordingly.
+You: Of course, I completely understand. The full presentation will last about 30 minutes, and we'll leave 15 minutes at the end for your questions, suggestions, and any specific needs you'd like to discuss further. Today, I'll cover four key areas to ensure you get a comprehensive understanding of our product.
+Client: That sounds very thorough, and we appreciate the detailed plan. We're especially focused on the core functions and how they align with our specific user management needs. For example, how we can better manage user data, improve user experience, and reduce operational costs.
+You: I completely understand your focus, and I'll make sure to emphasize the core functions and their real-world applications in the second and third parts of the presentation. I'll also tailor the explanation to your specific business requirements, using examples relevant to your industry to show how the product can be customized to meet your needs. Additionally, if you have any questions during the presentation, feel free to note them down, and we'll address them in the Q&A session at the end. Now, let's start the presentation with the first part—the product background and design philosophy.
+Client: Great, please proceed. We're looking forward to learning more."
+课件1 · L22 Starting a Presentation,短句,"Good morning, everyone. Let's start today's presentation.",重点句型
+课件1 · L22 Starting a Presentation,短句,I'd like to welcome all of you to today's presentation.,大家上午好，我们开始今天的演示
+课件1 · L22 Starting a Presentation,短句,"My name is [Your Name], and I'll be your presenter today.",我想欢迎大家参加今天的演示
+课件1 · L22 Starting a Presentation,短句,"Today, I'll talk about/introduce/discuss [Topic].",我是[你的名字]，今天由我来为大家演示
+课件1 · L22 Starting a Presentation,短句,The presentation will cover [X] key parts.,今天，我将讲解/介绍/探讨[主题]
+课件1 · L22 Starting a Presentation,短句,I'll keep the presentation concise and focus on the key points.,重点句型
+课件1 · L22 Starting a Presentation,短句,We'll leave some time for questions and discussions at the end.,我会保持演示简洁，聚焦重点内容
+课件1 · L22 Starting a Presentation,短句,"Without further ado, let's kick off the presentation.",我们会在最后留出一些时间用于提问和讨论
+课件1 · L22 Starting a Presentation,短句,Today's presentation is mainly about [Core Content].,话不多说，我们开始演示
+课件1 · L22 Starting a Presentation,短句,I'm honored to present our new product/work progress to you.,今天的演示主要围绕[核心内容]展开
+课件1 · L23 Q & A (Question and Answer Session),对话,"Q & A Session After a Team Progress Presentation
+团队进度汇报后的问答环节","Colleague A: Yes, I'd like to ask a question. You mentioned that we have a delay in the backend data docking task. Could you clarify the specific reason for the delay and how it will affect our overall monthly objectives? I'm worried it might impact our subsequent tasks.
+You: Great question, and thank you for bringing that up. The main reason for the delay is that we encountered some compatibility issues with the third-party data interface—we didn't anticipate that their system would have a different data format than we expected. As for the impact on our monthly objectives, we've adjusted the schedule slightly: the data docking task will be completed two days later than planned, but we've optimized the workflow for the next two weeks to make up for the delay. This way, we can still meet our overall monthly goals without affecting other key tasks.
+Colleague B: I have a question too. You shared the performance metrics for system efficiency improvement. Could you elaborate on how we achieved that improvement? I want to learn from it so we can apply the same methods to other modules.
+You: That's a very good question. We achieved the efficiency improvement mainly through two measures: first, we optimized the code structure of the core module, removing redundant code that was causing delays; second, we adjusted the data caching strategy, which reduced the time it takes to load data. I can share the detailed optimization plan with you after the session if you're interested. Does that answer your question?
+Colleague B: Yes, that's very helpful. Thank you.
+Team Lead: I have one more question. You mentioned the solutions for the current issues—how will we monitor the implementation of these solutions to ensure they work effectively?
+You: Excellent question, Team Lead. We'll set up daily short check-ins which each responsible colleague will report the progress of the solution implementation every afternoon. I'll also track the key indicators related to each issue, such as system stability and task completion rate, to monitor whether the solutions are working. If any solution doesn't achieve the expected effect, we'll adjust it in a timely manner.
+You: Alright, it looks like we have no more questions. Thank you all for your valuable inquiries—they help us clarify our work and improve our plan. Let's wrap up the Q & A session here, and I'll follow up with the detailed materials some of you asked for."
+课件1 · L23 Q & A (Question and Answer Session),对话,"Q & A Session After a Client Product Presentation
+客户产品介绍后的问答环节","You: Thank you for your question. The customization process usually takes 7 to 10 working days, depending on the complexity of your specific needs. As for the information you need to provide, we'll need a detailed description of your current user management workflow, the key functions you want to add or adjust, and any specific industry standards or requirements you need the product to meet. Our team will also communicate with your relevant personnel to confirm the details and ensure the customization meets your expectations. Client 2: I'm concerned about the post-launch support. If we encounter technical problems after the product is deployed, how quickly can your team respond? And what kind of support will you provide?
+You: That's a very important concern, and I'm glad you asked. We provide 24/7 technical support after launch—for urgent technical issues, our team will respond within 1 hour and provide a solution within 4 hours. For non-urgent issues, we'll respond within 8 working hours. Our support includes remote troubleshooting, technical guidance, and regular system maintenance. We also provide quarterly training sessions for your team to ensure you can use the product proficiently. Client 1: One more question. Can the product be integrated with our existing CRM system? We don't want to replace our current system; we just want to enhance our user management capabilities.
+You: Absolutely. Our product is designed with flexible integration capabilities, and it can be seamlessly integrated with most mainstream CRM systems, including the one you're currently using. Our technical team will be responsible for the integration work, and we'll test the integration thoroughly to ensure data consistency and system stability. The integration process will not affect the normal operation of your existing CRM system. Client 2: That make sense. We have no more questions for now.
+You: Thank you all for your questions and feedback. We greatly appreciate your attention to our product. If you have any other questions or needs after today's session, please feel free to contact us at any time. We'll also send you a detailed product manual and customization guide within 24 hours. Let's end the Q & A session here—thank you again for your time."
+课件1 · L23 Q & A (Question and Answer Session),短句,"Now, let's move on to the Q & A session.",重点句型
+课件1 · L23 Q & A (Question and Answer Session),短句,Does anyone have any questions?,现在，我们进入问答环节
+课件1 · L23 Q & A (Question and Answer Session),短句,I'd like to ask a question about [Topic].,有人有问题吗？
+课件1 · L23 Q & A (Question and Answer Session),短句,Could you clarify / elaborate on that?,我想提一个关于[主题]的问题
+课件1 · L23 Q & A (Question and Answer Session),短句,Let me answer that question.,你能澄清/详细说明一下吗？
+课件1 · L23 Q & A (Question and Answer Session),短句,We achieved this by arranging 24/7 after-sales personnel.,重点句型
+课件1 · L23 Q & A (Question and Answer Session),短句,I hope that answers your question.,我们通过配备全天候售后人员做到了这一点.
+课件1 · L23 Q & A (Question and Answer Session),短句,We'll follow up with the detailed materials later.,希望这能回答你的问题
+课件1 · L23 Q & A (Question and Answer Session),短句,"If you have any other questions, please feel free to ask.",我们稍后会跟进详细的资料
+课件1 · L23 Q & A (Question and Answer Session),短句,Let's wrap up the Q & A session here.,如果您还有其他问题，欢迎随时提问
+课件1 · L24 Behind Schedule,对话,"Reporting Delay to Team Lead
+向组长报告进度延期","You: Good morning, Team Lead. I'd like to report something about the frontend development task we're responsible for. I'm afraid we are behind schedule, and I want to explain the situation to you in detail.
+Team Lead: I see. How much are we behind? And what's the main reason for the delay? We had a clear timeline, so I need to know why we can't meet the scheduled progress.
+You: Thank you for your understanding, Team Lead. Currently, we are about two days behind the original schedule. The main reason is that we encountered some unexpected technical problems: when we were integrating the new interface with the existing system, we found that there are compatibility issues between the two, which took us more time to debug than we anticipated. In addition, one of our team members was on sick leave for two days last week, which also affected the progress a little.
+Team Lead: I understand the unexpected issues, but we can't afford too much delay—this task is closely related to the backend team's follow-up work. Have you come up with any solutions to make up for the delay?
+You: Yes, we have. We held a small team meeting this morning and worked out a detailed plan. First, we've invited a senior developer from the technical support team to help us solve the compatibility issue, which we expect to fix by the end of today. Second, our team members have agreed to work an extra hour each day this week to make up for the time lost. Third, we've optimized the workflow to avoid any unnecessary delays in the subsequent development process. We believe we can catch up with the original schedule by the end of this week.
+Team Lead: That's a practical plan. Please keep me updated on the progress every afternoon—if you encounter any other problems, report them to me immediately. Don't hesitate to ask for help if you need it.
+You: Thank you, Team Lead. We will definitely keep you updated, and we'll do our best to catch up with the schedule as soon as possible.
+Team Lead: Good. I trust your team's ability. Let's get to work."
+课件1 · L24 Behind Schedule,对话,"Informing Client of Project Delay
+告知客户项目延期","You: I completely understand your concern, Mr. Smith, and I apologize again for the inconvenience caused. Currently, the project is about three days behind the agreed schedule. The main reason for the delay is that during the testing phase, we found some potential bugs in the data security module—we take data security very seriously, so we decided to spend extra time debugging and optimizing this module to ensure it meets your company's high standards. We didn't anticipate that these bugs would be more complex than we initially thought, which led to the delay.
+Mr. Smith: I appreciate your attention to data security—that's very important to us. But we still need to minimize the delay. What solutions do you have to catch up with the schedule?
+You: Thank you for your understanding. We have taken urgent measures to make up for the delay. First, we've added two experienced developers to the project team to focus on the remaining work, especially the debugging of the data security module. Second, our core team will work overtime this weekend to accelerate the progress without compromising the quality. Third, we've adjusted the project timeline reasonably, prioritizing the core functions that are critical to your launch, and we'll complete the non-core functions after the launch if necessary.
+You: We estimate that we can reduce the delay to one day at most, and we'll ensure that the project is delivered with high quality by the revised deadline. We will also send you a detailed progress report every day, so you can keep track of the situation at any time. If you have any requirements or suggestions, please feel free to tell us.
+Mr. Smith: Alright, I accept your apology and your solution plan. I hope you can keep your promise and ensure the project is delivered on time and with good quality. We'll wait for your daily progress report.
+You: Thank you for your trust, Mr. Smith. We will not let you down. We'll do our best to catch up with the schedule and deliver a high-quality project to you."
+课件1 · L24 Behind Schedule,短句,I'm afraid we are behind schedule.,恐怕我们进度滞后了
+课件1 · L24 Behind Schedule,短句,The project is delayed by [X] days.,项目延迟了[X]天
+课件1 · L24 Behind Schedule,短句,The main reason for the delay is…,延迟的主要原因是……
+课件1 · L24 Behind Schedule,短句,We encountered some unexpected technical problems.,我们遇到了一些意外的技术问题
+课件1 · L24 Behind Schedule,短句,We need to accelerate the progress to make up for the delay.,我们需要加快进度来弥补延误
+课件1 · L24 Behind Schedule,短句,We have worked out a detailed solution plan.,我们已经制定了详细的解决计划
+课件1 · L24 Behind Schedule,短句,We will keep you updated on the progress.,我们会及时向你更新进度
+课件1 · L24 Behind Schedule,短句,I apologize for the delay caused.,我为造成的延误道歉
+课件1 · L24 Behind Schedule,短句,We will do our best to catch up with the original schedule.,我们会尽力赶上原定进度
+课件1 · L24 Behind Schedule,短句,We will ensure the project is delivered with high quality.,我们会确保项目高质量交付
+课件1 · L25 Apologizing for a Mistake,对话,"Apologizing to Team Lead for a Work Mistake
+为工作失误向组长道歉","You: Good morning, Team Lead. I'm here to apologize to you sincerely. I made a mistake in the work report I submitted yesterday, and I want to take full responsibility for it.
+Team Lead: I saw the report this morning and noticed the error in the data statistics. Can you explain what happened? This report is important for our team's monthly summary, and incorrect data might affect our work arrangement.
+You: I completely understand, and I feel very remorseful about it. The mistake was entirely my fault. I was in a hurry to finish the report before the deadline yesterday, so I didn't double-check the data after sorting it out. I accidentally mixed up the data of two different modules, which led to the incorrect statistics. I didn't pay enough attention to the details, and I should have been more careful.
+Team Lead: Carelessness in work reports is unacceptable. This could have caused serious problems if I hadn't noticed it in time. Have you corrected the mistake now?
+You: Yes, Team Lead. As soon as I realized the mistake this morning, I immediately rechecked all the data, corrected the wrong statistics, and verified them with the backend team to ensure there are no more errors. I've printed the corrected report and brought it to you now."
+课件1 · L25 Apologizing for a Mistake,对话,"Reporting Delay to Team Lead
+为失误道歉并承诺改进","You: I promise this will never happen again. In the future, I will take more time to check my work carefully, especially for data-related tasks, and I will ask a colleague to help review it if necessary to avoid such oversights. I'm truly sorry for the trouble I caused to the team.
+Team Lead: I appreciate your sincerity and the quick action to correct the mistake. Everyone makes mistakes, but what matters is taking responsibility and learning from them. Make sure you keep your promise. Carefulness is crucial in our work.
+You: Thank you for your forgiveness, Team Lead. I will definitely remember this lesson and do better in my work."
+课件1 · L25 Apologizing for a Mistake,对话,"Apologizing to Client for a Service Mistake
+为服务失误向客户道歉","You: I completely understand your disappointment, Ms. Lee, and I apologize again for all the trouble caused.
+The mistake was our fault: our order processing staff made a slip-up when entering the order information—they incorrectly entered the product model number, which led to the wrong batch of products being delivered to your company. This was due to our inadequate review process, and we take full responsibility for it.
+Ms. Lee: This mistake has brought us a lot of trouble. We need to solve this problem as soon as possible. What are you going to do to fix it?
+You: Thank you for your patience, Ms. Lee. We have taken immediate measures to rectify the mistake. First, we have arranged for a special logistics team to pick up the wrong batch of products from your company tomorrow morning, and we will bear all the logistics costs. Second, we have prioritized your correct order in our production line, and we will deliver the right products to you within 48 hours to minimize the impact on your production.
+You: In addition, as a compensation for our mistake, we will offer you a 10% discount on your next order with us. We have also optimized our order processing review process. From now on, every order will be reviewed by two staff members to avoid such errors. We promise that this kind of mistake will never happen again.
+Ms. Lee: Alright, I appreciate your quick response and the solution you proposed. I hope you can keep your promise and ensure that our cooperation goes smoothly in the future.
+You: Thank you for your forgiveness and trust, Ms. Lee. We will not let you down. I will personally track the progress of your correct order and keep you updated every step of the way. If you have any other requirements, please feel free to contact me at any time."
+课件1 · L25 Apologizing for a Mistake,短句,I apologize sincerely for my mistake.,重点句型
+课件1 · L25 Apologizing for a Mistake,短句,I'm very sorry for the inconvenience caused.,我真诚地为我的错误道歉
+课件1 · L25 Apologizing for a Mistake,短句,It's my fault / I take full responsibility for this mistake.,我为造成的不便感到非常抱歉
+课件1 · L25 Apologizing for a Mistake,短句,I made a mistake in [Something].,这是我的过错/我为这个错误承担全部责任
+课件1 · L25 Apologizing for a Mistake,短句,I will correct the mistake immediately / at once.,我在[某事]上犯了错误
+课件1 · L25 Apologizing for a Mistake,短句,I promise this mistake will never happen again.,重点句型
+课件1 · L25 Apologizing for a Mistake,短句,Please forgive me for my oversight / slip-up.,我保证这种错误再也不会发生
+课件1 · L25 Apologizing for a Mistake,短句,I will make up for the mistake and minimize the impact.,请原谅我的疏忽/失误
+课件1 · L25 Apologizing for a Mistake,短句,I deeply regret my carelessness.,我会弥补错误，将影响降到最低
+课件1 · L25 Apologizing for a Mistake,短句,Thank you for your forgiveness and trust.,我对我的粗心感到非常懊悔
+课件2 · L01 Talking About Weaknesses,对话,"Fresh Graduate Interview
+应届生面试","Interviewer: Now let's talk about your weaknesses. Every person has shortcomings, and I'd like to hear you talk about one of yours honestly.
+You: Thank you for asking. I think it's important to be honest about my weaknesses. One of my weaknesses is that I used to be too focused on perfecting every small detail when doing tasks, which sometimes made me spend too much time on minor things and affect the overall progress.
+Interviewer: That's a common issue for many new graduates. Have you done anything to improve this problem?
+You: Yes, I've realized this shortcoming and taken active steps to change it. I learned to make clear task plans before starting work, set priorities for each part, and distinguish between key tasks and minor details. I also set time limits for each stage to avoid getting stuck on small things. Now I can balance quality and efficiency much better.
+Interviewer: It's great that you can recognize your problem and make improvements actively. That shows you're a self-aware and motivated person.
+You: Thank you. I believe constantly reflecting on myself and improving my weaknesses is the best way to grow, whether in study or work."
+课件2 · L01 Talking About Weaknesses,对话,"Experienced Professional Interview
+职场人士面试","Interviewer: What would you say is your biggest weakness in your work? We want to know how you evaluate yourself and deal with your flaws.
+You: I acknowledge that I used to struggle with delegating tasks. I prefer to handle important work by myself because I worry that assigning work to others may lead to mistakes or inconsistent standards, so I often take on too much work at the same time.
+Interviewer: That shows you're responsible, but it can also make you overworked and affect team collaboration. How have you improved this?
+You: You're totally right. Later, I learned that trusting teammates and reasonable task delegation are crucial for team efficiency. I started training my delegation skills: I clearly explain task requirements and deadlines, check progress regularly instead of taking over all work, and fully trust my teammates' abilities. I also learned to communicate more with team members to divide work reasonably.
+You: Now I've made huge progress. I can delegate tasks properly, focus on my core responsibilities, and the whole team works more efficiently. I keep reminding myself to keep improving this skill and maintain better teamwork.
+Interviewer: It's impressive that you can sum up your experience and adjust your working style. This kind of growth mindset is very valuable for our team."
+课件2 · L01 Talking About Weaknesses,对话,"For Career Growth
+求职理由：职业成长","Interviewer: I see on your resume that you worked at your previous company for one year. Could you tell me why you decided to leave that job and apply for this position?
+You: I'm really grateful for the experience and training I got from my last job. It taught me a lot about basic work skills and team collaboration, and I really appreciate the opportunities the company gave me as a fresh graduate.
+Interviewer: I'm glad to hear you had a positive experience there. So what made you want to make a job change now?
+You: The main reason is that I want to pursue better career growth and more challenging work. My previous role was relatively routine, with limited space for learning new skills and taking on more responsibilities. I've been eager to expand my abilities and grow in a more dynamic and fast-paced environment.
+You: Your company has an excellent reputation in this industry, and this position aligns perfectly with my career goals. I'm looking forward to taking on more challenging tasks, learning more professional knowledge, and making bigger progress here.
+Interviewer: That's a very positive and clear goal. We value employees who are motivated to grow and improve themselves. It's good that you have a clear plan for your career.
+You: Thank you. I always believe that choosing a job that fits my long-term development is the most important thing, and I'm truly passionate about this position."
+课件2 · L01 Talking About Weaknesses,对话,"For New Challenges & Better Fit
+求职理由：新挑战与更合适的匹配","Interviewer: Can you walk me through why you left your previous full-time position? We'd like to understand your career choices and motivations.
+You: I spent three years at my last company, and I'm very thankful for the trust and opportunities my former team and leader gave me. I completed several key projects there and accumulated rich experience in project management and technical work.
+Interviewer: It sounds like you had a solid experience. So what caused you to make a career move at this stage?
+You: After three years, I felt I had fully mastered the core work of that role, and I was ready for new challenges and greater responsibilities. The previous role had a relatively fixed scope of work, and I wanted to step out of my comfort zone to develop more comprehensively.
+You: Besides that, I'm also looking for a company with a better cultural fit and more development prospects. Your company focuses on innovation and employee growth, which matches my career pursuit perfectly. I left my last job on very good terms, and this is a positive career choice for me to reach a higher level.
+Interviewer: We appreciate your positive attitude and respect for your former employer. Badmouthing a previous company is a big red flag for us, and your answer is very professional.
+You: Thank you. I always think it's important to stay respectful and grateful no matter where you work. I'm ready to bring my experience and enthusiasm to this new role and contribute to the team."
+课件2 · L01 Talking About Weaknesses,对话,"Confirming Basic Salary and Payment Date
+确认基本薪资与发薪日","HR: Welcome to join our team. Today we will confirm your formal employment treatment in detail.
+New Staff: Thank you very much. I hope we can make all items clear in advance to avoid later misunderstandings.
+HR: Sure. Your monthly basic salary is fixed, and performance bonus will be settled according to your monthly work evaluation. The company will transfer the full salary to your bank account on the tenth working day of each month without delay.
+New Staff: Got it, that is quite clear. I also want to confirm whether overtime allowance is calculated separately.
+HR: Yes, all overtime work will be recorded officially, and corresponding overtime subsidy will be issued together with monthly salary. We follow standard labor rules strictly.
+New Staff: That sounds reasonable. I have no doubts about the salary part for now.
+HR: Great. We will sort out a written document for you to sign later."
+课件2 · L01 Talking About Weaknesses,对话,"Asking About Benefits and Leave Policy
+询问福利与休假制度","New Staff: Apart from salary, I also hope to learn more about company benefits and vacation rules.
+HR: No problem. The company provides complete social insurance and commercial insurance for all official employees. Besides, you can enjoy regular festival gifts, annual physical examination and remote working subsidies.
+New Staff: That is really thoughtful. How many days of annual leave can I enjoy every year?
+HR: New employees are entitled to ten days of annual leave per year, plus legal public holidays. You can apply for leave freely as long as you finish handover work in advance.
+New Staff: I totally understand all these rules now. All the welfare arrangements meet my expectations.
+HR: We will keep optimizing employee benefits. If you have any other questions later, feel free to contact me anytime.
+New Staff: Thanks a lot for your patient explanation. I confirm and accept all the above salary and benefit terms."
+课件2 · L01 Talking About Weaknesses,短句,One of my weaknesses is.,我的一个弱点是……
+课件2 · L01 Talking About Weaknesses,短句,I used to have a problem with.,我过去在……方面有问题
+课件2 · L01 Talking About Weaknesses,短句,I recognize / acknowledge this shortcoming.,我意识到/坦言这个缺点
+课件2 · L01 Talking About Weaknesses,短句,I'm taking steps to improve this.,我正在采取措施改进这点
+课件2 · L01 Talking About Weaknesses,短句,I've learned to... to fix this problem.,我学会了……来改正这个问题
+课件2 · L01 Talking About Weaknesses,短句,I've made a lot of progress in this aspect.,我在这方面取得了很大进步
+课件2 · L01 Talking About Weaknesses,短句,I believe improving weaknesses helps me grow.,我相信改进弱点能让我成长
+课件2 · L01 Talking About Weaknesses,短句,I try to balance... and.,我努力平衡……和……
+课件2 · L01 Talking About Weaknesses,短句,I've adjusted my working / learning style.,我调整了我的工作/学习方式
+课件2 · L01 Talking About Weaknesses,短句,I keep working on myself every day.,我坚持每天提升自我
+课件2 · L01 Talking About Weaknesses,短句,I left my last job to seek better career growth.,我离职是为了寻求更好的职业发展
+课件2 · L01 Talking About Weaknesses,短句,I'm grateful for the experience I gained there.,我很感激在那里获得的经验
+课件2 · L01 Talking About Weaknesses,短句,I want to take on more challenges and responsibilities.,我想要迎接更多挑战，承担更多职责
+课件2 · L01 Talking About Weaknesses,短句,I'm looking for a better career opportunity.,我在寻找更好的工作机遇
+课件2 · L01 Talking About Weaknesses,短句,This position fits my long-term career goals.,这个岗位符合我的长期职业目标
+课件2 · L01 Talking About Weaknesses,短句,I left on good terms with my previous employer.,我和前公司和平分手
+课件2 · L01 Talking About Weaknesses,短句,I want to step out of my comfort zone.,我想要走出舒适区
+课件2 · L01 Talking About Weaknesses,短句,The previous role had limited growth space.,之前的岗位发展空间有限
+课件2 · L01 Talking About Weaknesses,短句,I'm eager to learn new skills and grow.,我渴望学习新技能，实现成长
+课件2 · L01 Talking About Weaknesses,短句,This is a positive career move for me.,对我来说，这是一次积极的职业变动
+课件2 · L01 Talking About Weaknesses,短句,I'd like to confirm all salary and benefit items in detail.,我想详细确认所有薪资福利项目
+课件2 · L01 Talking About Weaknesses,短句,The monthly salary will be paid on the fixed working day every month.,月薪将在每月固定工作日发放
+课件2 · L01 Talking About Weaknesses,短句,We provide full social insurance and other extra welfare benefits.,我们缴纳齐全社保并提供额外各项福利
+课件2 · L01 Talking About Weaknesses,短句,I have no questions about the relevant treatment rules.,我对相关待遇规定没有疑问
+课件2 · L01 Talking About Weaknesses,短句,I confirm and accept all the above salary and benefit terms.,我确认并接受上述所有关于薪资和福利的条款
+课件2 · L01 Talking About Weaknesses,短句,I want to __________ my specific monthly income standard.,我想要[确认/核对]自己具体的月收入标准
+课件2 · L01 Talking About Weaknesses,短句,The company offers complete __________ for every formal employee.,公司为每位正式员工缴纳齐全[社保/保险]
+课件2 · L01 Talking About Weaknesses,短句,Please __________ the exact payment time of monthly salary.,请[说明/告知]月薪准确的发放时间
+课件2 · L01 Talking About Weaknesses,短句,I can enjoy enough annual __________ after becoming official staff.,转正后我可享受充足的年度[假期]
+课件2 · L01 Talking About Weaknesses,短句,I __________ all the salary and benefit arrangements.,我[接受/认同]所有薪资与福利安排
+课件2 · L04 Raising Questions or Concerns,对话,"Asking Basic Job & Team Questions
+询问岗位与团队基本情况","Interviewer: Now, do you have any questions for me about this position, the team, or our company? Feel free to ask anything you want to know.
+You: Thank you for giving me this chance to ask questions. I do have a few things I'd like to know more about, to get a clearer understanding of this role.
+Interviewer: Of course, go ahead. I'm happy to answer all your questions.
+You: First, could you tell me more about the daily responsibilities of this position? I'd like to know what the core tasks are, and what key projects I would be involved in if I join the team.
+Interviewer: Sure. This role mainly involves daily project coordination, client communication, and data sorting. You'll work closely with the marketing and technical teams, and take charge of small-to-medium projects independently after the probation period.
+You: That sounds very clear. Thank you. Besides that, I wonder what the team's working style is like? Is it more collaborative or independent? And is there a mentor to guide new employees during the onboarding period?
+Interviewer: We have a very friendly and collaborative team. We value teamwork and mutual support. Every new hire will have a dedicated mentor to help with training and work guidance for the first three months, so you won't feel lost when you start.
+You: I have one last question. What qualities or skills are you most looking for in the ideal candidate for this role?
+Interviewer: We hope the candidate is responsible, proactive, and good at communication. Professional skills are important, but a positive attitude and teamwork spirit matter more to us.
+You: Thank you so much for your detailed answers. All my questions are answered now, and I have a much better understanding of this position."
+课件2 · L04 Raising Questions or Concerns,对话,"Asking About Development & Raising Mild Concerns
+询问发展空间并提出轻微顾虑","Interviewer: We've covered most parts of the interview. Do you have any questions or concerns you'd like to raise with me?
+You: Yes, I do. Thank you. I'm very interested in this position, and I have a few questions about career development and some small concerns to confirm.
+Interviewer: Feel free to speak your mind. We encourage open communication here.
+You: First, I'd like to ask about the growth path for this role. Are there clear promotion opportunities or further training programs for employees to improve their professional skills?
+Interviewer: We have a complete promotion system and regular skill training sessions. Employees can get promoted based on their performance and working experience, and we also support external training and certification if needed.
+You: That's great to hear. I also have a small concern. I noticed the job description mentions occasional overtime during busy periods. Could you clarify how often that usually happens, and is there any compensation or time off in lieu for overtime work?
+Interviewer: That's a very reasonable concern. Overtime only happens a few times a year during peak project seasons, not a regular thing. We offer overtime pay or compensatory time off for any extra work, and we strictly follow labor laws to protect employees'rights.
+You: Thank you for clarifying that. It puts my mind at ease.
+One more question: what's the biggest challenge of this role in the near future?
+Interviewer: The main challenge will be adapting to multiple projects at the same time and handling urgent tasks efficiently. But with the team's support and proper training, you'll get used to it quickly.
+You: I understand. Thank you for your honest and detailed answers. I don't have any more questions now."
+课件2 · L04 Raising Questions or Concerns,短句,Do you mind if I ask a few questions?,重点句型
+课件2 · L04 Raising Questions or Concerns,短句,I'd like to know more about this role's responsibilities.,您介意我问几个问题吗？
+课件2 · L04 Raising Questions or Concerns,短句,Could you clarify the team's working style?,我想了解更多这个岗位的职责
+课件2 · L04 Raising Questions or Concerns,短句,I wonder about the promotion path here.,您能说明一下团队的工作风格吗？
+课件2 · L04 Raising Questions or Concerns,短句,I have a small concern about.,我想了解这里的晋升通道
+课件2 · L04 Raising Questions or Concerns,短句,Would you tell me about the employee training programs?,重点句型
+课件2 · L04 Raising Questions or Concerns,短句,Is there a mentor for new employees?,您能讲讲员工培训计划吗？
+课件2 · L04 Raising Questions or Concerns,短句,Thank you for clarifying that for me.,新员工会有导师指导吗？
+课件2 · L04 Raising Questions or Concerns,短句,That puts my mind at ease.,感谢您为我澄清这点
+课件2 · L04 Raising Questions or Concerns,短句,"That's all my questions, thank you.",这让我放心了
+课件2 · L04 Code Review & Giving Technical Feedback,对话,"Zoom Meeting – Giving Positive & Suggestive Code Feedback
+Zoom 会议：给出正面且带建议的代码反馈","Manager: Let's start today's code review. We will go over the newly submitted module code and share technical feedback.
+You: I have finished reviewing my teammate's latest code for the user login module. I'd like to share my technical feedback.
+Manager: Sure, please share your review results in detail.
+You: Overall, the code quality is pretty good. The overall structure is clear, the naming convention follows team standards, and the core business logic is accurate without obvious bugs. The exception handling part is also complete, which effectively helps prevent common crashes.
+Teammate: Thanks for the positive feedback. I still think there's plenty of room to improve on the details.
+Teammate: That's really focused, professional feedback. I totally agree with these optimization points.
+You: You can address these details before merging the branch. once updated, the code will be more consistent, robust and maintainable. I can help you double-check it again if you need.
+Teammate: Thanks a lot. I will optimize and resubmit the code as soon as possible."
+课件2 · L04 Code Review & Giving Technical Feedback,对话,"Teams Meeting – Fixing Code Issues Based on Technical Feedback
+Teams 会议：根据技术反馈修复代码问题","Manager: After the team's joint code review, we found several technical problems in the data statistics module. Let's communicate about the revision plan.
+You: I accept all the technical feedback from the team. I have carefully checked the problems you pointed out.
+Manager: What are the main issues in your code?
+You: First, my loop logic is not rigorous enough, which may cause repeated data calculation. Second, the cache configuration is unreasonable, leading to minor performance loss. Third, I did not follow the latest team coding specifications in some variable naming parts.
+Manager: These are typical technical details. How do you plan to fix them?
+You: I have sorted out a clear optimization plan. I will rewrite the loop logic to avoid repeated calculation, adjust the cache strategy to improve response speed, and unify all variable names according to team standards. Besides, I will add sufficient unit tests after modification to ensure the stability of the new code.
+Manager: Good. Please make sure all hidden risks are completely eliminated.
+You: Sure. I will finish all revisions today, submit the updated code for secondary review, and learn from these details to improve my overall coding quality in future development.
+Manager: Perfect attitude. Continuous code review and technical communication can help the whole team grow together."
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I'd like to share my technical feedback after code review.,我想分享代码评审后的技术反馈
+课件2 · L04 Code Review & Giving Technical Feedback,短句,The overall code structure is clear and logical.,整体代码结构清晰、逻辑通顺
+课件2 · L04 Code Review & Giving Technical Feedback,短句,There are some redundant codes that need to be simplified.,存在部分冗余代码需要精简
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I accept your professional technical feedback and optimization suggestions.,我接受你专业的技术反馈和优化建议
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I will revise the code and submit it for secondary review.,我会修改代码并提交二次评审
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I will give __________ feedback on your code quality.,我将对你的代码质量给出[技术/专业]反馈
+课件2 · L04 Code Review & Giving Technical Feedback,短句,Your code structure is clear but has a few __________ details.,你的代码结构清晰，但存在部分[待优化/小问题]细节
+课件2 · L04 Code Review & Giving Technical Feedback,短句,Please __________ the redundant code to improve efficiency.,请[精简/删除]冗余代码以提升运行效率
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I fully __________ your technical suggestions.,我完全[接受/采纳]你的技术建议
+课件2 · L04 Code Review & Giving Technical Feedback,短句,I will __________ all problems before resubmission.,重新提交前我会[修复/解决]所有问题
+课件2 · L05 Asking About the Next Steps,对话,"Standard Asking for Next Steps
+常规询问后续流程","Interviewer: Thank you for your time today. We've had a great conversation. Do you have any final questions for me?
+You: Yes, thank you. I'm very interested in this position, so I'd like to ask about the next steps in the interview process. Could you please let me know what to expect moving forward?
+Interviewer: Sure. We will have another round of interviews with the department manager next week. That will be the final round.
+You: I see. Could you also share the expected timeline? When do you plan to make a hiring decision, and when might candidates receive feedback?
+Interviewer: We aim to finish all interviews within one week. You will get an update from HR by email early next week.
+You: Thank you for clarifying. May I ask who will contact me—HR or you directly?
+Interviewer: Our HR team will send you a formal email with details.
+You: Perfect. That's all my questions. Thank you so much for your help and information."
+课件2 · L05 Asking About the Next Steps,对话,"Asking Politely with Concerns
+带顾虑的委婉询问","Interviewer: Alright, we've covered everything. Any last questions before we finish?
+You: Yes, I do. I really enjoyed today's interview and would love to move forward. Could you please explain the next steps in the selection process?
+Interviewer: We will review all candidates this week, and then we will invite shortlisted candidates for a technical test or final interview.
+You: Understood. If I don't hear back by the end of next week, is it okay if I follow up by email?
+Interviewer: Absolutely. You can send a polite follow-up email to HR, and we will respond as soon as possible.
+You: Thank you. Also, may I confirm how many interview rounds there are in total?
+Two rounds: this one and the final round with the leadership team.
+You: That's very clear. Thank you for your patience and detailed answers. I'll look forward to your update."
+课件2 · L05 Asking About the Next Steps,短句,May I ask about the next steps in the interview process?,我想问一下面试流程的后续步骤是怎样的？
+课件2 · L05 Asking About the Next Steps,短句,Could you please let me know what the next steps are?,能否请您告知接下来的步骤是什么？
+课件2 · L05 Asking About the Next Steps,短句,What's the expected timeline for the hiring decision?,招聘决定的预计完成时间是怎样的？
+课件2 · L05 Asking About the Next Steps,短句,When will candidates receive feedback or updates?,候选人何时能收到反馈或最新消息？
+课件2 · L05 Asking About the Next Steps,短句,How many interview rounds are there in total?,总共会有多少轮面试？
+课件2 · L05 Asking About the Next Steps,短句,Who will contact me about the next steps?,谁会告知我接下来的步骤呢？
+课件2 · L05 Asking About the Next Steps,短句,Is it okay if I follow up by email if I don't hear back?,如果我等了一段时间仍未收到回复，能否通过电子邮件再进行一次联系呢？
+课件2 · L05 Asking About the Next Steps,短句,Thank you for clarifying the process for me.,感谢您为我详细说明了这个流程
+课件2 · L05 Asking About the Next Steps,短句,I'll look forward to your update.,我期待着您的最新消息
+课件2 · L05 Asking About the Next Steps,短句,That's all my questions. Thank you.,这就是我所有的问题了。谢谢你！
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Zoom Meeting – Confirming and Analyzing Project Requirements
+Zoom 会议：确认并分析项目需求","Manager: Today's meeting focuses on discussing the new version's core functions. Let's confirm the complete project requirements and sort out the development direction.
+You: Okay. According to the product document, the main requirement is to add an automatic data statistics and visual display function. Users can view real-time data charts and export daily, weekly and monthly reports.
+Manager: That's correct. The product team hopes to improve data viewing efficiency and reduce manual operation costs. Do you fully understand the business logic and user scenarios behind this requirement?
+You: Yes. I have sorted out the whole user operation process and core business logic. However, I still have a few details to clarify. The document does not clearly define the data refresh frequency and the maximum data volume for single export, which may cause ambiguity in later development.
+Manager: Good question. The data needs to be refreshed every five minutes, and the single export limit is ten thousand pieces of data.
+You: Got it. With these clear rules, we can standardize the interface design and code logic. I will sort out a detailed requirement checklist to ensure no function is missed during development.
+Manager: Perfect. Please confirm all uncertain points with the product team in advance to avoid rework in the later stage.
+You: Sure, I will complete requirement confirmation before starting technical design."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Discussing Technical Feasibility and Risks
+讨论技术可行性与潜在风险","Manager: After confirming the basic requirements, let's discuss the technical feasibility of this new function. Is it achievable under our current technical architecture?
+You: After preliminary technical evaluation, most of the functions are feasible and can be implemented based on our existing framework.
+Manager: Are there any technical difficulties or potential risks?
+You: Yes. The real-time big data calculation function has certain technical limitations. Our current server configuration and caching strategy cannot support high-frequency data refreshing and large-scale data querying. If we follow the original requirement completely, it may cause system lag, timeout errors and excessive server pressure.
+Manager: I see. Do you have any practical solutions or alternative plans?
+You: I have two optimization suggestions. First, we can adjust the refresh strategy to balance real-time performance and server pressure. Second, we can split the data query function and adopt asynchronous loading to reduce instantaneous pressure. These adjustments can ensure the core user experience without increasing too much workload.
+Manager: That's a reasonable technical solution. We will communicate with the product team to adjust the non-core requirements appropriately.
+You: Okay. I will complete the full feasibility report, record all technical risks and corresponding solutions, and submit it before tomorrow's meeting to promote the project progress smoothly.
+Manager: Great, please move forward with the technical design."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Zoom Meeting — Reporting & Troubleshooting Common Bugs
+Zoom 会议：报告并排查常见缺陷","Tester: I found a recurring bug in the new user module during functional testing . An error pop-up appears when users submit personal information.
+You: Got it. Thanks for the feedback. Could you share the steps to reproduce and the environment details?
+Tester: The error occurs when users submit forms with special symbols. It works fine with normal input, but triggers an exception with special characters. The test environment runs the latest build released this morning.
+You: I understand the problem scenario now. I will simulate this behavior and try to reproduce the bug first. I suspect the front-end data validation rules are incomplete, allowing unfiltered special characters to trigger backend parsing errors.
+Tester: That makes sense. This issue has blocked our full regression testing. We need to fix it as soon as possible.
+You: Sure. I've gone through the runtime logs and found the problematic code. The existing validation logic lacks checks for special characters. I'll optimize the filtering rules immediately and run regression tests to make sure the issue is fully resolved.
+Tester: Great. Please update me once the bug is fixed.
+You: No problem. I'll complete the fix within two hours and notify the test team to perform follow-up verification."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Teams Meeting — Communicating Complex Technical Debugging Issues
+Teams 会议：沟通复杂技术调试问题","Manager: We've seen occasional data timeouts in the production environment recently. Multiple users have reported slow page-load time. Let's go over the debugging progress.
+You: I've been working on troubleshooting this issue. At this time, the problem cannot be stably reproduced, which complicates debugging.
+Manager: Have you analyzed the system logs and monitored data?
+You: Yes. I went through the server logs and found that database queries took too long under high-concurrency scenarios. Inefficient SQL caused slow data response time and request timeouts. This is not a crash bug, but a performance bottleneck.
+Manager: I see. Do you have a clear solution?
+You: Yes. I plan to optimize the fuzzy query SQL and add appropriate indexes to boost query efficiency. In addition, I will adjust the interface timeout threshold to avoid frequent errors. Due to ongoing production risks, a temporary workaround will go live first to reduce user-experience impacts, and the proper fix will be implemented in our next iteration.
+Manager: That's a solid arrangement. Please keep the team updated on your debugging progress.
+You: Sure. I will continue to monitor the online data, trace the root cause thoroughly, and ensure no similar performance issues happen again.
+Manager: Well done. Timely debugging and smooth communication can effectively reduce project risks."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Zoom Meeting – Daily Branch & Version Synchronization
+Zoom 会议：每日分支与版本同步","Manager: Let's synchronize the current code branch status and version progress of this sprint.
+You: Okay. Right now our team follows standard multi-branch workflow. Main stays stable, only for official releases. We do all new-feature work on separate feature branches.
+Manager: Got it. Have you finished the development of the user permission module? Is the code ready for merging?
+You: Yes. I have completed all functional development and unit testing on my feature branch. The code runs stably without bugs. I have also pulled the latest code from the development branch in advance to keep consistent with the team's current version.
+Manager: Good. Remember not to commit untested code to the public branch to avoid affecting team collaboration.
+You: Absolutely. I always follow the team's version control rules. I will submit a merge request later, and wait for teammates' code review before merging into the dev branch. After full regression testing, we can merge it into the main branch for official release.
+Manager: Perfect. Standard branch operation can effectively reduce version errors and ensure project stability.
+You: Yes, I will strictly follow the process and keep the branch records clear and complete."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Teams Meeting – Handling Conflicts & Version Rollback
+Teams 会议：处理冲突与版本回滚","Manager: We ran into some issues during today's release integration. Please give us an update on where you're at.
+You: I found obvious code conflicts when merging my feature branch into the dev. Some functions my teammate modified overlap with my logic, so the auto-merge failed.
+Manager: Understood. How do you plan to resolve this conflict?
+You: I've gone through the conflicting code line by line. I'll keep both valid logics, delete redundant code, and manually revise the overlapping parts. Once the conflicts are resolved , I will test the whole function again to ensure no new bugs are introduced.
+Manager: Nice. Besides, the test team found occasional crashes in the latest online version. We need to consider a temporary rollback.
+You: I agree. To prevent more users from being affected, we can roll back to the previous stable version first. I will mark the problematic version with a special tag for subsequent troubleshooting. After fixing all hidden issues, we will push the updated version again in the next hotfix round.
+Manager: That's a safe and reliable solution. Please coordinate with all developers to suspend new code submission temporarily.
+You: Sure. I will sync this notice to the whole team, standardize subsequent branch submission and merging operations, and avoid repeated version conflicts and version errors.
+Manager: Great, keep the team updated with the version recovery progress."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Zoom Meeting – Explaining New Function Implementation
+Zoom 会议：讲解新功能实现","Manager: Could you briefly walk us through the new data export module?
+You: Sure. I will break down the whole feature and code logic for the team.
+Manager: Please start with the business scenario and core workflow.
+You: Okay. This module mainly handles batch data export and file generation. When users click the export button on the frontend, the request goes to the backend API. First, the code checks user permissions and filters matching data based on the time range and filters selected by the user.
+Manager: Got it. What's the next execution step?
+You: After data filtering, the program will sort and integrate the data uniformly, then call the file generation tool to convert structured data into Excel format. Finally, it will return the downloadable file link to the front end and record the export log for future traceability.
+Manager: Very clear. Are there any special edge-case logic checks?
+You: Yes. I added threshold checks for large datasets. If there are over ten thousand records, the system uses async export to prevent API timeouts. This avoids performance issues from processing large amounts of data.
+Manager: Perfect. Your logic design is comprehensive and reasonable."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Teams Meeting – Clarifying Complex Code Logic for Teammates
+Teams 会议：为队友讲清复杂代码逻辑","Teammate: I'm a little confused about the caching logic in this payment module. Could you help explain it?
+You: Of course. Let me sort out the whole code execution flow for you.
+Teammate: I don't mainly understand the trigger conditions of cache update and invalidation.
+You: Let's start with the basic logic. This code is divided into two core parts: cache query and cache refresh. When users access the payment page, the program will first query data from the cache. If the cache exists and is within the valid period, it will directly return cached data to improve response speed.
+Teammate: I see. What if the cache expires?
+You: If the cache is invalid or empty, the program will automatically request data from the database, update the cache synchronously, and reset the valid time. Besides, when users complete payment operations, the code will actively trigger cache invalidation to ensure that the next query can get the latest payment status data.
+Teammate: Now I fully understand the call relationship and execution sequence.
+You: This set of logic ensures both system response efficiency and data real-time performance. If you need to modify or iterate this function later, you can follow this execution sequence to avoid logical errors.
+Teammate: Thanks for your detailed explanation. It helps me a lot with subsequent code maintenance."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Zoom Meeting – Sprint Task Planning & Allocation
+Zoom 会议：迭代任务规划与分配","Manager: Welcome to the sprint planning meeting. Today we will break down tasks, confirm priorities and arrange the development schedule for this two-week sprint.
+You: Okay. I have sorted out all the pending functional requirements and divided them into several independent development modules. We can allocate tasks according to each person's technical direction and workload.
+Manager: Great. Please talk about the core tasks of this sprint.
+You: The top-priority tasks are user authentication optimization and order data reconstruction. These two modules are the core milestones of this version and need to be completed before the mid-sprint review. The secondary tasks are UI interface adaptation and log optimization, which can be arranged in the later stage of the sprint.
+Manager: That's a reasonable priority arrangement. How about your personal task workload?
+You: I will take charge of the order data reconstruction module. I have evaluated the development cycle clearly. The whole task includes database adjustment, interface development and data verification, which takes about five working days. The workload is within my capacity.
+Manager: Perfect. Please confirm your task deadline and update your task status on the team platform in real time.
+You: Sure. I will make a detailed daily development plan, follow the sprint schedule strictly, and finish all scheduled tasks on time."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,对话,"Teams Meeting – Daily Progress Tracking & Schedule Adjustment
+Teams 会议：每日进度跟踪与计划调整","Manager: Let's have our daily standup to synchronize the latest development progress. Please report your task completion status.
+You: Up to today, I have finished 70% of the order reconstruction module. The core database structure adjustment and backend interface development have been completed, and I am currently working on data compatibility processing.
+Manager: Why is the progress slightly behind the planned schedule?
+You: There is a temporary blocking issue. The old data format is inconsistent with the new structure, which leads to extra time for data sorting and conversion. This unexpected problem slows down the overall progress a little bit.
+Manager: Got it. Do you need team support or schedule rescheduling?
+You: I have found a feasible solution and am handling it right now. I will accelerate my development speed in the next two days and try to catch up with the original schedule. If I still have difficulty finishing on time, I will report in advance and adjust the non-core tasks properly.
+Manager: Good. Please keep tracking your progress closely and update the blocking situation in time. We will adjust the overall sprint plan dynamically according to the actual situation.
+You: No problem. I will synchronize my progress every day, actively solve risks and obstacles, and ensure the final delivery of the sprint tasks."
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Let's clarify the core project requirements and business logic.,我们来梳理核心项目需求与业务逻辑
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Some requirement details are not clearly defined in the document.,部分需求细节在文档中定义不明确
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to evaluate the technical feasibility before development.,开发前我们需要评估技术可行性
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This function has certain technical limitations under the current architecture.,该功能在现有架构下存在一定技术局限
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We can provide alternative technical plans to avoid potential risks.,我们可以提供替代技术方案规避潜在风险
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to __________ the project requirements carefully.,我们需要仔细[梳理/澄清]项目需求
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will evaluate the technical __________ of this new function.,我将评估新功能的技术[可行性]
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Current architecture has technical __________ for this requirement.,现有架构对该需求存在技术[局限/限制]
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to avoid potential technical __________ in advance.,我们需要提前规避潜在技术[风险]
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will offer an __________ plan to replace the original design.,我会提供[替代/备选]方案替代原有设计
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will simulate the scenario and reproduce the existing bug.,我将模拟场景复现现有漏洞
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I have located the problematic code through log analysis.,我通过日志分析定位到了问题代码
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This abnormal issue is blocking the overall testing progress.,该异常问题正在阻碍整体测试进度
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will deploy a temporary solution to ease the online risk.,我会部署临时方案缓解线上风险
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to complete permanent fixes and comprehensive verification.,我们需要完成永久修复与全面验证
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will try to __________ the bug according to your operation steps.,我会根据你的操作步骤尝试[复现]漏洞
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I have __________ the root cause of this technical error.,我已经[定位/找到]该技术错误的根本原因
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This bug is __________ our project testing progress.,该漏洞正在[阻碍/影响]我们的项目测试进度
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will __________ the problematic code and optimize the logic.,我会[修复/修改]问题代码并优化逻辑
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need a __________ solution to solve the online problem thoroughly.,我们需要[永久/健壮]方案彻底解决线上问题
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We develop new features on independent feature branches.,重点句型
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will submit a merge request after completing local testing.,我们在独立功能分支上开发新功能
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Code conflicts occurred during branch merging.,本地测试完成后我会提交合并请求
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will resolve conflicting code and retest the functions.,分支合并过程中出现了代码冲突
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to roll back the version to ensure system stability.,我会解决代码冲突并重新测试功能
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We develop new functions on the __________ branch.,重点句型
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Please __________ the latest code before merging.,我们在[功能/开发]分支开发新功能
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I need to fix the code __________ before submission.,合并前请[拉取/更新]最新代码
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We will __________ the version to avoid online risks.,提交前我需要解决代码[冲突]
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,The main branch must keep __________ all the time.,我们将[回退/还原]版本规避线上风险
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Let me break down the whole function and code execution flow.,我来拆解整体功能和代码执行流程
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This module is mainly responsible for batch data processing functions.,该模块主要负责批量数据处理功能
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,The program will execute different logic according to different conditions.,程序会根据不同条件执行不同逻辑
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This logical design effectively improves system operating efficiency.,该逻辑设计有效提升了系统运行效率
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will explain the call relationship and execution sequence clearly.,我会清晰讲解调用关系与执行顺序
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Let me __________ the core code logic of this module.,我来__________该模块的核心代码逻辑
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This code is __________ for data filtering and sorting.,这段代码__________数据筛选与排序工作
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,The program runs according to a fixed __________ sequence.,程序按照固定__________顺序执行
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Different conditions will __________ different execution results.,不同条件会__________不同的执行结果
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This design can __________ the overall system efficiency.,该设计可以__________系统整体运行效率
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to break down and allocate tasks for this sprint.,我们需要拆解并分配本次迭代的任务
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We should clarify task priority and core milestones.,我们需要明确任务优先级与核心里程碑
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I have evaluated the workload and development cycle clearly.,我已清晰评估工作量与开发周期
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,A blocking issue caused slight delay of the development progress.,阻塞问题导致开发进度轻微滞后
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will accelerate development and catch up with the original schedule.,我会加快开发进度，追赶原定计划
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,We need to __________ tasks reasonably for the new sprint.,我们需要为新迭代合理[拆解/规划]任务
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,Please confirm task __________ and avoid schedule conflicts.,请确认任务[优先级]，避免进度冲突
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will closely __________ my daily development progress.,我会密切[跟进/监控]每日开发进度
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,This technical problem is __________ my task progress.,该技术问题正在[阻碍/影响]我的任务进度
+课件2 · L05 Discussing Project Requirements & Technical Feasibility,短句,I will try my best to __________ the delayed progress.,我会尽力[追回/赶上]滞后的进度
+课件2 · L06 On Leave,对话,"Asking for Sick Leave
+请病假","You: Hi Team Lead, I'm not feeling well this morning. I have a fever and a bad cold, so I'd like to ask for sick leave today.
+Team Lead: I'm sorry to hear that. Are you able to work from home, or do you need to rest completely?
+You: I feel really weak, so I need to rest and see a doctor. I've already handed over my urgent tasks to Lisa. She knows what needs to be done today.
+Team Lead: Okay, approved. Please take care of yourself and don't worry about work. Submit the leave request in the system later.
+You: Thank you. I'll check messages if anything extremely urgent comes up, but I hope to rest fully. I'll be back tomorrow if I feel better.
+Team Lead: No problem. Focus on recovering. We'll cover your work today."
+课件2 · L06 On Leave,对话,"Applying for Annual Leave & Handover
+申请年假并交接工作","You: Hi, I'd like to apply for annual leave from next Monday to Wednesday. That's three days off. I've already planned my work in advance.
+Manager: Okay. Is there any urgent work that can't wait until you come back?
+You: Most tasks are finished. I'll hand over the ongoing project to Mike. He will handle client inquiries and daily updates while I'm away. I've also written a clear handover note.
+Manager: Good. Please make sure all important files are shared and your colleagues know who to contact.
+You: I will. I'll set my auto-reply email and update my status to ""on leave"". I'll also be reachable for emergencies only.
+Manager: Approved. Enjoy your leave, and we'll handle things here.
+You: Thank you so much. I'll make sure everything is smooth before I leave."
+课件2 · L06 On Leave,短句,I'd like to ask for sick / annual leave today.,重点句型
+课件2 · L06 On Leave,短句,I'll be on leave from Monday to Wednesday.,我想今天请病假/年假
+课件2 · L06 On Leave,短句,I've handed over my work to [colleague].,我从周一到周三将休假
+课件2 · L06 On Leave,短句,Please contact [name] while I'm away.,我已经把我的工作交给了[同事]
+课件2 · L06 On Leave,短句,Is it possible to take three days off?,我外出期间，请联系[姓名]
+课件2 · L06 On Leave,短句,Could you approve my leave request?,重点句型
+课件2 · L06 On Leave,短句,I'll set an auto-reply email.,您能否批准我的请假申请？
+课件2 · L06 On Leave,短句,I'm only available for urgent issues.,我会设置一封自动回复邮件。我会设置一封自动回复邮件
+课件2 · L06 On Leave,短句,Thank you for approving my leave.,我只在紧急情况下才有空处理事务
+课件2 · L06 On Leave,短句,I'll be back to work on [date].,感谢您批准我的请假申请
+课件2 · L07 Employee Training and Development,对话,"Applying for a Professional Skill Training
+申请专业技能培训","You: Good morning, Team Lead. I'd like to talk to you about applying for a professional training program. I recently found an advanced Python development training course that's closely related to our current project, and I think it will help me improve my work efficiency and better complete the backend development tasks.
+Team Lead: That's great to hear. We encourage employees to participate in training to improve their skills. Could you tell me more about the training, such as the content, duration, and time arrangement? I need to make sure it won't affect our project progress.
+You: Sure. The training is an online course, which lasts for 4 weeks, with 2 hours of learning every evening after work, so it won't take up working time. The content mainly covers advanced Python frameworks, data processing optimization, and bug troubleshooting skills, all of which are exactly what I need for our current project of optimizing the user data processing module.
+Team Lead: That sounds perfect, as it won't interfere with our daily work. Is there any cost for this training? And will you be able to apply what you learn to our work after completing the training?
+You: The company has a training subsidy policy, right? I checked, and this course is eligible for the subsidy, so I only need to bear 30% of the cost. And yes, I plan to apply the optimization skills I learn to our current project as soon as I finish each module, which can help speed up the data processing and reduce potential bugs.
+Team Lead: Great. I approve your application. Please submit the training application form in the company system, and I'll sign it. After completing the training, could you share a brief summary of what you've learned with the team? It might help other colleagues too.
+You: Absolutely! Thank you so much for your support. I'll submit the form right away, and I'll definitely share my learning experience with the team after the training."
+课件2 · L07 Employee Training and Development,对话,"Asking About Training Opportunities & Career Development
+询问培训机会与职业发展","You: Hi HR Manager, I hope I'm not disturbing you. I've been working in the company for a year now, and I'd like to ask about the training opportunities available for employees, especially those related to career development and promotion.
+HR Manager: Not at all. It's great that you're proactive about your growth. Our company provides a variety of training programs for different levels of employees. For junior employees like you, we have on-the-job training, basic skill workshops, and professional training courses related to your position.
+You: That's good to know. I'm particularly interested in training that can help me grow into a senior developer. Could you tell me what training programs are available for that, and how I can apply for them?
+HR Manager: Sure. For employees who want to move into senior positions, we have a ""Senior Talent Development Program"" every quarter. This program includes advanced skill training, project management training, and one-on-one coaching with department leaders. If you wish to apply , you need to have worked in the company for at least one year, have a good performance record, and submit an application form with your career plan.
+You: Thank you for the detailed explanation. When will the next program start, and what are the specific requirements for the application? Also, is there any offline training available? I prefer in-person learning because it's easier to interact with teachers and other colleagues.
+HR Manager: The next program will start in two months. The specific requirements are listed on the company intranet. You can check there for details. We do have offline training sessions every month, including skill seminars and group discussions. I'll send you the training schedule for the next month, so you can choose the ones that fit your needs.
+You: That's very helpful. Thank you so much. I'll check the intranet for the application requirements and look forward to the training schedule.
+HR Manager: You're welcome. If you have any other questions about training or career development, feel free to contact me anytime."
+课件2 · L07 Employee Training and Development,短句,I'd like to apply for the professional training program.,重点句型
+课件2 · L07 Employee Training and Development,短句,What training opportunities are available for employees?,我想申请参加这个专业培训项目
+课件2 · L07 Employee Training and Development,短句,This training is closely related to our current work.,员工有哪些培训机会？
+课件2 · L07 Employee Training and Development,短句,The training will help me improve my professional skills.,这次培训与我们当前的工作密切相关
+课件2 · L07 Employee Training and Development,短句,Could you approve my training application?,这次培训将帮助我提升专业技能
+课件2 · L07 Employee Training and Development,短句,I prefer offline training to online training.,重点句型
+课件2 · L07 Employee Training and Development,短句,I want to participate in training related to career development.,比起线上培训，我更喜欢线下培训
+课件2 · L07 Employee Training and Development,短句,When will the next training program start?,我想参加与职业发展相关的培训
+课件2 · L07 Employee Training and Development,短句,I'll share my learning experience with the team after the training.,下一个培训项目什么时候开始？
+课件2 · L07 Employee Training and Development,短句,Thank you for your support with my training application.,培训结束后，我会和团队分享我的学习经验
+课件2 · L08 Performance evaluation,对话,"Discussing Performance Evaluation with Team Lead
+与组长讨论绩效评估","You: Good morning, Team Lead. I heard that the quarterly performance evaluation will start next week. I'd like to ask some questions about the evaluation process and standards.
+Team Lead: Sure, go ahead. I'm glad you're proactive about this. The evaluation will be conducted from next Monday to Friday, and each employee will have a one-on-one discussion with their direct leader.
+You: Thank you for letting me know. Could you tell me what the main evaluation criteria are? I want to make sure I understand how my performance will be rated, especially in terms of project completion and teamwork.
+Team Lead: The evaluation has four key criteria: project completion rate, work quality, teamwork, and initiative. For project completion, we'll check if you meet the deadlines and achieve goals; for work quality, we'll look at the accuracy and efficiency of your tasks; teamwork and initiative are also important, such as how well you cooperate with colleagues and whether you take the initiative to solve problems.
+You: That's clear. I also want to know if there will be any self-evaluation part? And if so, what should I focus on when filling out the self-evaluation form?
+Team Lead: Yes, you need to submit a self-evaluation form before the one-on-one discussion. When filling it out, focus on your achievements in the past quarter, the challenges you faced, your strengths and weaknesses, and your improvement plans for the next quarter. Be specific and provide examples if possible.
+You: Understood. Thank you for the detailed explanation. I'll prepare the self-evaluation form carefully and look forward to the discussion with you.
+Team Lead: You're welcome. I believe you've done a good job this quarter, and the evaluation will be a good opportunity for us to review your performance and discuss your growth."
+课件2 · L08 Performance evaluation,对话,"Receiving Performance Feedback & Discussing Improvement
+接收绩效反馈并讨论改进","Team Lead: Let's start our performance evaluation discussion. Overall, your performance this quarter is good. You completed all the assigned projects on time, and your work quality is high. Colleagues also speak highly of your teamwork.
+You: Thank you so much. I really appreciate your recognition. I also want to hear your feedback on areas where I can improve. I hope to do better in the next quarter.
+Team Lead: That's a good attitude. The main area for improvement is your time management. I noticed that you sometimes spend too much time on small details, which occasionally affects the progress of less urgent tasks. For example, when you were working on the user interface optimization project, you spent extra time adjusting minor details, which delayed the start of the follow-up testing task.
+You: I totally agree with you. I've also realized this problem recently. I tend to pursue perfection in every detail, which sometimes leads to inefficiency. Could you give me some suggestions on how to improve my time management?
+Team Lead: Sure. I suggest you prioritize your tasks every morning, distinguish between urgent and important tasks, and allocate your time reasonably. You can use time management tools to set deadlines for each task, which will help you focus on the key points and avoid getting stuck on small details. Also, don't hesitate to ask for help if you feel overwhelmed.
+You: That's very helpful. Thank you. I'll try this method starting tomorrow and make a conscious effort to improve my time management. I also plan to set clear goals for the next quarter to improve my work efficiency.
+Team Lead: Great. I believe you can make progress soon. Let's set a follow-up check in a month to see how you're doing. If you have any questions during this period, feel free to talk to me.
+You: Thank you for your guidance and support. I'll work hard to make improvements and live up to your expectations."
+课件2 · L08 Performance evaluation,短句,When will the performance evaluation be conducted?,重点句型
+课件2 · L08 Performance evaluation,短句,What are the main evaluation criteria?,绩效评估什么时候开展？
+课件2 · L08 Performance evaluation,短句,I need to submit a self-evaluation form.,主要的评估标准是什么？
+课件2 · L08 Performance evaluation,短句,Could you give me feedback on my performance?,我需要提交一份自我评估表
+课件2 · L08 Performance evaluation,短句,My main area for improvement is…,您能给我一些关于我绩效的反馈吗？
+课件2 · L08 Performance evaluation,短句,I will make improvements according to your suggestions.,重点句型
+课件2 · L08 Performance evaluation,短句,I plan to set clear goals for the next quarter.,我会根据您的建议进行改进
+课件2 · L08 Performance evaluation,短句,Thank you for your recognition and guidance.,我计划为下一季度设定明确的目标
+课件2 · L08 Performance evaluation,短句,How can I improve my work efficiency?,感谢您的认可和指导
+课件2 · L08 Performance evaluation,短句,I'll make a conscious effort to correct my shortcomings.,我如何才能提高我的工作效率？
+课件2 · L09 Promotions and Transfers,对话,"Applying for a Promotion
+申请晋升","You: Good morning, Team Lead. I've been working in the company as a backend developer for two years, and I'd like to discuss the possibility of applying for a promotion to a senior backend developer position. I've prepared a summary of my work achievements and growth over the past two years.
+Team Lead: I'm glad you're proactive about your career growth. I've noticed your hard work and progress. You've completed several key projects and helped the team solve many technical problems. Could you share more about why you think you're qualified for this promotion?
+You: Thank you for your recognition. Over the past two years, I've mastered advanced backend development skills, led the development of the user data management module, and optimized the system performance, which reduced the response time by 30%. I've also mentored two new developers and helped them quickly adapt to their roles. I believe I have the skills, experience, and responsibility to take on the role of a senior backend developer.
+Team Lead: That's a solid performance. The promotion to senior developer requires not only professional skills but also the ability to lead small projects and mentor team members, which you've demonstrated. Do you know the formal promotion process and criteria?
+You: I have a basic understanding, but I'd like to confirm. I know I need to submit a promotion application form, go through a performance review, and attend an interview with the department manager. Could you tell me if there are any other specific requirements or things I need to prepare?
+Team Lead: You're right about the process. In addition, you need to provide two colleague recommendations and a detailed project report of the key projects you've led. I'll support your application and write a recommendation for you. Submit the application form and related materials to HR next week, and I'll follow up with the department manager.
+You: Thank you so much for your support! I'll prepare all the materials this week and submit them on time. I'll continue to work hard and live up to your expectations if I get promoted.
+Team Lead: I believe you can do it. Good luck with your application."
+课件2 · L09 Promotions and Transfers,对话,"Applying for an Internal Transfer
+申请内部转岗","You: Hi HR Manager, I hope I'm not disturbing you. I've been working in the marketing department as a marketing specialist for a year, and I'd like to apply for an internal transfer to the product department as a product assistant. I'm very interested in product management and have been learning related knowledge in my spare time.
+HR Manager: Not at all. Internal transfers are encouraged if they fit your career development and the company's needs. Could you tell me why you want to transfer to the product department, and what relevant skills or experience you have for the product assistant position?
+You: Sure. During my work in the marketing department, I often communicated with the product team to understand user needs and product functions, which made me realize my interest in product management. I've learned product design basics and user research methods through online courses, and I've helped the product team collect and sort user feedback several times. I'm detail-oriented, good at communication, and I believe these skills are suitable for the product assistant role.
+HR Manager: That's good to know. The product department is currently looking for a product assistant, so your application couldn't come at a better time. Do you have any questions about the product assistant position, such as job responsibilities or work requirements?
+You: Yes, I'd like to ask about the main responsibilities of the product assistant and whether there will be any training for the new role. I want to make sure I can adapt to the new position quickly. HR
+Manager: The main responsibilities include collecting user feedback, assisting the product manager with product planning, organizing product meetings, and updating product documents. We will provide a one-month on-the-job training to help you adapt to the role, and you'll have a mentor from the product team to guide you.
+You: That's reassuring. Thank you. What's the next step for the transfer application? Do I need to get approval from my current department manager first?
+HR Manager: Yes, you need to discuss it with your current department manager and get their approval first. Then submit the internal transfer application form to me, and I'll coordinate with the product department to arrange an interview. If the interview is successful, we'll finalize the transfer date.
+You: Understood. Thank you so much for your help. I'll discuss it with my department manager today and submit the application form as soon as possible.
+HR Manager: You're welcome. If you have any other questions during the process, feel free to contact me."
+课件2 · L09 Promotions and Transfers,短句,I'd like to discuss the possibility of applying for a promotion.,我想申请晋升
+课件2 · L09 Promotions and Transfers,短句,Could you share why you think you're qualified?,说说你胜任的理由
+课件2 · L09 Promotions and Transfers,短句,I optimized system performance and got good results.,我优化系统并取得成效
+课件2 · L09 Promotions and Transfers,短句,I've noticed your hard work and progress.,我看到你的努力和进步
+课件2 · L09 Promotions and Transfers,短句,It requires not only skills but also team leadership.,岗位需要能力与团队管理
+课件2 · L09 Promotions and Transfers,短句,Are there any other requirements I need to prepare?,还有其他需要准备的要求吗？
+课件2 · L09 Promotions and Transfers,短句,You need to provide recommendations and project reports.,你需提交推荐信与项目报告
+课件2 · L09 Promotions and Transfers,短句,My work made me interested in product management.,工作让我对产品管理产生兴趣
+课件2 · L09 Promotions and Transfers,短句,I'd like to know responsibilities and training.,我想了解职责和培训
+课件2 · L09 Promotions and Transfers,短句,What's the next step for the application?,申请下一步流程是什么？
+课件2 · L10 The Structure of an Email,短句,I'm writing to report an issue we encountered during API integration.,我写这封信是为了报告我们在API集成过程中遇到的一个问题
+课件2 · L10 The Structure of an Email,短句,We keep receiving timeout errors when connecting to the third-party service.,我们在连接到第三方服务时一直遇到超时错误
+课件2 · L10 The Structure of an Email,短句,This issue is blocking our development progress and may affect the testing schedule.,这个问题正在阻碍我们的发展进程，并且可能会影响测试计划的安排
+课件2 · L11 Starting an Email,短句,This email is to confirm the development schedule.,此邮件用于确认开发进度安排
+课件2 · L11 Starting an Email,短句,I'm reaching out to let you know we will have a tech meeting this March 6th.,这个问题正在阻碍我们的发展进程，并且可能会影响测试计划的安排
+课件2 · L12 Accepting Tasks,对话,"Zoom Meeting – Accepting a Development Task
+Zoom 会议：接受开发任务","Manager: Hi team, let's move to the task assignment for this week. As you know, our system's payment module has encountered unstable exceptions during recent regression tests. Some users reported failed transactions, incorrect status callbacks, and occasional timeouts when connecting to the third-party payment gateway. This is a high-priority issue that directly affects user experience and online business. We need to locate the root cause, fix the code logic, optimize the timeout strategy, add a retry mechanism, and complete a full round of joint debugging with the third-party team. The final delivery deadline is Thursday noon, including the test report and operation verification. Is there anyone available to take full responsibility for this task?
+You: Yes, I'm willing to take charge of this task. I have already checked the recent error logs, reviewed the related interface documents, and understood the potential risks in network fluctuation and parameter transmission. I can start the full investigation immediately after this meeting.
+Manager: Great. You also need to coordinate with the test team for real-scenario simulation and communicate with the third-party technical support if you need to clarify their interface rules.
+You: Understood. I will first analyze the exception stack and locate the root cause within two hours. Then I will optimize the code logic, add timeout control and automatic retry strategy, and conduct local unit tests. After that, I will arrange joint debugging with the third-party team and the test team to ensure stability. I will keep you updated on every key progress and submit the complete test report and fix record before Thursday deadline. If any blocking risk occurs, I will report it in time.
+Manager: Perfect. Thank you for taking this task. We count on you to ensure stability and on-time delivery.
+You: No problem. I will do my best to resolve all issues and guarantee the task is completed on schedule."
+课件2 · L12 Accepting Tasks,对话,"Teams Meeting – Accepting an Agile Sprint Task
+Teams 会议：接受敏捷迭代任务","Manager: Let's talk about the core task in this sprint: the user behavior data analysis dashboard. This module includes front-end chart display, multi-dimensional data filtering, back-end data interface development, data permission control, and performance optimization for large data volumes. It depends on the data layer provided by the backend group and requires close communication with the product team to clarify the display logic. You also need to update task status in Jira every day, attend daily standups, and conduct self-test before the formal test phase. The whole module must be ready before the sprint review meeting. Who can take ownership of this complete module?
+You: I'm glad to accept this task. I have read all the user stories, acceptance criteria, and prototype documents in advance. I understand the development scope, functional points, performance requirements, and dependency risks clearly.
+Manager: Good. Please make sure you clarify unclear requirements in time, avoid rework, and ensure development quality and timeline.
+You: Got it. I will make a detailed implementation plan, break down the tasks into small manageable items, and finish development and self-test step by step. I will cooperate with the product team promptly for any unclear points, coordinate with the backend team for data interface integration, and update my progress and risks daily. I will complete all development and pre-test before the deadline and fully prepare for the sprint review to ensure smooth delivery.
+Manager: Thank you. Please feel free to let me know if you need any resource support or further clarification.
+You: Will do. I will keep you updated and make sure the task is delivered with high quality on time."
+课件2 · L12 Accepting Tasks,短句,I'm willing to take charge of this task.,我愿意负责这项任务
+课件2 · L12 Accepting Tasks,短句,I will keep you updated on every key progress.,我会及时同步每一项关键进度
+课件2 · L12 Accepting Tasks,短句,I will submit the complete test report before the deadline.,我会在截止日期前提交完整测试报告
+课件2 · L12 Accepting Tasks,短句,I'm glad to accept this task.,我很乐意接受这项任务
+课件2 · L12 Accepting Tasks,短句,I will cooperate with the product team promptly.,我会及时配合产品团队
+课件2 · L12 Accepting Tasks,短句,I will [Action] all issues and guarantee the task is completed on time.,我会[动作]所有问题以确保任务按时完成
+课件2 · L12 Accepting Tasks,短句,Please help me [Action] unclear requirements as soon as possible.,请帮我尽快[动作]不明确的需求
+课件2 · L12 Accepting Tasks,短句,I will finish the development and testing before [Time].,我会在[时间]前完成开发与测试
+课件2 · L12 Accepting Tasks,短句,I will [Action] you updated if any risks appear.,如果出现任何风险，我会及时向你[动作]
+课件2 · L12 Accepting Tasks,短句,I am happy to [Action] this task and start working immediately.,我很乐意[动作]这项任务并立即开始工作
+课件2 · L13 Raising a Concern,对话,"Zoom Meeting – Raising a Technical Concern
+Zoom 会议：提出技术顾虑","Manager: Let's check the current development progress. Any updates?
+You: I have an important concern to raise. The third-party API response is very unstable, and it's blocking our module development.
+Manager: What exactly is the problem?
+You: The interface often times out and returns wrong data. We can't proceed with testing and integration. I'm worried we will miss the deadline.
+Manager: Have you tried contacting their support?
+You: Yes, but they haven't given a clear solution. I suggest we either find an alternative service or adjust the schedule.
+Manager: Understood. I will escalate this and get support for you right away.
+You: Thank you. Please update me as soon as possible so we can keep the project on track."
+课件2 · L13 Raising a Concern,对话,"Teams Meeting – Raising an Agile Process Concern
+Teams 会议：提出敏捷流程顾虑","Manager: Let's talk about this sprint. Are tasks going smoothly?
+You: I'd like to express a concern. The requirements keep changing during the sprint, which causes rework and reduces efficiency.
+Manager: That's a valid point. How does it affect your work?
+You: We can't estimate accurately, and the workload becomes unpredictable. I'm worried we can't deliver all user stories on time.
+Manager: Thank you for pointing this out. We will improve the requirement freeze rule.
+You: Great. I hope we can clarify all requirements before the sprint starts to avoid risks."
+课件2 · L13 Raising a Concern,短句,I have an important concern to raise.,重点句型
+课件2 · L13 Raising a Concern,短句,The interface often times out and returns wrong data.,我有一个重要的问题需要提出
+课件2 · L13 Raising a Concern,短句,I'm worried we will miss the deadline.,接口经常超时并返回错误数据
+课件2 · L13 Raising a Concern,短句,I'd like to express a concern.,我担心我们会错过截止日期
+课件2 · L13 Raising a Concern,短句,We can't estimate accurately and the workload is unpredictable.,我想表达一个顾虑
+课件2 · L13 Raising a Concern,短句,I have a [.,重点句型
+课件2 · L13 Raising a Concern,短句,There is an [.,我对任务进度有担忧
+课件2 · L13 Raising a Concern,短句,We need to [.,我担心我们无法按时完成
+课件2 · L13 Raising a Concern,短句,Could you provide support to solve this problem?,我们需要调整计划以避免风险
+课件2 · L14 Addressing a Problem,对话,"Zoom Meeting — Addressing Technical Development Problem
+Zoom 会议：处理技术开发问题","Manager: Our current module development is stuck. Has anyone found the main cause?
+You: I've been analyzing the issue, and I'm ready to address this problem. The system keeps throwing runtime errors after the new code merge, which blocks our follow-up development and testing.
+Manager: Do you know what triggers the errors?
+You: I've already checked the code version, database connection and API parameter transmission. I think the conflict comes from inconsistent dependency versions among different branches.
+Manager: That makes sense. What's your plan to fix it?
+You: I'm gonna make the dependency versions consistent, roll back the conflicting code changes, and conduct local unit tests and regression tests. If the problem still exists, I will coordinate with other developers to review the code together.
+Manager: Sounds solid. Please keep the team updated on your progress.
+You: Sure. I will resolve this bottleneck as soon as possible and get the project back on track."
+课件2 · L14 Addressing a Problem,对话,"Teams Meeting — Addressing Agile Team Workflow Problem
+Teams 会议：处理敏捷团队流程问题","Manager: Our recent sprint efficiency is lower than expected. Let's discuss how to improve it.
+You: I'd like to address this workflow problem directly. Many user stories are not clearly defined at the beginning, leading to frequent requirement changes, extra rework and tight delivery time.
+Manager: Yes, that's exactly our pain point. What solution do you suggest?
+You: I suggest we clarify all user stories and acceptance criteria before sprint planning, set clear task priorities, and arrange daily short standups to sync progress and remove obstacles in time.
+Manager: Great practical ideas. Should we also adjust task allocation?
+You: Definitely. We need to assign tasks based on each member's technical strengths, avoid overloading one person, and improve overall team collaboration efficiency.
+Manager: That makes sense. And how can we avoid lengthy off-topic discussions in daily standup?
+You: Great question. We can add a parking lot session to daily standup, so unresolved or non-urgent issues can be logged as parking lot items, so we can discuss and resolve them in follow-up meetings instead of delaying current development tasks. This effectively prevents random obstacles from affecting our sprint progress.
+Manager: Spot on. That's exactly what we need."
+课件2 · L14 Addressing a Problem,短句,I'm ready to address this problem.,我准备好处理这个问题了
+课件2 · L14 Addressing a Problem,短句,I've already checked possible causes one by one.,我已经逐一排查了可能的原因
+课件2 · L14 Addressing a Problem,短句,I will resolve this bottleneck as soon as possible.,我会尽快解决这个瓶颈问题
+课件2 · L14 Addressing a Problem,短句,I'd like to address this workflow issue directly.,我想直接提出并处理这个流程问题
+课件2 · L14 Addressing a Problem,短句,These changes can effectively solve our current issues.,这些调整能有效解决我们目前的问题
+课件2 · L14 Addressing a Problem,短句,Let's __________ a practical solution to fix the error.,让我们[想出/制定]一个可行方案来修复这个错误
+课件2 · L14 Addressing a Problem,短句,I will __________ all related tests after fixing the bug.,修复漏洞后我会[执行/完成]所有相关测试
+课件2 · L14 Addressing a Problem,短句,Please __________ the team updated during problem solving.,解决问题过程中请随时向团队[同步/更新]进度
+课件2 · L14 Addressing a Problem,短句,We should __________ our workflow to avoid similar problems.,我们需要[优化/调整]工作流程，避免类似问题再次发生
+课件2 · L15 Raising a Problem,对话,"Zoom Meeting – Raising a Technical Problem
+Zoom 会议：提出技术问题","Manager: Let's check the current development status. Is everything going well?
+You: Actually, I'd like to raise a technical issue. The new version framework is not compatible with the old database structure. When we run the project locally, it keeps throwing connection exceptions and data parsing errors.
+Manager: How serious is this problem?
+You: It's quite serious. It blocks all our subsequent module development and unit testing. If we can't fix it soon, we will definitely miss the current deadline.
+Manager: Have you tried any temporary workarounds?
+You: I've tried adjusting the configuration parameters, but the problem still exists. I hope we can arrange a joint code review with the backend team as soon as possible.
+Manager: Got it. I will organize a small group discussion this afternoon to solve this together.
+You: Thank you. This will help us get back on track quickly."
+课件2 · L15 Raising a Problem,短句,I'd like to raise a technical issue.,我想提出一个技术问题
+课件2 · L15 Raising a Problem,短句,This problem blocks our subsequent development and testing.,这个问题阻碍了我们后续的开发和测试
+课件2 · L15 Raising a Problem,短句,I've tried adjusting the configuration parameters.,我已经尝试调整配置参数
+课件2 · L15 Raising a Problem,短句,I want to bring up a workflow problem.,我想提出一个流程上的问题
+课件2 · L15 Raising a Problem,短句,Frequent requirement changes cause a lot of unnecessary rework.,需求频繁变动造成大量不必要的返工
+课件2 · L15 Raising a Problem,短句,I need to __________ a problem that affects our progress.,我需要[提出/指出]一个影响进度的问题
+课件2 · L15 Raising a Problem,短句,This issue will __________ the whole project deadline.,这个问题会[影响/耽误]整个项目截止时间
+课件2 · L15 Raising a Problem,短句,The problem __________ our daily development work.,这个问题[阻碍/拖慢]了我们日常开发工作
+课件2 · L15 Raising a Problem,短句,Could we __________ a meeting to discuss this problem?,我们能否[安排/组织]会议讨论这个问题？
+课件2 · L15 Raising a Problem,短句,We should __________ clear rules to avoid similar problems.,我们需要[制定/设立]明确规则避免类似问题
+课件2 · L16 Inviting and Declining,对话,"Zoom Meeting – Inviting Someone to a Technical Seminar
+Zoom 会议：邀请参加技术研讨会","Kevin: Hi, we're going to hold an online technical seminar this Friday at 3 PM. The topic is about API security optimization and third-party dependency management. I'd like to invite you to join us and share your practical experience.
+You: Thanks so much for your invitation. I'm totally available this Friday afternoon, and I'm glad to take part in this seminar. I've summarized many problems and solutions during recent API integration work, so I can share some real cases and practical tips with the team.
+Kevin: That would be fantastic. Your experience is really valuable for our whole development group. We hope you can also give some suggestions on how to avoid common dependency version conflicts.
+You: Sure, I'll prepare my presentation notes and case materials in advance. I will jump into the meeting on time and actively participate in the discussion.
+Kevin: Perfect, looking forward to your sharing on Friday.
+You: No problem, see you online then."
+课件2 · L16 Inviting and Declining,对话,"Teams Meeting – Politely Declining an Invitation with Proper Reason
+Teams 会议：礼貌婉拒邀请","Make: Hello, we plan to have an agile sprint meeting tomorrow morning from 9 to 10:30. We want to review this sprint's problems, workflow weaknesses and improvement plans. I really want to invite you to attend and give your feedback as a senior developer.
+You: I truly appreciate your invitation, but I'm so sorry that I can't make it tomorrow morning. I've got an unavoidable prior commitment, plus I have an urgent online bug issue with a very tight deadline. I need to focus all my time on troubleshooting and fixing the system error tomorrow.
+M ake: It's alright, we totally understand your situation. Work comes first.
+You: Thanks a lot for your understanding. Would you mind sending me the meeting minutes and video recording after the meeting? I'll carefully read the notes and watch the recording in my spare time. If I have any opinions or suggestions, I'll leave them in our team group chat in time. Hopefully I can join the next retrospective meeting.
+Make: Sure, I'll send all the documents and recording to you as soon as the meeting ends.
+You: That's very kind of you, thank you again."
+课件2 · L16 Inviting and Declining,短句,I'd like to invite you to join our online technical seminar.,重点句型
+课件2 · L16 Inviting and Declining,短句,I'm totally available and glad to take part in the discussion.,我想邀请你参加我们的线上技术研讨会
+课件2 · L16 Inviting and Declining,短句,"I truly appreciate your invitation, but I can't make it tomorrow morning.",我完全有空，很乐意参与这次讨论
+课件2 · L16 Inviting and Declining,短句,I have an unavoidable prior commitment and an urgent bug task.,非常感谢你的邀请，但我明天上午无法参加
+课件2 · L16 Inviting and Declining,短句,Could you send me the meeting minutes and video recording later?,我有无法推脱的已有安排和紧急漏洞任务
+课件2 · L16 Inviting and Declining,短句,I'd like to __________ you to join our technical discussion.,重点句型
+课件2 · L16 Inviting and Declining,短句,I'm __________ this Friday afternoon and ready to share my experience.,我想[邀请/邀约]你参加我们的技术讨论
+课件2 · L16 Inviting and Declining,短句,I have a __________ and cannot attend the meeting.,我本周五下午[有空的/空闲的]，可以分享经验
+课件2 · L16 Inviting and Declining,短句,I have to __________ your invitation politely.,我有[时间冲突/已有安排]，无法参加会议
+课件2 · L16 Inviting and Declining,短句,Please share the meeting __________ and recording with me.,我不得不礼貌地[婉拒/推辞]你的邀请
+课件2 · L17 Feedback and Evaluation,对话,"Remote Meeting – Giving Positive Feedback & Evaluation
+远程会议：给予正面反馈与评价","Manager: Now let's move to individual task review in this sprint. I'd like to start with your performance.
+You: Thanks. I'm ready to hear your feedback and evaluation.
+Manager: Overall, you performed very well. You delivered your module on time, kept clear daily progress updates, and cooperated smoothly with both product and test teams. Your code quality and logical design are solid, and you actively solved blocking issues without delaying the timeline.
+You: Thank you very much for your recognition. I tried my best to follow the sprint plan and communicate timely when facing uncertainties.
+Manager: Definitely. Your responsibility and teamwork spirit are impressive. Keep this good performance in the next sprint.
+You: I appreciate your positive feedback. I will keep improving my efficiency and technical capability in future tasks."
+课件2 · L17 Feedback and Evaluation,对话,"Remote Meeting – Giving Constructive Feedback & Improvement Suggestions
+远程会议：给予建设性反馈与改进建议","Colleague: I'd like to share my honest evaluation and some constructive feedback on our recent team cooperation.
+You: Sure, please go ahead. I'm open to any comments and suggestions.
+Colleague: You are reliable in task delivery and always meet deadlines. However, sometimes your requirement confirmation is not early enough, which leads to minor rework later. Also, your daily progress report could be more detailed for the whole team to follow.
+You: Thanks a lot for your frank and valuable feedback. I totally agree with these points. I didn't clarify some unclear user stories at the early stage, and my daily update was too brief.
+Colleague: It's fine. Everyone has room for improvement. If you confirm requirements earlier and update key progress more clearly, the whole workflow will be much smoother.
+You: I will take your suggestions seriously. I'll adjust my working habit, clarify doubts in time, and make my daily report more complete and transparent. Thanks again for your kind evaluation."
+课件2 · L17 Feedback and Evaluation,短句,I'd like to give some feedback and evaluation.,重点句型
+课件2 · L17 Feedback and Evaluation,短句,You delivered the task on time with high quality.,我想给出一些反馈和评价
+课件2 · L17 Feedback and Evaluation,短句,There is still room for improvement in your workflow.,你高质量按时完成了任务
+课件2 · L17 Feedback and Evaluation,短句,I'm open to any honest comments and suggestions.,你的工作流程还有提升空间
+课件2 · L17 Feedback and Evaluation,短句,I will take your feedback seriously and make adjustments.,我愿意接受任何诚恳的点评与建议
+课件2 · L17 Feedback and Evaluation,短句,Please feel free to share your __________ on my performance.,重点句型
+课件2 · L17 Feedback and Evaluation,短句,You have obvious __________ in teamwork and task delivery.,请尽管对我的表现给出[评价/反馈]
+课件2 · L17 Feedback and Evaluation,短句,I have some __________ suggestions for your daily work.,你在团队协作和任务交付上有明显[优点/优势]
+课件2 · L17 Feedback and Evaluation,短句,There is still room for __________ in requirement confirmation.,我对你的日常工作有一些[建设性/合理]改进建议
+课件2 · L17 Feedback and Evaluation,短句,I will __________ your advice and adjust my working style.,在需求确认方面还有[改进/提升]空间
+课件2 · L18 Sharing and Encouraging,对话,"Remote Meeting – Sharing Work Experience
+远程会议：分享工作经验","Manager: In today's team sync meeting, let's take some time to share our work experience and useful skills from this sprint. Who'd like to start first?
+You: I'd love to share some practical tips about debugging and API integration. I've encountered many common error cases when connecting with third-party services, and I've summed up a set of quick troubleshooting methods.
+Manager: That's very helpful for the whole team. Could you talk about how you avoid repeating mistakes?
+You: Sure. I usually record every error case and solution in my notes, summarize regular patterns, and share standard configuration steps with teammates. This can save lots of time for repeated troubleshooting and improve overall development efficiency.
+Manager: Great sharing. These practical methods are valuable for new members as well.
+You: Glad that helps everyone. We can share more insights later and learn from each other to grow together."
+课件2 · L18 Sharing and Encouraging,对话,"Remote Meeting – Encouraging Teammates
+远程会议：鼓励队友","Colleague: I feel a little stressed lately. I'm still not familiar with the current framework, and I often get stuck when developing complex modules. I'm worried I'll slow the team down.
+You: Don't worry too much. Everyone needs time to get used to new tech stacks. You've made obvious progress in the past few weeks, and You're proactive about asking questions and learning, and that goes a long way.
+Colleague: Thank you for your encouragement. I still feel I need to improve a lot.
+You: Keep it up. Take it step by step. If you run into any technical issue, feel free to reach out to me or other teammates anytime. We're all happy to help out and give support. We're not expected to figure everything out on our own.
+Colleague: I really appreciate your support. I'll keep practicing and try to catch up soon.
+You: Believe in yourself. You're doing great, and you'll get more comfortable with this over time and with more practice."
+课件2 · L18 Sharing and Encouraging,短句,I'd love to share some practical tips about my work.,我想分享一些实用的工作技巧
+课件2 · L18 Sharing and Encouraging,短句,We're all happy to help out and give support.,我们都乐意提供帮助和支持
+课件2 · L18 Sharing and Encouraging,短句,You've made obvious progress in your work recently.,你近期在工作上进步很明显
+课件2 · L18 Sharing and Encouraging,短句,Keep it up and believe in yourself.,继续加油，相信你自己
+课件2 · L18 Sharing and Encouraging,短句,We're not expected to figure everything out on our own.,我们并不需要独自解决所有问题
+课件2 · L18 Sharing and Encouraging,短句,I'd like to __________ my work experience with the team.,我想和团队[回顾/交流]我的工作经验
+课件2 · L18 Sharing and Encouraging,短句,Let's __________ useful skills and learn from each other.,让我们[交换/分享]实用技巧，互相学习
+课件2 · L18 Sharing and Encouraging,短句,I'd like to __________ you for your hard work and progress.,我想为你的努力和进步[鼓励/称赞]你
+课件2 · L18 Sharing and Encouraging,短句,"__________ it up, you will get better and better.",[继续/坚持]加油，你会越来越优秀
+课件2 · L18 Sharing and Encouraging,短句,We should give __________ to teammates when they feel stressed.,当同事有压力时，我们应该给予[支持/鼓励]
+课件2 · L19 Interrupting a Conversation,对话,"Polite Interruption for Important Reminder
+为重要提醒礼貌打断","Scrum master: While we were talking about the new feature design, we plan to adjust the overall page structure and refactor most of the front-end logic, and we will also adjust the interface calling sequence to align with the new business process...
+You: Excuse me, sorry to interrupt your conversation briefly. I have an important reminder for the team.
+Scrum master: It's okay, please go ahead.
+You: Just now the operations team sent a notice that the test environment will be shut down and maintained in one hour. All developers must finish environment debugging and data saving before that time, otherwise all local test data may be lost.
+Scrum master: Thanks for the timely heads-up. This update is critical to our day-to-day development.
+You: You're welcome. You can continue your earlier discussion now.
+Scrum master: Got it, thanks a lot."
+课件2 · L19 Interrupting a Conversation,对话,"Interrupt to Put Forward Different Opinions
+打断并提出不同意见","Manager: For this sprint, we will increase task volume properly and shorten cycle for individual tasks, so that we can complete more functional modules and speed up the whole project...
+You: May I interrupt you for a moment? I have different views on this work arrangement.
+Manager: Sure, feel free to speak out your thoughts.
+You: I understand we want to accelerate the progress, but blindly increasing tasks will make everyone overloaded. Many tasks will be rushed, which will easily lead to low code quality and more potential bugs later on.
+Manager: Your concern makes sense. What practical suggestion do you have?
+You: I suggest we keep the original task amount stable for now, ensure the delivery quality, and appropriately adjust the priority instead of shortening timelines.
+Manager: Alright, we will take your suggestion into full consideration and go over this later."
+课件2 · L19 Interrupting a Conversation,短句,Sorry to interrupt your conversation briefly.,重点句型
+课件2 · L19 Interrupting a Conversation,短句,I have an important reminder to tell everyone.,抱歉短暂打断你的谈话
+课件2 · L19 Interrupting a Conversation,短句,May I interrupt you for a moment?,我有重要提醒告知大家
+课件2 · L19 Interrupting a Conversation,短句,I have different views on this work arrangement.,我可以打断你一下吗？
+课件2 · L19 Interrupting a Conversation,短句,We will take your opinion into full consideration.,我对这项工作安排有不同看法
+课件2 · L19 Interrupting a Conversation,短句,Sorry to __________ you while you are speaking.,重点句型
+课件2 · L19 Interrupting a Conversation,短句,Can I __________ in and say a few words?,很抱歉在你发言时[打断/打扰]你
+课件2 · L19 Interrupting a Conversation,短句,I have an __________ matter to inform all members.,我可以[插话/插入]进来讲几句话吗？
+课件2 · L19 Interrupting a Conversation,短句,Please __________ on for a short while.,我有一件[紧急的/重要的]事情通知全体成员
+课件2 · L19 Interrupting a Conversation,短句,I want to put forward my different______.,请稍微[稍等/暂停]片刻
+课件2 · L20 Meeting New Colleagues,对话,"Teams Meeting — Welcoming a New Developer
+Teams 会议：欢迎新开发同事","Manager: Good morning everyone. Today we have a new member joining our technical development team. Let's give a warm welcome to Leo.
+Leo: Thank you so much for the warm welcome. Let me briefly introduce myself. My name is Leo, and I am a backend developer. I majored in Computer Science and I have two years of development experience in backend service construction and database optimization. I specialize in Java development and microservice deployment.
+You: It's nice to meet you, Leo. I'm one of the senior developers in this group. I'm mainly responsible for API integration and module iterations.
+Leo: Nice to meet you too. I'm still getting familiar with our company's technical framework and coding standards.
+You: Take your time to adapt to the working environment. If you run into any technical issues or workflow problems during the onboarding period, feel free to reach out to me. All teammates are willing to give support and share experience.
+You: No worries. We will set up a brief orientation for you this week to help you get familiar with our sprint workflow and code management practices. Looking forward to cooperating with you."
+课件2 · L20 Meeting New Colleagues,对话,"Zoom Meeting — Communicating and Getting to Know New Teammate
+Zoom 会议：与新同事交流熟悉","Manager: After the self-introduction, let's have a quick chat. You can chat with your new teammate about day-to-day work.
+You: Hi, welcome to our team. Which module will you be responsible for in this sprint?
+New Colleague: Thank you. As planned, I will take charge of the data statistics module and help out with backend API debugging. I still lack some experience with our internal development tools.
+You: That's completely normal for new hires. I can share some hands-on tips and standard documents with you later. These resources can help you speed up the onboarding process.
+New Colleague: That would be extremely helpful. I hope I won't slow down the team's overall progress.
+You: Don't put too much pressure on yourself. Our team has a supportive culture. We usually hold daily standups to sync up on progress, and everyone helps each other work through technical obstacles. We will stay in close touch during ongoing development.
+New Colleague: I'm honored to join this great team. I will actively learn, listen carefully and cooperate with everyone.
+You: Great . Let's make progress and grow together."
+课件2 · L20 Meeting New Colleagues,短句,Let me briefly introduce myself to the team.,我向团队简单自我介绍一下
+课件2 · L20 Meeting New Colleagues,短句,I specialize in backend development and database optimization.,我专攻后端开发与数据库优化
+课件2 · L20 Meeting New Colleagues,短句,Feel free to reach out to me if you have any confusion.,有困惑可以随时找我
+课件2 · L20 Meeting New Colleagues,短句,I will catch up with the team progress as soon as possible.,我会尽快跟上团队进度
+课件2 · L20 Meeting New Colleagues,短句,We will keep in close touch during future cooperation.,未来合作中我们保持密切沟通
+课件2 · L20 Meeting New Colleagues,短句,Let me __________ myself briefly to everyone.,我向大家简单[介绍]一下自己
+课件2 · L20 Meeting New Colleagues,短句,I __________ in backend technical development.,我[擅长/专攻]后端技术开发
+课件2 · L20 Meeting New Colleagues,短句,Welcome to __________ our development team.,欢迎[加入]我们开发团队
+课件2 · L20 Meeting New Colleagues,短句,I will __________ new teammates with technical problems.,我会[协助/帮助]新同事解决技术问题
+课件2 · L20 Meeting New Colleagues,短句,I am looking forward to __________ with you.,我期待和你[合作/共事]
+课件2 · L21 Praising and Expressing Appreciation,对话,"Praise for Excellent Working Performance
+表扬出色的工作表现","Manager: After reviewing this week's task completion situation, I want to give positive comments on everyone's work.
+You: Thank you. I have tried my best to finish all assigned tasks on schedule.
+Manager: You have shown really great working ability recently. You not only finish development tasks efficiently, but also take the initiative to check potential bugs in advance. Besides, you always actively coordinate with other groups to push forward project progress. Your responsible attitude and solid professional skills are totally worthy of praise.
+You: I feel so honored to get such high recognition. Actually, I also learned a lot from team members during daily cooperation.
+Manager: You are modest as well. Keep this good state, and you will make greater progress in technical capability and project experience.
+You: I will keep working hard. I also want to say that I truly appreciate the guidance and encouragement you have given me all the time."
+课件2 · L21 Praising and Expressing Appreciation,对话,"Expressing Sincere Appreciation to Teammates
+向队友表达真诚感谢","You: I would like to take this chance to express my sincere gratitude to you.
+Colleague: It's my pleasure. Did I help you solve any troubles recently?
+You: Exactly. Last time I got stuck in the complex interface docking work, you spared plenty of spare time to sort out relevant documents for me and patiently explained difficult technical points step by step. Without your generous help, I could not have finished that tough task so smoothly.
+Colleague: We are teammates, helping each other is what we should do.
+You: Your professional experience and patient guidance saved me a lot of time and avoided many unnecessary mistakes. I really appreciate your kindness and selfless support. I will also try my best to offer help whenever you are in need later.
+Colleague: That's great, let's make progress together as a team."
+课件2 · L21 Praising and Expressing Appreciation,短句,Everyone __________ his responsible working attitude.,所有人都[称赞/认可]他认真负责的工作态度
+课件2 · L21 Praising and Expressing Appreciation,短句,I deeply __________ your generous help in work.,我深深[感激/感谢]你在工作中慷慨的帮助
+课件2 · L21 Praising and Expressing Appreciation,短句,You have made __________ achievements in this sprint.,你在本次迭代中取得了[出色/优秀]的成绩
+课件2 · L21 Praising and Expressing Appreciation,短句,Please accept my sincere __________ from the bottom of my heart.,请接受我发自内心真诚的[谢意/感谢]
+课件2 · L21 Praising and Expressing Appreciation,短句,His quick response is really _______.,他高效的响应能力十分[令人佩服/出色]
+课件2 · L21 Praising and Expressing Appreciation,短句,I'd like to __________ my work experience with the team.,我想和团队[分享/交流]我的工作经验
+课件2 · L21 Praising and Expressing Appreciation,短句,Let's __________ useful skills and learn from each other.,让我们[交换/探讨]实用技巧，互相学习
+课件2 · L22 Workplace Rules,对话,"Teams Meeting – Learning Daily Workplace & Attendance Rules
+Teams 会议：了解日常职场与考勤规定","HR: Welcome all new employees to today's online orientation meeting. Now I will introduce our basic workplace rules and daily working disciplines.
+You: Thank you for your arrangement. We are willing to learn and follow all company regulations strictly.
+HR: First of all, let's talk about attendance rules. All staff need to clock in before 9 a.m. and clock out after 6 p.m. every working day. Being late or leaving early for multiple times will affect your monthly performance assessment. If you need to ask for leave, you must submit an application in advance and get approval from your supervisor.
+You: Got it, we will keep punctual for daily work. I also want to confirm the rules for online remote meetings. Do we need to log in the meeting room ahead of time?
+HR: Yes. For all official team meetings and training sessions, employees should join 3 to 5 minutes in advance, prepare meeting materials, and keep cameras and microphones available when required. Leaving the meeting without permission is not allowed.
+You: I totally understand these rules. Good working discipline can help standardize our work habits and improve team efficiency. We will strictly comply with all attendance and meeting rules.
+HR: Very good. If you have any questions about daily workplace disciplines, feel free to consult me anytime."
+课件2 · L22 Workplace Rules,对话,"Zoom Meeting – Learning Confidentiality & Professional Rules
+Zoom 会议：了解保密与职业规范","Manager: In today's team meeting, I want to emphasize several crucial workplace rules, especially for technical employees.
+You: Okay, we are ready to listen to the rules and requirements.
+Manager: First, confidentiality and data security are our top priorities. All project data, user information, code resources and internal documents are confidential. No one is allowed to send company private data to external platforms or personal devices. Any information leakage will be regarded as a serious rule violation.
+You: I fully agree. Protecting company confidential information is every employee's basic responsibility.
+Manager: Besides, we need to maintain good workplace professionalism. During working hours, please focus on task completion, avoid irrelevant personal affairs, and keep positive cooperation with teammates. Any inappropriate words or behaviors that affect team atmosphere are not permitted.
+You: Understood. We will standardize our working behavior, abide by the code of conduct, and avoid any violations. If we encounter uncertain situations, we will actively ask for clarification from the management team.
+Manager: Excellent. Following standard workplace rules can help our team maintain stable working order and ensure project safety and quality.
+You: Sure. We will always keep compliance in mind and develop good professional working habits."
+课件2 · L22 Workplace Rules,短句,We need to strictly follow and comply with company workplace rules.,我们需要严格遵守公司职场规章制度
+课件2 · L22 Workplace Rules,短句,All employees must keep punctual for daily work and meetings.,所有员工日常工作和会议必须守时
+课件2 · L22 Workplace Rules,短句,Company project data and user information are strictly confidential.,公司项目数据和用户信息严格保密
+课件2 · L22 Workplace Rules,短句,Any rule violation will affect personal performance assessment.,任何违规行为都会影响个人绩效考核
+课件2 · L22 Workplace Rules,短句,We should maintain good professionalism and team atmosphere.,我们应保持良好的职业素养和团队氛围
+课件2 · L22 Workplace Rules,短句,We must strictly __________ all company workplace rules.,我们必须严格[遵守/遵从]公司所有职场制度
+课件2 · L22 Workplace Rules,短句,Please be __________ for all meetings and daily work.,所有会议和日常工作请保持[守时的]
+课件2 · L22 Workplace Rules,短句,Company data belongs to __________ information.,公司数据属于[保密的/机密的]信息
+课件2 · L22 Workplace Rules,短句,Any rule __________ will cause corresponding punishment.,任何[违反]制度的行为都会受到相应处罚
+课件2 · L22 Workplace Rules,短句,We need to improve our working __________ at all times.,我们需要时刻提升自身职业[素养/操守]
+课件2 · L23 Giving Positive Feedback,对话,"Zoom Meeting – Giving Positive Feedback on Task Delivery
+Zoom 会议：对任务交付给予正面反馈","Manager: Let's wrap up the task review of this sprint. I'd like to give targeted positive feedback to everyone's recent performance.
+You: Thank you, manager. I'm glad to hear your evaluation and feedback.
+Manager: I want to praise your performance specifically. During this sprint, you showed strong professionalism and work initiative. You not only completed all assigned development tasks ahead of the deadline with high quality, but also took the initiative to check potential system bugs and optimize the original code logic. Your work is very solid and meticulous, with almost no repeated errors or rework.
+You: Thanks a lot for your recognition. I just tried my best to meet the team's delivery standards.
+Manager: Besides personal task delivery, your teamwork is also impressive. You actively coordinate with product and test teams, respond to colleagues' technical questions in a timely manner, and offer practical solutions to solve blocking problems. Your positive participation greatly improved the overall team efficiency.
+You: I really appreciate your praise. I also learned a lot from teammates in daily cooperation.
+Manager: Keep up this excellent working state. Your continuous progress and positive attitude are great examples for the whole team."
+课件2 · L23 Giving Positive Feedback,对话,"Teams Meeting – Praising Teammate's Progress and Contribution
+Teams 会议：表扬队友的进步与贡献","You: I'd like to share my positive feedback for my teammate in this group discussion.
+Colleague: Thank you, I'm willing to listen to your opinions.
+You: In the past few weeks, you have made obvious and remarkable progress. At the beginning of the sprint, you were not familiar with the new technical framework, but you kept learning actively, sorted out detailed study notes, and quickly adapted to the project development rhythm.
+Colleague: I'm glad that my efforts are noticed. I still have a lot to improve.
+You: Your work attitude is highly praiseworthy. Every task you take is completed earnestly and reliably. Moreover, you are always willing to cooperate with others, take on extra trivial work, and share your summarized experience with new team members. Your modest and proactive attitude brings very positive energy to our team.
+Colleague: Thank you for such sincere and positive feedback. I will keep improving myself.
+You: You totally deserve this praise. Keep it up, and you will definitely make greater progress in future work."
+课件2 · L23 Giving Positive Feedback,短句,I want to praise your excellent performance in this sprint.,我想表扬你在本次迭代中的出色表现
+课件2 · L23 Giving Positive Feedback,短句,"Your work is solid, meticulous and of high quality.",你的工作扎实细致、质量很高
+课件2 · L23 Giving Positive Feedback,短句,Your active cooperation greatly improved team efficiency.,你的积极配合大幅提升了团队效率
+课件2 · L23 Giving Positive Feedback,短句,You have made obvious and remarkable progress recently.,你近期取得了非常显著的进步
+课件2 · L23 Giving Positive Feedback,短句,Your positive attitude brings great energy to the whole team.,你的积极心态为团队带来了满满活力
+课件2 · L23 Giving Positive Feedback,短句,I'd like to __________ your outstanding work performance.,我想[表扬/肯定]你出色的工作表现
+课件2 · L23 Giving Positive Feedback,短句,Your work is very __________ and reliable.,你的工作非常[扎实的/细致的]且靠谱
+课件2 · L23 Giving Positive Feedback,短句,You showed great work __________ in daily tasks.,你在日常工作中展现了极强的工作[主动性/积极性]
+课件2 · L23 Giving Positive Feedback,短句,Your __________ brings positive energy to the team.,你的[态度/表现]为团队带来了正能量
+课件2 · L23 Giving Positive Feedback,短句,Keep up your __________ performance in future work.,在后续工作中继续保持[出色的/优秀的]表现
+课件2 · L24 Taking Leaves,对话,"Zoom Meeting – Applying for Sick Leave
+Zoom 会议：申请病假","You: Excuse me, manager. I'd like to ask for your permission for my temporary leave.
+Manager: Sure, what's the situation? Do you have any urgent matters?
+You: I've caught a bad cold and have a fever this morning. I feel dizzy and weak, and my physical condition is not suitable for working. So I want to apply for one day of sick leave today to have a good rest and see a doctor.
+Manager: I'm sorry to hear that. Please take good care of yourself. Have you arranged your ongoing work properly?
+You: Yes, I've made full preparations in advance. I have sorted out all ongoing development tasks, updated the latest progress in the team document, and handed over my temporary work to my colleague Tom. He will cover my urgent work during my absence.
+Manager: That's great, there will be no work delay. I will approve your sick leave application immediately. Don't worry about your work, focus on recovering your health.
+You: Thank you so much for your understanding and approval. I will check work messages briefly if I feel better, and I will resume work on time tomorrow with full working status.
+Manager: No problem. Get well soon."
+课件2 · L24 Taking Leaves,对话,"Teams Meeting – Applying for Annual Leave
+Teams 会议：申请年假","You: Hi manager, I'd like to apply for annual leave next week.
+Manager: Sure, please tell me the specific leave time and your work arrangement.
+You: I plan to take three days of paid annual leave from next Monday to Wednesday to deal with some personal family matters. I have checked the team's sprint schedule, and there is no core project delivery and important meeting during this period.
+Manager: Alright, but please make sure all your work is properly arranged to avoid affecting team progress.
+You: I've already finished all key tasks in advance. I have listed the follow-up work plans and key notes in detail, and coordinated with my teammate Lily to take over my routine work. I will also keep my phone accessible during my leave to deal with sudden emergencies remotely if necessary.
+Manager: Perfect, your arrangement is very comprehensive. I will approve your annual leave application.
+You: Thank you very much. I will finish all pending work before my leave and resume work immediately after the vacation to catch up with the team progress in time.
+Manager: Okay, enjoy your vacation."
+课件2 · L24 Taking Leaves,短句,I'd like to apply for one day of sick leave for physical recovery.,重点句型
+课件2 · L24 Taking Leaves,短句,I have handed over my ongoing work to my colleague in advance.,我想申请一天病假休养身体
+课件2 · L24 Taking Leaves,短句,My teammate will cover my urgent work during my absence.,我已提前将手头工作交接给同事
+课件2 · L24 Taking Leaves,短句,I plan to take three days of paid annual leave next week.,我不在岗期间，同事会代为处理我的紧急工作
+课件2 · L24 Taking Leaves,短句,I will keep accessible and resume work on time after vacation.,我计划下周休三天带薪年假
+课件2 · L24 Taking Leaves,短句,I want to __________ for one day's sick leave today.,重点句型
+课件2 · L24 Taking Leaves,短句,I have __________ all my ongoing work to my teammate.,我今天想[申请]一天病假
+课件2 · L24 Taking Leaves,短句,My colleague will __________ my work during my leave.,我已经把所有手头工作[交接/移交]给同事
+课件2 · L24 Taking Leaves,短句,Could you please __________ my leave application?,我休假期间同事会[处理/接手]我的工作
+课件2 · L24 Taking Leaves,短句,I will __________ work on time after my vacation.,麻烦你[批准/同意]我的请假申请
+课件2 · L25 Confirming Mistakes,对话,"Zoom Meeting — Confirming Technical Mistakes
+Zoom 会议：确认技术失误","Manager: The test team reported abnormal data output in the new module. Let's figure out what went wrong.
+You: Got it. I've checked the code and running logs repeatedly, and I can confirm that there is a logical mistake in the data calculation part I wrote.
+Manager: So this error is caused by your code? Could you explain the specific details?
+You: Yes, I admit it's my oversight. I missed an edge case during the development and unit test, which leads to incorrect data statistics under special scenarios. This small fault has affected the overall test progress.
+Manager: I see. Have you found a way to fix it?
+You: Absolutely. I have located the exact lines of code and worked out a revision plan. I will correct the logic immediately and run full regression tests to make sure the problem is solved completely. Besides, I will record this case to avoid similar mistakes in future work.
+Manager: Good attitude. Please finish the repair as soon as possible and keep the team updated.
+You: No problem. I will take responsibility for this issue and ensure no recurrence."
+课件2 · L25 Confirming Mistakes,对话,"Teams Meeting — Confirming Workflow Mistakes
+Teams 会议：确认流程失误","Colleague: Our delivered document does not match the client's requirements. Let's confirm who made the mistake and how to handle it.
+You: After reviewing the whole process, I'd like to acknowledge my fault. When sorting out the final version yesterday, I accidentally mixed up two parts of content and failed to double-check before submission. That's why the document has obvious errors.
+Colleague: We totally understand. Everyone may have carelessness at work. Do you know how to remedy this situation?
+You: Yes. I have revised all incorrect content and reorganized the whole structure. I will submit the updated version to the client within one hour, and write a brief note to explain the situation politely.
+Colleague: That's proper. We should also set a double-check rule to prevent such oversights next time.
+You: I agree. This mistake reminds me to be more careful. I will pay more attention to details and verify all deliverables strictly before handing them over. Thanks for your understanding."
+课件2 · L25 Confirming Mistakes,短句,I can confirm that there is a logical mistake in the code.,我可以确认代码中存在逻辑失误
+课件2 · L25 Confirming Mistakes,短句,I admit it is my oversight that caused this error.,我承认是我的疏忽造成了这次差错
+课件2 · L25 Confirming Mistakes,短句,I have located the problem and will correct it right away.,我已经找到问题，并会立刻进行纠正
+课件2 · L25 Confirming Mistakes,短句,This small fault has affected the team's overall progress.,这次小过失影响了团队的整体进度
+课件2 · L25 Confirming Mistakes,短句,We need to take measures to avoid similar mistakes again.,我们需要采取措施，避免同类失误再次发生
+课件2 · L25 Confirming Mistakes,短句,I need to __________ the exact cause of this mistake.,我需要[确认/查明]这次失误的确切原因
+课件2 · L25 Confirming Mistakes,短句,I __________ that I made a careless error in my work.,我[承认/正视]自己在工作中出现了粗心的差错
+课件2 · L25 Confirming Mistakes,短句,Please __________ the wrong content and submit the new version.,请[修改/纠正]错误内容并提交新版本
+课件2 · L25 Confirming Mistakes,短句,This __________ is caused by insufficient pre-delivery check.,这次[失误/差错]是由于交付前检查不到位导致的
+课件2 · L25 Confirming Mistakes,短句,We should learn a lesson and __________ such problems next time.,我们应当吸取教训，下次[避免/杜绝]这类问题

@@ -74,7 +74,8 @@
           "cameraPermission": "墨言需要使用相机拍摄简历或职位图片。"
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-web-browser"
     ],
     "owner": "rg0x80s-team"
   }

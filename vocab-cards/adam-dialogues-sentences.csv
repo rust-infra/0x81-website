@@ -1,0 +1,575 @@
+英文,中文,课程,来源
+I'm [Name].,我是[姓名],L01 Talking About Yourself,Adams-1
+I'm a [Job Title].,我是一名[职位],L01 Talking About Yourself,Adams-1
+I've worked for [X years].,我已经工作了[X年],L01 Talking About Yourself,Adams-1
+I'm good at [Skill].,我擅长[技能],L01 Talking About Yourself,Adams-1
+I'm a [Trait].,我是一个[特质]的人,L01 Talking About Yourself,Adams-1
+My biggest strength is [Strength].,我最大的优势是[优势内容],L01 Talking About Yourself,Adams-1
+I'm good at [Skill/Area] and perform well in it.,我擅长[技能/领域]，且在这方面表现出色,L01 Talking About Yourself,Adams-1
+He is skilled at building efficient backend systems with C#.,他擅长用C#构建高效的后端系统,L01 Talking About Yourself,Adams-1
+I excel at technical English communication which means I can handle the scrum meeting well.,我在技术英语交流方面表现出色，这意味着我能很好地主持敏捷会议,L01 Talking About Yourself,Adams-1
+My job is to [Work Content].,我的工作是[工作内容],L01 Talking About Yourself,Adams-1
+I'm in charge of [Responsibility].,我负责[工作职责],L01 Talking About Yourself,Adams-1
+I work on [Work Content] every day.,我每天从事[工作内容],L01 Talking About Yourself,Adams-1
+I also [Action] with my team.,我还和团队一起[动作],L01 Talking About Yourself,Adams-1
+I fix [Problem] to make programs run well.,我修复[问题]以确保程序正常运行,L01 Talking About Yourself,Adams-1
+I have [X] years of work experience.,我有[X]年工作经历,L04 Talking About Work Experience,Adams-1
+I worked at [Company Name] before.,我以前在[公司名称]工作,L04 Talking About Work Experience,Adams-1
+I was a [Job Title] there.,我在那里是一名[职位],L04 Talking About Work Experience,Adams-1
+I have worked as a [Job Title] for [X] years.,我做[职位]已经[X]年了,L04 Talking About Work Experience,Adams-1
+I [did] [Work Content] in my last job.,我上一份工作做[工作内容],L04 Talking About Work Experience,Adams-1
+I apply for this position because [Reason].,重点句型,L05 Explaining Why You Applied for the Position,Adams-1
+I want this job because I [Wish/Action].,我申请这个职位是因为[原因],L05 Explaining Why You Applied for the Position,Adams-1
+I hope to work here to [Improve/Learn].,我想要这份工作是因为我[愿望/动作],L05 Explaining Why You Applied for the Position,Adams-1
+The reason I apply is [reason].,我希望在这里工作来[提升/学习],L05 Explaining Why You Applied for the Position,Adams-1
+"I'm good at this job, so I apply for it.",我还和团队一起[动作],L05 Explaining Why You Applied for the Position,Adams-1
+I will join the company orientation.,重点句型,L06 Orientation,Adams-1
+We learn [Content] in the orientation.,我将要参加公司的入职培训,L06 Orientation,Adams-1
+I know the company rules from the orientation.,我们在入职培训中学习[内容],L06 Orientation,Adams-1
+The orientation helps me know the team.,我从入职培训中了解了公司规则,L06 Orientation,Adams-1
+I take part in the onboarding this morning.,入职培训帮我了解了团队,L06 Orientation,Adams-1
+Welcome to the company's orientation session.,重点句型,L06 Orientation (medium),Adams-1
+Could you confirm which orientation manual I should use?,欢迎参加公司的入职培训,L06 Orientation (medium),Adams-1
+Will we have a tour of the office later?,您能确认我应该使用哪版入职手册吗？,L06 Orientation (medium),Adams-1
+Could you explain the company's rules?,我们之后会参观办公室吗？,L06 Orientation (medium),Adams-1
+I need help with the internal system.,您能讲解一下公司的规章制度吗？,L06 Orientation (medium),Adams-1
+Could you guide me to apply for office supplies?,重点句型,L06 Orientation (medium),Adams-1
+What time does the training start tomorrow?,您能指导我申请办公用品吗？,L06 Orientation (medium),Adams-1
+When will I meet my mentor?,明天的培训什么时候开始？,L06 Orientation (medium),Adams-1
+Thank you for your help with my onboarding.,我什么时候能见到我的导师？,L06 Orientation (medium),Adams-1
+I have a few questions after the orientation.,感谢您在我入职时提供的帮助,L06 Orientation (medium),Adams-1
+My work schedule is [Content].,我的工作安排是[内容],L07 Work Schedules,Adams-1
+I start work at [Time].,我在[时间]开始工作,L07 Work Schedules,Adams-1
+I need to finish [Task] today.,我今天需要完成[任务],L07 Work Schedules,Adams-1
+I will [Action] with my team this afternoon.,我今天下午要和团队一起[动作],L07 Work Schedules,Adams-1
+My daily work is to [Work Content].,我的日常工作是[工作内容],L07 Work Schedules,Adams-1
+Could you tell me our working hours and break time?,您能告诉我我们的工作时间和休息时间吗？,L07 Work Schedules,Adams-1
+Are there any special rules about the schedule?,关于工作安排有什么特殊规定吗？,L07 Work Schedules,Adams-1
+Do we have any fixed daily tasks to finish?,我们有需要完成的固定日常任务吗？,L07 Work Schedules,Adams-1
+When do we usually have team meetings?,我们通常什么时候开团队会议？,L07 Work Schedules,Adams-1
+What if I can't finish the assigned work on time?,如果我不能按时完成分配的工作怎么办？,L07 Work Schedules,Adams-1
+Should I inform you in advance?,我需要提前通知您吗？,L07 Work Schedules,Adams-1
+Please let me know as soon as possible.,请尽快告诉我,L07 Work Schedules,Adams-1
+I'll follow the schedule and inform you if I have any problems.,我会遵守安排，有问题会通知您,L07 Work Schedules,Adams-1
+Can you tell me our work hours and break time?,能告诉我我们的工作时间和休息时间吗？,L07 Work Schedules,Adams-1
+I'll stick to the schedule and let you know if I run into any issues.,我会遵守安排，遇到问题会告诉你,L07 Work Schedules,Adams-1
+Let me tell you [Information].,重点句型,L08 Give Information,Adams-1
+The [Information] is [Detail].,让我告诉你[信息],L08 Give Information,Adams-1
+I will inform you of the [Information].,[信息]是[细节],L08 Give Information,Adams-1
+I can show you the [Information/Thing].,我会通知你[信息],L08 Give Information,Adams-1
+I'll let you know when it's ready.,我可以给你展示[信息/东西],L08 Give Information,Adams-1
+I need to give you some information about…,重点句型,L08 Give Information,Adams-1
+I'd like to share some details with you.,我需要向您提供一些关于......的资料,L08 Give Information,Adams-1
+Let me tell you the latest update.,我想与您分享一些细节,L08 Give Information,Adams-1
+I'm informing you that…,让我来告诉你们最新的消息,L08 Give Information,Adams-1
+I want to let you know about…,我在此告知您......,L08 Give Information,Adams-1
+Do you need any further information?,重点句型,L08 Give Information,Adams-1
+I'll keep you updated if there's anything new.,您还需要其他信息吗？,L08 Give Information,Adams-1
+Thank you for letting me know.,如果有任何新情况，我会及时通知你,L08 Give Information,Adams-1
+Please pass this information to others.,感谢您告知我此事,L08 Give Information,Adams-1
+I'll send a notice to remind you later.,请将此信息转告给其他人,L08 Give Information,Adams-1
+I need to arrange a meeting for [Purpose].,重点句型,L09 Arranging a Meeting,Adams-1
+Let's set the meeting at [Time].,我需要为[目的]安排一场会议,L09 Arranging a Meeting,Adams-1
+The meeting will be in [Place].,我们把会议定在[时间]吧,L09 Arranging a Meeting,Adams-1
+I will inform the team about the meeting.,会议将在[地点]举行,L09 Arranging a Meeting,Adams-1
+I have arranged the meeting for [Time].,我会通知团队会议的事情,L09 Arranging a Meeting,Adams-1
+I have arranged the meeting for [Time].,我已经把会议安排在[时间]了,L09 Arranging a Meeting,Adams-1
+Could we arrange a Teams meeting for [Time]?,重点句型,L09 Arranging a Meeting,Adams-1
+What time works for you?,我们能安排一个Teams会议在[时间]吗?,L09 Arranging a Meeting,Adams-1
+Can you send the meeting invite?,你什么时候方便？,L09 Arranging a Meeting,Adams-1
+Can you send the meeting link?,你能发送一下会议邀请吗？,L09 Arranging a Meeting,Adams-1
+I'll make sure to join on time.,你能发送一下会议链接吗？,L09 Arranging a Meeting,Adams-1
+Let's hop on a Teams call this afternoon.,重点句型,L09 Arranging a Meeting,Adams-1
+[Time] works for me.,今天下午咱们来参加一下Teams会议吧.,L09 Arranging a Meeting,Adams-1
+Will loop in [someone/team].,[时间]对我来说很合适,L09 Arranging a Meeting,Adams-1
+Add [someone/team] to the tech meeting.,会邀请[某人/某团队]参与,L09 Arranging a Meeting,Adams-1
+See you on Teams at [Time].,将[某人/某团队]加入技术会议中,L09 Arranging a Meeting,Adams-1
+Can you help me [Action]?,你能帮我[动作]吗?,L10 Make a Request,Adams-1
+Could you do me a favor?,你能帮我个忙吗?,L10 Make a Request,Adams-1
+Please [Action] for me.,请帮我[动作],L10 Make a Request,Adams-1
+Can you give me [Something]?,你能给我[某物]吗?,L10 Make a Request,Adams-1
+Could you show me how to [Action]?,你能教我怎么[动作]吗?,L10 Make a Request,Adams-1
+I need to make an important request about [something].,我需要提出一个关于[某事]的重要请求,L10 Make a Request,Adams-1
+I've been stuck on [a problem] for a long time.,我被[某个问题]卡住很久了,L10 Make a Request,Adams-1
+Could you help me [do something]?,你能帮我[做某事]吗？,L10 Make a Request,Adams-1
+Could you help me [do something] correctly?,你能帮我正确地[做某事]吗？,L10 Make a Request,Adams-1
+I would appreciate your [help/support].,我将非常感激你的[帮助/支持],L10 Make a Request,Adams-1
+May I speak with you about [an urgent request].,我能和你谈一下[一个紧急请求]吗？,L10 Make a Request,Adams-1
+I encountered unexpected [problems/issues] that delayed my progress.,我遇到了意外的[问题]耽误了进度,L10 Make a Request,Adams-1
+I wonder if you could [do something for me].,我想知道你是否能[为我做某事],L10 Make a Request,Adams-1
+Could you give me some advice on how to [do something]?,你能给我一些建议，如何[做某事]吗？,L10 Make a Request,Adams-1
+I will keep you updated on [something] in time.,我会及时向你同步[某事]的最新进展,L10 Make a Request,Adams-1
+We are having a meeting at [Time].,我们将在[时间]开会,L11 Having a Meeting,Adams-1
+I need to attend a meeting.,我需要参加一场会议,L11 Having a Meeting,Adams-1
+Let's discuss [Topic] in the meeting.,我们在会议中讨论[主题]吧,L11 Having a Meeting,Adams-1
+I'd like to speak in the meeting.,我想在会议中发言,L11 Having a Meeting,Adams-1
+We are discussing the [Project/Task] progress.,我们正在讨论[项目/任务]进度,L11 Having a Meeting,Adams-1
+We have a [team/project] meeting at [time] this afternoon.,我们今天下午[时间]有个[团队/项目]会,L11 Having a Meeting,Adams-1
+The meeting is about [progress/blockers/tasks].,会议是关于[进度/阻碍/任务]的,L11 Having a Meeting,Adams-1
+Let's get started with today's [meeting].,我们开始今天的[会议]吧,L11 Having a Meeting,Adams-1
+My work is [on track/behind schedule/ahead of schedule] so far.,到目前为止我的工作[进度正常/滞后/提前],L11 Having a Meeting,Adams-1
+I'm facing a problem with [system/interface/code].,我在[系统/接口/代码]上遇到了问题,L11 Having a Meeting,Adams-1
+I haven't found the [cause/solution] yet.,我还没找到[原因/解决方案],L11 Having a Meeting,Adams-1
+My plan next is to [finish/test/fix] the task.,我接下来的计划是[完成/测试/修复]任务,L11 Having a Meeting,Adams-1
+I need some help with [technical issue].,我在[技术问题]方面需要一些帮助,L11 Having a Meeting,Adams-1
+I'll keep you [updated/posted] on my progress.,我会随时跟你[同步/更新]我的进度,L11 Having a Meeting,Adams-1
+Could you help me with [something] after the meeting?,重点句型,L12 Making Requests in the Meeting,Adams-1
+Would you mind [action] for me later?,会议结束后，你能帮我处理[某件事]吗？,L12 Making Requests in the Meeting,Adams-1
+I'd like to make a request about the task arrangement.,稍后你介意帮我做[某个动作]吗？,L12 Making Requests in the Meeting,Adams-1
+May I have more time to finish [work]?,我想就任务安排提一个请求,L12 Making Requests in the Meeting,Adams-1
+Could we adjust the task order to prioritize [task]?,我可以多一点时间完成[某项工作]吗？,L12 Making Requests in the Meeting,Adams-1
+Can you give me some guidance on [issue]?,重点句型,L12 Making Requests in the Meeting,Adams-1
+I need your support for the task of [sprint].,你能就[某个问题]给我一些指导吗？,L12 Making Requests in the Meeting,Adams-1
+Would it be possible to discuss [something] in more detail later?,我需要你为[迭代]任务提供支持,L12 Making Requests in the Meeting,Adams-1
+Could you spare some time to help me with [requirement]?,稍后我们能就[某件事]更详细地讨论吗？,L12 Making Requests in the Meeting,Adams-1
+I would appreciate it if you could assist me with [something].,你能抽出点时间帮我处理[某个需求]吗？,L12 Making Requests in the Meeting,Adams-1
+Do you need any help in the meeting?,重点句型,L13 Offering Help in the Meeting,Adams-1
+Let me [Action] you.,你在会议中需要帮忙吗？,L13 Offering Help in the Meeting,Adams-1
+I can [ Action] you a hand to get it done shortly.,我来帮你[做某事],L13 Offering Help in the Meeting,Adams-1
+Please [Action] the report to the manager.,我可以[做某事]您尽快完成这件事,L13 Offering Help in the Meeting,Adams-1
+Let me give you a hand with the [Problem/Thing].,请把这份报告[做某事]经理,L13 Offering Help in the Meeting,Adams-1
+Can I help you troubleshoot this bug after the meeting?,重点句型,L13 Offering Help in the Meeting,Adams-1
+Would you like me to [Action] you with your task?,会议结束后，我能帮您排查一下这个故障吗？,L13 Offering Help in the Meeting,Adams-1
+I can [Action] you with troubleshooting the problem.,您希望我[做某事]您来完成您的任务吗？,L13 Offering Help in the Meeting,Adams-1
+Let me [Action] you finish part of your work.,我可以[做某事]您排查这个问题,L13 Offering Help in the Meeting,Adams-1
+I'm glad to [Action] you meet the deadline.,让我[做某事]您完成一部分工作吧,L13 Offering Help in the Meeting,Adams-1
+I left a [message/note] for you on the desk.,我在桌上给你留了[留言/便条],L14 Leaving a Message,Adams-1
+Please tell [Name] to call me back.,请告诉[姓名]给我回电,L14 Leaving a Message,Adams-1
+Can you pass this message to [Name]?,你能把这个留言转给[姓名]吗？,L14 Leaving a Message,Adams-1
+"This note is for [Name], about the [work/task].",这张便条是给[姓名]的，关于[工作/任务]的,L14 Leaving a Message,Adams-1
+I left word for you to contact me soon.,我留了口信让你尽快联系我,L14 Leaving a Message,Adams-1
+You can leave a [message/note] for her at the front of the desk.,我在桌上给你留了[留言/便条],L14 Leaving a Message,Adams-1
+Please leave a [message/note] in the group chat once it's done.,任务完成后，请在群聊中留下一条[留言/通知],L14 Leaving a Message,Adams-1
+She left a [message/note] reminding herself of the meeting.,她留下了一条[留言/便条]，以提醒自己要参加这次会议,L14 Leaving a Message,Adams-1
+Leave a note on the notice board about the change you made.,在公告板上留下关于你所做的更改的说明,L14 Leaving a Message,Adams-1
+"If you meet the IT staff on - site, leave a word about the network problem in our area.",如果你在现场遇到信息技术人员，就向他们提及我们区域的网络问题吧,L14 Leaving a Message,Adams-1
+I want to confirm [Information] with you.,重点句型,L15 Confirming Information,Adams-1
+Is [Information] correct?,我想和你确认[信息],L15 Confirming Information,Adams-1
+Can you confirm [Something] for me?,[信息]是正确的吗？,L15 Confirming Information,Adams-1
+I just want to make sure about [Information].,你能帮我确认[某物/某事]吗？,L15 Confirming Information,Adams-1
+Thank you for confirming the [Detail/Information].,我只是想确认一下[信息],L15 Confirming Information,Adams-1
+Could you double-check [details] for me?,重点句型,L15 Confirming Information,Adams-1
+"The deadline is [time], correct?",你能帮我再次核对[详情]吗？,L15 Confirming Information,Adams-1
+Can you confirm [Something] for me?,截止日期是[时间]，对吗？,L15 Confirming Information,Adams-1
+Correct me if I'm wrong about [something].,你能帮我确认[某物/某事]吗？,L15 Confirming Information,Adams-1
+Is the meeting in [place] at [time].,如果我在[某事]上错了，请纠正,L15 Confirming Information,Adams-1
+"Good morning/afternoon, everyone. Let's start the meeting.",大家上午/下午好，我们开始会议,L16 Opening a Meeting,Adams-1
+Thank you for coming/your presence today.,感谢大家今天出席,L16 Opening a Meeting,Adams-1
+Let's call the meeting to order.,我们宣布会议正式开始,L16 Opening a Meeting,Adams-1
+Today's meeting agenda has [X] parts.,今天的会议议程有[X]部分,L16 Opening a Meeting,Adams-1
+Our main purpose for this meeting is to [Goal].,本次会议的主要目的是[目标],L16 Opening a Meeting,Adams-1
+"First, let's confirm all attendees are present.",首先，我们确认所有参会人员已到齐,L16 Opening a Meeting,Adams-1
+"Before we start, does anyone have questions about the agenda?",开始之前，有人对议程有疑问吗？,L16 Opening a Meeting,Adams-1
+"Today, we'll focus on [Topic/Problem].",今天，我们将重点讨论[主题/问题],L16 Opening a Meeting,Adams-1
+Let's kick off the meeting with [First Part].,我们从[第一部分内容]开始本次会议,L16 Opening a Meeting,Adams-1
+I'd like to welcome everyone to this [Meeting Type] meeting.,欢迎大家参加本次[会议类型]会议,L16 Opening a Meeting,Adams-1
+Today's meeting agenda has [X] items.,今天的会议议程有[X]项,L17 Meeting Agenda and Rules,Adams-1
+Let's confirm the meeting agenda first.,我们先确认一下会议议程,L17 Meeting Agenda and Rules,Adams-1
+Can we adjust the order of the agenda items?,我们可以调整议程项的顺序吗？,L17 Meeting Agenda and Rules,Adams-1
+We need to stick to the agenda to save time.,我们需要遵守议程以节省时间,L17 Meeting Agenda and Rules,Adams-1
+Please arrive on time for the meeting.,请准时参加会议,L17 Meeting Agenda and Rules,Adams-1
+Let's avoid off-topic discussions during the meeting.,会议期间我们避免跑题讨论,L17 Meeting Agenda and Rules,Adams-1
+Speak one by one and respect others' opinions.,依次发言，尊重他人观点,L17 Meeting Agenda and Rules,Adams-1
+Could you keep quiet and focus on the meeting?,请保持安静，专注于会议好吗？,L17 Meeting Agenda and Rules,Adams-1
+Please take notes of the key points in the meeting.,请记录会议中的重点内容,L17 Meeting Agenda and Rules,Adams-1
+Let's follow the meeting rules to make it efficient.,我们遵守会议规则，让会议更高效,L17 Meeting Agenda and Rules,Adams-1
+I have good news to share with you.,重点句型,L18 Delivering Good News,Adams-1
+I'm pleased to announce some good news.,我有好消息要和大家分享,L18 Delivering Good News,Adams-1
+That's great/wonderful news!,我很荣幸宣布一些好消息,L18 Delivering Good News,Adams-1
+Our team succeeded in [Something].,真是个好/太棒的消息！,L18 Delivering Good News,Adams-1
+We got good news from [Someone/Department].,我们团队在[某事]上成功了,L18 Delivering Good News,Adams-1
+I'm so happy/excited to hear the good news.,重点句型,L18 Delivering Good News,Adams-1
+Our hard work finally paid off.,听到这个好消息我非常开心/兴奋,L18 Delivering Good News,Adams-1
+I'm glad to inform you that [Good News].,我们的努力终于有回报了,L18 Delivering Good News,Adams-1
+Let's celebrate this good news together.,我很高兴告知大家[好消息],L18 Delivering Good News,Adams-1
+This good news is a reward for our efforts.,让我们一起庆祝这个好消息,L18 Delivering Good News,Adams-1
+I regret to inform you that we have encountered an unexpected setback.,重点句型,L19 Delivering Bad News,Adams-1
+I have to honestly report that the progress will be delayed.,我很遗憾地告知我们遇到了意外挫折,L19 Delivering Bad News,Adams-1
+I take full responsibility for this technical risk.,我必须如实汇报进度将会延误,L19 Delivering Bad News,Adams-1
+I need to break some bad news to the whole team.,我愿意为这次技术风险承担全部责任,L19 Delivering Bad News,Adams-1
+We will rearrange tasks to minimize the negative influence.,我需要向团队传达一则坏消息,L19 Delivering Bad News,Adams-1
+I regret to __________ you that the task will be delayed.,重点句型,L19 Delivering Bad News,Adams-1
+We have met an unexpected technical __________.,我遗憾地[通知/告知]你任务将会延误,L19 Delivering Bad News,Adams-1
+I need to __________ the bad news to my manager frankly.,我们遇到了一场意外的技术[挫折/故障],L19 Delivering Bad News,Adams-1
+I will take full __________ for this mistake.,我需要坦率地向经理[汇报/传达]坏消息,L19 Delivering Bad News,Adams-1
+We need a __________ plan to reduce the loss.,我将为这次失误承担全部[责任],L19 Delivering Bad News,Adams-1
+Let me clarify what I really mean.,让我澄清我的真实意思,L20 Clarifying,Adams-1
+That's not exactly right.,那不完全正确,L20 Clarifying,Adams-1
+There is a misunderstanding about this.,关于这件事有个误会,L20 Clarifying,Adams-1
+What I mean is.,我的意思是……,L20 Clarifying,Adams-1
+I'd like to correct the wrong information.,我想纠正错误信息,L20 Clarifying,Adams-1
+Let me make it clear for everyone.,我给大家讲清楚,L20 Clarifying,Adams-1
+"Actually, the situation is.",事实上，情况是……,L20 Clarifying,Adams-1
+I didn't mean that at all.,我根本不是那个意思,L20 Clarifying,Adams-1
+Please allow me to explain it again.,请允许我再解释一遍,L20 Clarifying,Adams-1
+I hope this clarifies the confusion.,我希望这能澄清困惑,L20 Clarifying,Adams-1
+Let's wrap up / conclude the meeting.,我们结束会议吧,L21 Closing a Meeting,Adams-1
+Let me summarize / recap the key points.,我来总结一下要点,L21 Closing a Meeting,Adams-1
+These are the main decisions we made today.,这些是我们今天做出的主要决定,L21 Closing a Meeting,Adams-1
+Please finish your task by the deadline.,请在截止日前完成任务,L21 Closing a Meeting,Adams-1
+I'll distribute the meeting minutes later.,我稍后会分发会议纪要,L21 Closing a Meeting,Adams-1
+Our next meeting is on [date] at [time].,我们下次会议在[日期][时间],L21 Closing a Meeting,Adams-1
+Please follow up on your action items.,请跟进你的行动项,L21 Closing a Meeting,Adams-1
+"If you have no questions, we can stop here.",如果大家没有问题，我们就到这里,L21 Closing a Meeting,Adams-1
+Thank you all for your time / participation.,谢谢大家的时间/参与,L21 Closing a Meeting,Adams-1
+The meeting is adjourned / dismissed.,会议到此结束,L21 Closing a Meeting,Adams-1
+"Good morning, everyone. Let's start today's presentation.",重点句型,L22 Starting a Presentation,Adams-1
+I'd like to welcome all of you to today's presentation.,大家上午好，我们开始今天的演示,L22 Starting a Presentation,Adams-1
+"My name is [Your Name], and I'll be your presenter today.",我想欢迎大家参加今天的演示,L22 Starting a Presentation,Adams-1
+"Today, I'll talk about/introduce/discuss [Topic].",我是[你的名字]，今天由我来为大家演示,L22 Starting a Presentation,Adams-1
+The presentation will cover [X] key parts.,今天，我将讲解/介绍/探讨[主题],L22 Starting a Presentation,Adams-1
+I'll keep the presentation concise and focus on the key points.,重点句型,L22 Starting a Presentation,Adams-1
+We'll leave some time for questions and discussions at the end.,我会保持演示简洁，聚焦重点内容,L22 Starting a Presentation,Adams-1
+"Without further ado, let's kick off the presentation.",我们会在最后留出一些时间用于提问和讨论,L22 Starting a Presentation,Adams-1
+Today's presentation is mainly about [Core Content].,话不多说，我们开始演示,L22 Starting a Presentation,Adams-1
+I'm honored to present our new product/work progress to you.,今天的演示主要围绕[核心内容]展开,L22 Starting a Presentation,Adams-1
+"Now, let's move on to the Q & A session.",重点句型,L23 Q & A (Question and Answer Session),Adams-1
+Does anyone have any questions?,现在，我们进入问答环节,L23 Q & A (Question and Answer Session),Adams-1
+I'd like to ask a question about [Topic].,有人有问题吗？,L23 Q & A (Question and Answer Session),Adams-1
+Could you clarify / elaborate on that?,我想提一个关于[主题]的问题,L23 Q & A (Question and Answer Session),Adams-1
+Let me answer that question.,你能澄清/详细说明一下吗？,L23 Q & A (Question and Answer Session),Adams-1
+We achieved this by arranging 24/7 after-sales personnel.,重点句型,L23 Q & A (Question and Answer Session),Adams-1
+I hope that answers your question.,我们通过配备全天候售后人员做到了这一点.,L23 Q & A (Question and Answer Session),Adams-1
+We'll follow up with the detailed materials later.,希望这能回答你的问题,L23 Q & A (Question and Answer Session),Adams-1
+"If you have any other questions, please feel free to ask.",我们稍后会跟进详细的资料,L23 Q & A (Question and Answer Session),Adams-1
+Let's wrap up the Q & A session here.,如果您还有其他问题，欢迎随时提问,L23 Q & A (Question and Answer Session),Adams-1
+I'm afraid we are behind schedule.,恐怕我们进度滞后了,L24 Behind Schedule,Adams-1
+The project is delayed by [X] days.,项目延迟了[X]天,L24 Behind Schedule,Adams-1
+The main reason for the delay is…,延迟的主要原因是……,L24 Behind Schedule,Adams-1
+We encountered some unexpected technical problems.,我们遇到了一些意外的技术问题,L24 Behind Schedule,Adams-1
+We need to accelerate the progress to make up for the delay.,我们需要加快进度来弥补延误,L24 Behind Schedule,Adams-1
+We have worked out a detailed solution plan.,我们已经制定了详细的解决计划,L24 Behind Schedule,Adams-1
+We will keep you updated on the progress.,我们会及时向你更新进度,L24 Behind Schedule,Adams-1
+I apologize for the delay caused.,我为造成的延误道歉,L24 Behind Schedule,Adams-1
+We will do our best to catch up with the original schedule.,我们会尽力赶上原定进度,L24 Behind Schedule,Adams-1
+We will ensure the project is delivered with high quality.,我们会确保项目高质量交付,L24 Behind Schedule,Adams-1
+I apologize sincerely for my mistake.,重点句型,L25 Apologizing for a Mistake,Adams-1
+I'm very sorry for the inconvenience caused.,我真诚地为我的错误道歉,L25 Apologizing for a Mistake,Adams-1
+It's my fault / I take full responsibility for this mistake.,我为造成的不便感到非常抱歉,L25 Apologizing for a Mistake,Adams-1
+I made a mistake in [Something].,这是我的过错/我为这个错误承担全部责任,L25 Apologizing for a Mistake,Adams-1
+I will correct the mistake immediately / at once.,我在[某事]上犯了错误,L25 Apologizing for a Mistake,Adams-1
+I promise this mistake will never happen again.,重点句型,L25 Apologizing for a Mistake,Adams-1
+Please forgive me for my oversight / slip-up.,我保证这种错误再也不会发生,L25 Apologizing for a Mistake,Adams-1
+I will make up for the mistake and minimize the impact.,请原谅我的疏忽/失误,L25 Apologizing for a Mistake,Adams-1
+I deeply regret my carelessness.,我会弥补错误，将影响降到最低,L25 Apologizing for a Mistake,Adams-1
+Thank you for your forgiveness and trust.,我对我的粗心感到非常懊悔,L25 Apologizing for a Mistake,Adams-1
+"I'm [Name], the new [Tech Job Title].",重点句型,L01 First-Day Onboarding & Team Introductions,Adams-1
+It's nice to meet you all. I'm glad to join the tech team.,我是[姓名]，新来的[技术职位],L01 First-Day Onboarding & Team Introductions,Adams-1
+"This is [Name], our [Tech Job Title] in the team.",很高兴认识大家，我很荣幸加入技术团队,L01 First-Day Onboarding & Team Introductions,Adams-1
+Our tech team uses [Tech Stack] for our projects.,这是[姓名]，我们团队的[技术职位],L01 First-Day Onboarding & Team Introductions,Adams-1
+We're currently working on a [Tech Project] now.,我们技术团队用[技术栈]做项目,L01 First-Day Onboarding & Team Introductions,Adams-1
+I have [X] years of experience in [Tech Field].,重点句型,L01 First-Day Onboarding & Team Introductions,Adams-1
+I mainly work with [Tech Tool/Framework] for development.,我在[技术领域]有[X]年经验,L01 First-Day Onboarding & Team Introductions,Adams-1
+Could you help me with the project framework?,我主要用[技术工具/框架]做开发,L01 First-Day Onboarding & Team Introductions,Adams-1
+I'll read the project document carefully before starting work.,你能帮我了解一下项目框架吗？,L01 First-Day Onboarding & Team Introductions,Adams-1
+I'm looking forward to cooperating with the whole team.,开始工作前，我会仔细阅读项目文档,L01 First-Day Onboarding & Team Introductions,Adams-1
+Let's kick off our daily scrum / standup meeting.,我们开始今天的每日站会,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+Yesterday I finished… and did…,昨天我完成了……并且做了……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+Today I'll tackle… / focus on… / work on…,今天我将处理/专注于/做……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I have a blocker:…,我有一个阻碍:……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I'm stuck on… and need help with it.,我卡在……上，需要帮助解决……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I might need to sync / coordinate with… later.,我稍后可能需要和……同步/协调,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+This blocker is preventing me from completing…,这个阻碍让我无法完成……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I logged the bugs in Jira and assigned them to…,我在Jira上记录了bug，并分配给了……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+Let's address blockers early to stay on track.,我们尽早解决阻碍，确保进度正常,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+The daily standup is over—let's get to work.,今日站会结束，开始工作吧,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I made a mistake / introduced a code bug.,我犯了一个错误/引入了一个代码漏洞,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I take full responsibility for this mistake / incident.,我为这个错误/事故承担全部责任,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+We are experiencing a system outage / technical incident.,我们正遭遇系统宕机/技术事故,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I've started troubleshooting / debugging the issue.,我已经开始排查/调试这个问题,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+The root cause of the problem is…,这个问题的根本原因是……,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I will fix the error and submit a patch / fix.,我会修复错误并提交补丁/修复包,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+We need to restore service / resolve the incident as soon as possible.,我们需要尽快恢复服务/解决事故,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I will prevent this from happening again by…,我会通过……防止这种情况再次发生,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+Let's conduct a root cause analysis after the incident.,事故结束后，我们进行根本原因分析,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+I apologize for the inconvenience caused by the mistake / incident.,我为错误/事故造成的不便道歉,L02 Daily Standup Meetings (Agile/Scrum),Adams-1
+One of my weaknesses is.,我的一个弱点是……,L01 Talking About Weaknesses,Adams-2
+I used to have a problem with.,我过去在……方面有问题,L01 Talking About Weaknesses,Adams-2
+I recognize / acknowledge this shortcoming.,我意识到/坦言这个缺点,L01 Talking About Weaknesses,Adams-2
+I'm taking steps to improve this.,我正在采取措施改进这点,L01 Talking About Weaknesses,Adams-2
+I've learned to... to fix this problem.,我学会了……来改正这个问题,L01 Talking About Weaknesses,Adams-2
+I've made a lot of progress in this aspect.,我在这方面取得了很大进步,L01 Talking About Weaknesses,Adams-2
+I believe improving weaknesses helps me grow.,我相信改进弱点能让我成长,L01 Talking About Weaknesses,Adams-2
+I try to balance... and.,我努力平衡……和……,L01 Talking About Weaknesses,Adams-2
+I've adjusted my working / learning style.,我调整了我的工作/学习方式,L01 Talking About Weaknesses,Adams-2
+I keep working on myself every day.,我坚持每天提升自我,L01 Talking About Weaknesses,Adams-2
+I left my last job to seek better career growth.,我离职是为了寻求更好的职业发展,L01 Talking About Weaknesses,Adams-2
+I'm grateful for the experience I gained there.,我很感激在那里获得的经验,L01 Talking About Weaknesses,Adams-2
+I want to take on more challenges and responsibilities.,我想要迎接更多挑战，承担更多职责,L01 Talking About Weaknesses,Adams-2
+I'm looking for a better career opportunity.,我在寻找更好的工作机遇,L01 Talking About Weaknesses,Adams-2
+This position fits my long-term career goals.,这个岗位符合我的长期职业目标,L01 Talking About Weaknesses,Adams-2
+I left on good terms with my previous employer.,我和前公司和平分手,L01 Talking About Weaknesses,Adams-2
+I want to step out of my comfort zone.,我想要走出舒适区,L01 Talking About Weaknesses,Adams-2
+The previous role had limited growth space.,之前的岗位发展空间有限,L01 Talking About Weaknesses,Adams-2
+I'm eager to learn new skills and grow.,我渴望学习新技能，实现成长,L01 Talking About Weaknesses,Adams-2
+This is a positive career move for me.,对我来说，这是一次积极的职业变动,L01 Talking About Weaknesses,Adams-2
+I'd like to confirm all salary and benefit items in detail.,我想详细确认所有薪资福利项目,L01 Talking About Weaknesses,Adams-2
+The monthly salary will be paid on the fixed working day every month.,月薪将在每月固定工作日发放,L01 Talking About Weaknesses,Adams-2
+We provide full social insurance and other extra welfare benefits.,我们缴纳齐全社保并提供额外各项福利,L01 Talking About Weaknesses,Adams-2
+I have no questions about the relevant treatment rules.,我对相关待遇规定没有疑问,L01 Talking About Weaknesses,Adams-2
+I confirm and accept all the above salary and benefit terms.,我确认并接受上述所有关于薪资和福利的条款,L01 Talking About Weaknesses,Adams-2
+I want to __________ my specific monthly income standard.,我想要[确认/核对]自己具体的月收入标准,L01 Talking About Weaknesses,Adams-2
+The company offers complete __________ for every formal employee.,公司为每位正式员工缴纳齐全[社保/保险],L01 Talking About Weaknesses,Adams-2
+Please __________ the exact payment time of monthly salary.,请[说明/告知]月薪准确的发放时间,L01 Talking About Weaknesses,Adams-2
+I can enjoy enough annual __________ after becoming official staff.,转正后我可享受充足的年度[假期],L01 Talking About Weaknesses,Adams-2
+I __________ all the salary and benefit arrangements.,我[接受/认同]所有薪资与福利安排,L01 Talking About Weaknesses,Adams-2
+Do you mind if I ask a few questions?,重点句型,L04 Raising Questions or Concerns,Adams-2
+I'd like to know more about this role's responsibilities.,您介意我问几个问题吗？,L04 Raising Questions or Concerns,Adams-2
+Could you clarify the team's working style?,我想了解更多这个岗位的职责,L04 Raising Questions or Concerns,Adams-2
+I wonder about the promotion path here.,您能说明一下团队的工作风格吗？,L04 Raising Questions or Concerns,Adams-2
+I have a small concern about.,我想了解这里的晋升通道,L04 Raising Questions or Concerns,Adams-2
+Would you tell me about the employee training programs?,重点句型,L04 Raising Questions or Concerns,Adams-2
+Is there a mentor for new employees?,您能讲讲员工培训计划吗？,L04 Raising Questions or Concerns,Adams-2
+Thank you for clarifying that for me.,新员工会有导师指导吗？,L04 Raising Questions or Concerns,Adams-2
+That puts my mind at ease.,感谢您为我澄清这点,L04 Raising Questions or Concerns,Adams-2
+"That's all my questions, thank you.",这让我放心了,L04 Raising Questions or Concerns,Adams-2
+May I ask about the next steps in the interview process?,我想问一下面试流程的后续步骤是怎样的？,L05 Asking About the Next Steps,Adams-2
+Could you please let me know what the next steps are?,能否请您告知接下来的步骤是什么？,L05 Asking About the Next Steps,Adams-2
+What's the expected timeline for the hiring decision?,招聘决定的预计完成时间是怎样的？,L05 Asking About the Next Steps,Adams-2
+When will candidates receive feedback or updates?,候选人何时能收到反馈或最新消息？,L05 Asking About the Next Steps,Adams-2
+How many interview rounds are there in total?,总共会有多少轮面试？,L05 Asking About the Next Steps,Adams-2
+Who will contact me about the next steps?,谁会告知我接下来的步骤呢？,L05 Asking About the Next Steps,Adams-2
+Is it okay if I follow up by email if I don't hear back?,如果我等了一段时间仍未收到回复，能否通过电子邮件再进行一次联系呢？,L05 Asking About the Next Steps,Adams-2
+Thank you for clarifying the process for me.,感谢您为我详细说明了这个流程,L05 Asking About the Next Steps,Adams-2
+I'll look forward to your update.,我期待着您的最新消息,L05 Asking About the Next Steps,Adams-2
+That's all my questions. Thank you.,这就是我所有的问题了。谢谢你！,L05 Asking About the Next Steps,Adams-2
+I'd like to ask for sick / annual leave today.,重点句型,L06 On Leave,Adams-2
+I'll be on leave from Monday to Wednesday.,我想今天请病假/年假,L06 On Leave,Adams-2
+I've handed over my work to [colleague].,我从周一到周三将休假,L06 On Leave,Adams-2
+Please contact [name] while I'm away.,我已经把我的工作交给了[同事],L06 On Leave,Adams-2
+Is it possible to take three days off?,我外出期间，请联系[姓名],L06 On Leave,Adams-2
+Could you approve my leave request?,重点句型,L06 On Leave,Adams-2
+I'll set an auto-reply email.,您能否批准我的请假申请？,L06 On Leave,Adams-2
+I'm only available for urgent issues.,我会设置一封自动回复邮件。我会设置一封自动回复邮件,L06 On Leave,Adams-2
+Thank you for approving my leave.,我只在紧急情况下才有空处理事务,L06 On Leave,Adams-2
+I'll be back to work on [date].,感谢您批准我的请假申请,L06 On Leave,Adams-2
+I'd like to apply for the professional training program.,重点句型,L07 Employee Training and Development,Adams-2
+What training opportunities are available for employees?,我想申请参加这个专业培训项目,L07 Employee Training and Development,Adams-2
+This training is closely related to our current work.,员工有哪些培训机会？,L07 Employee Training and Development,Adams-2
+The training will help me improve my professional skills.,这次培训与我们当前的工作密切相关,L07 Employee Training and Development,Adams-2
+Could you approve my training application?,这次培训将帮助我提升专业技能,L07 Employee Training and Development,Adams-2
+I prefer offline training to online training.,重点句型,L07 Employee Training and Development,Adams-2
+I want to participate in training related to career development.,比起线上培训，我更喜欢线下培训,L07 Employee Training and Development,Adams-2
+When will the next training program start?,我想参加与职业发展相关的培训,L07 Employee Training and Development,Adams-2
+I'll share my learning experience with the team after the training.,下一个培训项目什么时候开始？,L07 Employee Training and Development,Adams-2
+Thank you for your support with my training application.,培训结束后，我会和团队分享我的学习经验,L07 Employee Training and Development,Adams-2
+When will the performance evaluation be conducted?,重点句型,L08 Performance evaluation,Adams-2
+What are the main evaluation criteria?,绩效评估什么时候开展？,L08 Performance evaluation,Adams-2
+I need to submit a self-evaluation form.,主要的评估标准是什么？,L08 Performance evaluation,Adams-2
+Could you give me feedback on my performance?,我需要提交一份自我评估表,L08 Performance evaluation,Adams-2
+My main area for improvement is…,您能给我一些关于我绩效的反馈吗？,L08 Performance evaluation,Adams-2
+I will make improvements according to your suggestions.,重点句型,L08 Performance evaluation,Adams-2
+I plan to set clear goals for the next quarter.,我会根据您的建议进行改进,L08 Performance evaluation,Adams-2
+Thank you for your recognition and guidance.,我计划为下一季度设定明确的目标,L08 Performance evaluation,Adams-2
+How can I improve my work efficiency?,感谢您的认可和指导,L08 Performance evaluation,Adams-2
+I'll make a conscious effort to correct my shortcomings.,我如何才能提高我的工作效率？,L08 Performance evaluation,Adams-2
+I'd like to discuss the possibility of applying for a promotion.,我想申请晋升,L09 Promotions and Transfers,Adams-2
+Could you share why you think you're qualified?,说说你胜任的理由,L09 Promotions and Transfers,Adams-2
+I optimized system performance and got good results.,我优化系统并取得成效,L09 Promotions and Transfers,Adams-2
+I've noticed your hard work and progress.,我看到你的努力和进步,L09 Promotions and Transfers,Adams-2
+It requires not only skills but also team leadership.,岗位需要能力与团队管理,L09 Promotions and Transfers,Adams-2
+Are there any other requirements I need to prepare?,还有其他需要准备的要求吗？,L09 Promotions and Transfers,Adams-2
+You need to provide recommendations and project reports.,你需提交推荐信与项目报告,L09 Promotions and Transfers,Adams-2
+My work made me interested in product management.,工作让我对产品管理产生兴趣,L09 Promotions and Transfers,Adams-2
+I'd like to know responsibilities and training.,我想了解职责和培训,L09 Promotions and Transfers,Adams-2
+What's the next step for the application?,申请下一步流程是什么？,L09 Promotions and Transfers,Adams-2
+I'm writing to report an issue we encountered during API integration.,我写这封信是为了报告我们在API集成过程中遇到的一个问题,L10 The Structure of an Email,Adams-2
+We keep receiving timeout errors when connecting to the third-party service.,我们在连接到第三方服务时一直遇到超时错误,L10 The Structure of an Email,Adams-2
+This issue is blocking our development progress and may affect the testing schedule.,这个问题正在阻碍我们的发展进程，并且可能会影响测试计划的安排,L10 The Structure of an Email,Adams-2
+This email is to confirm the development schedule.,此邮件用于确认开发进度安排,L11 Starting an Email,Adams-2
+I'm reaching out to let you know we will have a tech meeting this March 6th.,这个问题正在阻碍我们的发展进程，并且可能会影响测试计划的安排,L11 Starting an Email,Adams-2
+I'm willing to take charge of this task.,我愿意负责这项任务,L12 Accepting Tasks,Adams-2
+I will keep you updated on every key progress.,我会及时同步每一项关键进度,L12 Accepting Tasks,Adams-2
+I will submit the complete test report before the deadline.,我会在截止日期前提交完整测试报告,L12 Accepting Tasks,Adams-2
+I'm glad to accept this task.,我很乐意接受这项任务,L12 Accepting Tasks,Adams-2
+I will cooperate with the product team promptly.,我会及时配合产品团队,L12 Accepting Tasks,Adams-2
+I will [Action] all issues and guarantee the task is completed on time.,我会[动作]所有问题以确保任务按时完成,L12 Accepting Tasks,Adams-2
+Please help me [Action] unclear requirements as soon as possible.,请帮我尽快[动作]不明确的需求,L12 Accepting Tasks,Adams-2
+I will finish the development and testing before [Time].,我会在[时间]前完成开发与测试,L12 Accepting Tasks,Adams-2
+I will [Action] you updated if any risks appear.,如果出现任何风险，我会及时向你[动作],L12 Accepting Tasks,Adams-2
+I am happy to [Action] this task and start working immediately.,我很乐意[动作]这项任务并立即开始工作,L12 Accepting Tasks,Adams-2
+I have an important concern to raise.,重点句型,L13 Raising a Concern,Adams-2
+The interface often times out and returns wrong data.,我有一个重要的问题需要提出,L13 Raising a Concern,Adams-2
+I'm worried we will miss the deadline.,接口经常超时并返回错误数据,L13 Raising a Concern,Adams-2
+I'd like to express a concern.,我担心我们会错过截止日期,L13 Raising a Concern,Adams-2
+We can't estimate accurately and the workload is unpredictable.,我想表达一个顾虑,L13 Raising a Concern,Adams-2
+I have a [.,重点句型,L13 Raising a Concern,Adams-2
+There is an [.,我对任务进度有担忧,L13 Raising a Concern,Adams-2
+We need to [.,我担心我们无法按时完成,L13 Raising a Concern,Adams-2
+Could you provide support to solve this problem?,我们需要调整计划以避免风险,L13 Raising a Concern,Adams-2
+I'm ready to address this problem.,我准备好处理这个问题了,L14 Addressing a Problem,Adams-2
+I've already checked possible causes one by one.,我已经逐一排查了可能的原因,L14 Addressing a Problem,Adams-2
+I will resolve this bottleneck as soon as possible.,我会尽快解决这个瓶颈问题,L14 Addressing a Problem,Adams-2
+I'd like to address this workflow issue directly.,我想直接提出并处理这个流程问题,L14 Addressing a Problem,Adams-2
+These changes can effectively solve our current issues.,这些调整能有效解决我们目前的问题,L14 Addressing a Problem,Adams-2
+Let's __________ a practical solution to fix the error.,让我们[想出/制定]一个可行方案来修复这个错误,L14 Addressing a Problem,Adams-2
+I will __________ all related tests after fixing the bug.,修复漏洞后我会[执行/完成]所有相关测试,L14 Addressing a Problem,Adams-2
+Please __________ the team updated during problem solving.,解决问题过程中请随时向团队[同步/更新]进度,L14 Addressing a Problem,Adams-2
+We should __________ our workflow to avoid similar problems.,我们需要[优化/调整]工作流程，避免类似问题再次发生,L14 Addressing a Problem,Adams-2
+I'd like to raise a technical issue.,我想提出一个技术问题,L15 Raising a Problem,Adams-2
+This problem blocks our subsequent development and testing.,这个问题阻碍了我们后续的开发和测试,L15 Raising a Problem,Adams-2
+I've tried adjusting the configuration parameters.,我已经尝试调整配置参数,L15 Raising a Problem,Adams-2
+I want to bring up a workflow problem.,我想提出一个流程上的问题,L15 Raising a Problem,Adams-2
+Frequent requirement changes cause a lot of unnecessary rework.,需求频繁变动造成大量不必要的返工,L15 Raising a Problem,Adams-2
+I need to __________ a problem that affects our progress.,我需要[提出/指出]一个影响进度的问题,L15 Raising a Problem,Adams-2
+This issue will __________ the whole project deadline.,这个问题会[影响/耽误]整个项目截止时间,L15 Raising a Problem,Adams-2
+The problem __________ our daily development work.,这个问题[阻碍/拖慢]了我们日常开发工作,L15 Raising a Problem,Adams-2
+Could we __________ a meeting to discuss this problem?,我们能否[安排/组织]会议讨论这个问题？,L15 Raising a Problem,Adams-2
+We should __________ clear rules to avoid similar problems.,我们需要[制定/设立]明确规则避免类似问题,L15 Raising a Problem,Adams-2
+I'd like to invite you to join our online technical seminar.,重点句型,L16 Inviting and Declining,Adams-2
+I'm totally available and glad to take part in the discussion.,我想邀请你参加我们的线上技术研讨会,L16 Inviting and Declining,Adams-2
+"I truly appreciate your invitation, but I can't make it tomorrow morning.",我完全有空，很乐意参与这次讨论,L16 Inviting and Declining,Adams-2
+I have an unavoidable prior commitment and an urgent bug task.,非常感谢你的邀请，但我明天上午无法参加,L16 Inviting and Declining,Adams-2
+Could you send me the meeting minutes and video recording later?,我有无法推脱的已有安排和紧急漏洞任务,L16 Inviting and Declining,Adams-2
+I'd like to __________ you to join our technical discussion.,重点句型,L16 Inviting and Declining,Adams-2
+I'm __________ this Friday afternoon and ready to share my experience.,我想[邀请/邀约]你参加我们的技术讨论,L16 Inviting and Declining,Adams-2
+I have a __________ and cannot attend the meeting.,我本周五下午[有空的/空闲的]，可以分享经验,L16 Inviting and Declining,Adams-2
+I have to __________ your invitation politely.,我有[时间冲突/已有安排]，无法参加会议,L16 Inviting and Declining,Adams-2
+Please share the meeting __________ and recording with me.,我不得不礼貌地[婉拒/推辞]你的邀请,L16 Inviting and Declining,Adams-2
+I'd like to give some feedback and evaluation.,重点句型,L17 Feedback and Evaluation,Adams-2
+You delivered the task on time with high quality.,我想给出一些反馈和评价,L17 Feedback and Evaluation,Adams-2
+There is still room for improvement in your workflow.,你高质量按时完成了任务,L17 Feedback and Evaluation,Adams-2
+I'm open to any honest comments and suggestions.,你的工作流程还有提升空间,L17 Feedback and Evaluation,Adams-2
+I will take your feedback seriously and make adjustments.,我愿意接受任何诚恳的点评与建议,L17 Feedback and Evaluation,Adams-2
+Please feel free to share your __________ on my performance.,重点句型,L17 Feedback and Evaluation,Adams-2
+You have obvious __________ in teamwork and task delivery.,请尽管对我的表现给出[评价/反馈],L17 Feedback and Evaluation,Adams-2
+I have some __________ suggestions for your daily work.,你在团队协作和任务交付上有明显[优点/优势],L17 Feedback and Evaluation,Adams-2
+There is still room for __________ in requirement confirmation.,我对你的日常工作有一些[建设性/合理]改进建议,L17 Feedback and Evaluation,Adams-2
+I will __________ your advice and adjust my working style.,在需求确认方面还有[改进/提升]空间,L17 Feedback and Evaluation,Adams-2
+I'd love to share some practical tips about my work.,我想分享一些实用的工作技巧,L18 Sharing and Encouraging,Adams-2
+We're all happy to help out and give support.,我们都乐意提供帮助和支持,L18 Sharing and Encouraging,Adams-2
+You've made obvious progress in your work recently.,你近期在工作上进步很明显,L18 Sharing and Encouraging,Adams-2
+Keep it up and believe in yourself.,继续加油，相信你自己,L18 Sharing and Encouraging,Adams-2
+We're not expected to figure everything out on our own.,我们并不需要独自解决所有问题,L18 Sharing and Encouraging,Adams-2
+I'd like to __________ my work experience with the team.,我想和团队[回顾/交流]我的工作经验,L18 Sharing and Encouraging,Adams-2
+Let's __________ useful skills and learn from each other.,让我们[交换/分享]实用技巧，互相学习,L18 Sharing and Encouraging,Adams-2
+I'd like to __________ you for your hard work and progress.,我想为你的努力和进步[鼓励/称赞]你,L18 Sharing and Encouraging,Adams-2
+"__________ it up, you will get better and better.",[继续/坚持]加油，你会越来越优秀,L18 Sharing and Encouraging,Adams-2
+We should give __________ to teammates when they feel stressed.,当同事有压力时，我们应该给予[支持/鼓励],L18 Sharing and Encouraging,Adams-2
+Sorry to interrupt your conversation briefly.,重点句型,L19 Interrupting a Conversation,Adams-2
+I have an important reminder to tell everyone.,抱歉短暂打断你的谈话,L19 Interrupting a Conversation,Adams-2
+May I interrupt you for a moment?,我有重要提醒告知大家,L19 Interrupting a Conversation,Adams-2
+I have different views on this work arrangement.,我可以打断你一下吗？,L19 Interrupting a Conversation,Adams-2
+We will take your opinion into full consideration.,我对这项工作安排有不同看法,L19 Interrupting a Conversation,Adams-2
+Sorry to __________ you while you are speaking.,重点句型,L19 Interrupting a Conversation,Adams-2
+Can I __________ in and say a few words?,很抱歉在你发言时[打断/打扰]你,L19 Interrupting a Conversation,Adams-2
+I have an __________ matter to inform all members.,我可以[插话/插入]进来讲几句话吗？,L19 Interrupting a Conversation,Adams-2
+Please __________ on for a short while.,我有一件[紧急的/重要的]事情通知全体成员,L19 Interrupting a Conversation,Adams-2
+I want to put forward my different______.,请稍微[稍等/暂停]片刻,L19 Interrupting a Conversation,Adams-2
+Let me briefly introduce myself to the team.,我向团队简单自我介绍一下,L20 Meeting New Colleagues,Adams-2
+I specialize in backend development and database optimization.,我专攻后端开发与数据库优化,L20 Meeting New Colleagues,Adams-2
+Feel free to reach out to me if you have any confusion.,有困惑可以随时找我,L20 Meeting New Colleagues,Adams-2
+I will catch up with the team progress as soon as possible.,我会尽快跟上团队进度,L20 Meeting New Colleagues,Adams-2
+We will keep in close touch during future cooperation.,未来合作中我们保持密切沟通,L20 Meeting New Colleagues,Adams-2
+Let me __________ myself briefly to everyone.,我向大家简单[介绍]一下自己,L20 Meeting New Colleagues,Adams-2
+I __________ in backend technical development.,我[擅长/专攻]后端技术开发,L20 Meeting New Colleagues,Adams-2
+Welcome to __________ our development team.,欢迎[加入]我们开发团队,L20 Meeting New Colleagues,Adams-2
+I will __________ new teammates with technical problems.,我会[协助/帮助]新同事解决技术问题,L20 Meeting New Colleagues,Adams-2
+I am looking forward to __________ with you.,我期待和你[合作/共事],L20 Meeting New Colleagues,Adams-2
+Everyone __________ his responsible working attitude.,所有人都[称赞/认可]他认真负责的工作态度,L21 Praising and Expressing Appreciation,Adams-2
+I deeply __________ your generous help in work.,我深深[感激/感谢]你在工作中慷慨的帮助,L21 Praising and Expressing Appreciation,Adams-2
+You have made __________ achievements in this sprint.,你在本次迭代中取得了[出色/优秀]的成绩,L21 Praising and Expressing Appreciation,Adams-2
+Please accept my sincere __________ from the bottom of my heart.,请接受我发自内心真诚的[谢意/感谢],L21 Praising and Expressing Appreciation,Adams-2
+His quick response is really _______.,他高效的响应能力十分[令人佩服/出色],L21 Praising and Expressing Appreciation,Adams-2
+I'd like to __________ my work experience with the team.,我想和团队[分享/交流]我的工作经验,L21 Praising and Expressing Appreciation,Adams-2
+Let's __________ useful skills and learn from each other.,让我们[交换/探讨]实用技巧，互相学习,L21 Praising and Expressing Appreciation,Adams-2
+We need to strictly follow and comply with company workplace rules.,我们需要严格遵守公司职场规章制度,L22 Workplace Rules,Adams-2
+All employees must keep punctual for daily work and meetings.,所有员工日常工作和会议必须守时,L22 Workplace Rules,Adams-2
+Company project data and user information are strictly confidential.,公司项目数据和用户信息严格保密,L22 Workplace Rules,Adams-2
+Any rule violation will affect personal performance assessment.,任何违规行为都会影响个人绩效考核,L22 Workplace Rules,Adams-2
+We should maintain good professionalism and team atmosphere.,我们应保持良好的职业素养和团队氛围,L22 Workplace Rules,Adams-2
+We must strictly __________ all company workplace rules.,我们必须严格[遵守/遵从]公司所有职场制度,L22 Workplace Rules,Adams-2
+Please be __________ for all meetings and daily work.,所有会议和日常工作请保持[守时的],L22 Workplace Rules,Adams-2
+Company data belongs to __________ information.,公司数据属于[保密的/机密的]信息,L22 Workplace Rules,Adams-2
+Any rule __________ will cause corresponding punishment.,任何[违反]制度的行为都会受到相应处罚,L22 Workplace Rules,Adams-2
+We need to improve our working __________ at all times.,我们需要时刻提升自身职业[素养/操守],L22 Workplace Rules,Adams-2
+I want to praise your excellent performance in this sprint.,我想表扬你在本次迭代中的出色表现,L23 Giving Positive Feedback,Adams-2
+"Your work is solid, meticulous and of high quality.",你的工作扎实细致、质量很高,L23 Giving Positive Feedback,Adams-2
+Your active cooperation greatly improved team efficiency.,你的积极配合大幅提升了团队效率,L23 Giving Positive Feedback,Adams-2
+You have made obvious and remarkable progress recently.,你近期取得了非常显著的进步,L23 Giving Positive Feedback,Adams-2
+Your positive attitude brings great energy to the whole team.,你的积极心态为团队带来了满满活力,L23 Giving Positive Feedback,Adams-2
+I'd like to __________ your outstanding work performance.,我想[表扬/肯定]你出色的工作表现,L23 Giving Positive Feedback,Adams-2
+Your work is very __________ and reliable.,你的工作非常[扎实的/细致的]且靠谱,L23 Giving Positive Feedback,Adams-2
+You showed great work __________ in daily tasks.,你在日常工作中展现了极强的工作[主动性/积极性],L23 Giving Positive Feedback,Adams-2
+Your __________ brings positive energy to the team.,你的[态度/表现]为团队带来了正能量,L23 Giving Positive Feedback,Adams-2
+Keep up your __________ performance in future work.,在后续工作中继续保持[出色的/优秀的]表现,L23 Giving Positive Feedback,Adams-2
+I'd like to apply for one day of sick leave for physical recovery.,重点句型,L24 Taking Leaves,Adams-2
+I have handed over my ongoing work to my colleague in advance.,我想申请一天病假休养身体,L24 Taking Leaves,Adams-2
+My teammate will cover my urgent work during my absence.,我已提前将手头工作交接给同事,L24 Taking Leaves,Adams-2
+I plan to take three days of paid annual leave next week.,我不在岗期间，同事会代为处理我的紧急工作,L24 Taking Leaves,Adams-2
+I will keep accessible and resume work on time after vacation.,我计划下周休三天带薪年假,L24 Taking Leaves,Adams-2
+I want to __________ for one day's sick leave today.,重点句型,L24 Taking Leaves,Adams-2
+I have __________ all my ongoing work to my teammate.,我今天想[申请]一天病假,L24 Taking Leaves,Adams-2
+My colleague will __________ my work during my leave.,我已经把所有手头工作[交接/移交]给同事,L24 Taking Leaves,Adams-2
+Could you please __________ my leave application?,我休假期间同事会[处理/接手]我的工作,L24 Taking Leaves,Adams-2
+I will __________ work on time after my vacation.,麻烦你[批准/同意]我的请假申请,L24 Taking Leaves,Adams-2
+I can confirm that there is a logical mistake in the code.,我可以确认代码中存在逻辑失误,L25 Confirming Mistakes,Adams-2
+I admit it is my oversight that caused this error.,我承认是我的疏忽造成了这次差错,L25 Confirming Mistakes,Adams-2
+I have located the problem and will correct it right away.,我已经找到问题，并会立刻进行纠正,L25 Confirming Mistakes,Adams-2
+This small fault has affected the team's overall progress.,这次小过失影响了团队的整体进度,L25 Confirming Mistakes,Adams-2
+We need to take measures to avoid similar mistakes again.,我们需要采取措施，避免同类失误再次发生,L25 Confirming Mistakes,Adams-2
+I need to __________ the exact cause of this mistake.,我需要[确认/查明]这次失误的确切原因,L25 Confirming Mistakes,Adams-2
+I __________ that I made a careless error in my work.,我[承认/正视]自己在工作中出现了粗心的差错,L25 Confirming Mistakes,Adams-2
+Please __________ the wrong content and submit the new version.,请[修改/纠正]错误内容并提交新版本,L25 Confirming Mistakes,Adams-2
+This __________ is caused by insufficient pre-delivery check.,这次[失误/差错]是由于交付前检查不到位导致的,L25 Confirming Mistakes,Adams-2
+We should learn a lesson and __________ such problems next time.,我们应当吸取教训，下次[避免/杜绝]这类问题,L25 Confirming Mistakes,Adams-2
+I'd like to share my technical feedback after code review.,我想分享代码评审后的技术反馈,L04 Code Review & Giving Technical Feedback,Adams-2
+The overall code structure is clear and logical.,整体代码结构清晰、逻辑通顺,L04 Code Review & Giving Technical Feedback,Adams-2
+There are some redundant codes that need to be simplified.,存在部分冗余代码需要精简,L04 Code Review & Giving Technical Feedback,Adams-2
+I accept your professional technical feedback and optimization suggestions.,我接受你专业的技术反馈和优化建议,L04 Code Review & Giving Technical Feedback,Adams-2
+I will revise the code and submit it for secondary review.,我会修改代码并提交二次评审,L04 Code Review & Giving Technical Feedback,Adams-2
+I will give __________ feedback on your code quality.,我将对你的代码质量给出[技术/专业]反馈,L04 Code Review & Giving Technical Feedback,Adams-2
+Your code structure is clear but has a few __________ details.,你的代码结构清晰，但存在部分[待优化/小问题]细节,L04 Code Review & Giving Technical Feedback,Adams-2
+Please __________ the redundant code to improve efficiency.,请[精简/删除]冗余代码以提升运行效率,L04 Code Review & Giving Technical Feedback,Adams-2
+I fully __________ your technical suggestions.,我完全[接受/采纳]你的技术建议,L04 Code Review & Giving Technical Feedback,Adams-2
+I will __________ all problems before resubmission.,重新提交前我会[修复/解决]所有问题,L04 Code Review & Giving Technical Feedback,Adams-2
+Let's clarify the core project requirements and business logic.,我们来梳理核心项目需求与业务逻辑,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Some requirement details are not clearly defined in the document.,部分需求细节在文档中定义不明确,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to evaluate the technical feasibility before development.,开发前我们需要评估技术可行性,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This function has certain technical limitations under the current architecture.,该功能在现有架构下存在一定技术局限,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We can provide alternative technical plans to avoid potential risks.,我们可以提供替代技术方案规避潜在风险,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to __________ the project requirements carefully.,我们需要仔细[梳理/澄清]项目需求,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will evaluate the technical __________ of this new function.,我将评估新功能的技术[可行性],L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Current architecture has technical __________ for this requirement.,现有架构对该需求存在技术[局限/限制],L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to avoid potential technical __________ in advance.,我们需要提前规避潜在技术[风险],L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will offer an __________ plan to replace the original design.,我会提供[替代/备选]方案替代原有设计,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will simulate the scenario and reproduce the existing bug.,我将模拟场景复现现有漏洞,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I have located the problematic code through log analysis.,我通过日志分析定位到了问题代码,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This abnormal issue is blocking the overall testing progress.,该异常问题正在阻碍整体测试进度,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will deploy a temporary solution to ease the online risk.,我会部署临时方案缓解线上风险,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to complete permanent fixes and comprehensive verification.,我们需要完成永久修复与全面验证,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will try to __________ the bug according to your operation steps.,我会根据你的操作步骤尝试[复现]漏洞,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I have __________ the root cause of this technical error.,我已经[定位/找到]该技术错误的根本原因,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This bug is __________ our project testing progress.,该漏洞正在[阻碍/影响]我们的项目测试进度,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will __________ the problematic code and optimize the logic.,我会[修复/修改]问题代码并优化逻辑,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need a __________ solution to solve the online problem thoroughly.,我们需要[永久/健壮]方案彻底解决线上问题,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We develop new features on independent feature branches.,重点句型,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will submit a merge request after completing local testing.,我们在独立功能分支上开发新功能,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Code conflicts occurred during branch merging.,本地测试完成后我会提交合并请求,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will resolve conflicting code and retest the functions.,分支合并过程中出现了代码冲突,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to roll back the version to ensure system stability.,我会解决代码冲突并重新测试功能,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We develop new functions on the __________ branch.,重点句型,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Please __________ the latest code before merging.,我们在[功能/开发]分支开发新功能,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I need to fix the code __________ before submission.,合并前请[拉取/更新]最新代码,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We will __________ the version to avoid online risks.,提交前我需要解决代码[冲突],L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+The main branch must keep __________ all the time.,我们将[回退/还原]版本规避线上风险,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Let me break down the whole function and code execution flow.,我来拆解整体功能和代码执行流程,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This module is mainly responsible for batch data processing functions.,该模块主要负责批量数据处理功能,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+The program will execute different logic according to different conditions.,程序会根据不同条件执行不同逻辑,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This logical design effectively improves system operating efficiency.,该逻辑设计有效提升了系统运行效率,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will explain the call relationship and execution sequence clearly.,我会清晰讲解调用关系与执行顺序,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Let me __________ the core code logic of this module.,我来__________该模块的核心代码逻辑,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This code is __________ for data filtering and sorting.,这段代码__________数据筛选与排序工作,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+The program runs according to a fixed __________ sequence.,程序按照固定__________顺序执行,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Different conditions will __________ different execution results.,不同条件会__________不同的执行结果,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This design can __________ the overall system efficiency.,该设计可以__________系统整体运行效率,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to break down and allocate tasks for this sprint.,我们需要拆解并分配本次迭代的任务,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We should clarify task priority and core milestones.,我们需要明确任务优先级与核心里程碑,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I have evaluated the workload and development cycle clearly.,我已清晰评估工作量与开发周期,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+A blocking issue caused slight delay of the development progress.,阻塞问题导致开发进度轻微滞后,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will accelerate development and catch up with the original schedule.,我会加快开发进度，追赶原定计划,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+We need to __________ tasks reasonably for the new sprint.,我们需要为新迭代合理[拆解/规划]任务,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+Please confirm task __________ and avoid schedule conflicts.,请确认任务[优先级]，避免进度冲突,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will closely __________ my daily development progress.,我会密切[跟进/监控]每日开发进度,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+This technical problem is __________ my task progress.,该技术问题正在[阻碍/影响]我的任务进度,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
+I will try my best to __________ the delayed progress.,我会尽力[追回/赶上]滞后的进度,L05 Discussing Project Requirements & Technical Feasibility,Adams-2
