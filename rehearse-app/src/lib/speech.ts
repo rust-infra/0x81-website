@@ -263,7 +263,14 @@ async function speakWithNative(
         speak: (u: unknown) => void;
         getVoices?: () => Array<{ voiceURI: string; lang: string }>;
       };
-      SpeechSynthesisUtterance?: new (t: string) => { lang: string; rate: number };
+      SpeechSynthesisUtterance?: new (t: string) => {
+        lang: string;
+        rate: number;
+        voice?: unknown;
+        onend?: () => void;
+        onerror?: () => void;
+        onboundary?: (event: { charIndex: number; charLength?: number }) => void;
+      };
     };
     if (w.speechSynthesis && w.SpeechSynthesisUtterance) {
       const u = new w.SpeechSynthesisUtterance(text);
@@ -275,13 +282,35 @@ async function speakWithNative(
             .getVoices()
             .find((v) => v.voiceURI === voiceId);
           if (voice) {
-            (u as unknown as { voice?: unknown }).voice = voice;
+            u.voice = voice;
           }
         } catch {
           // 无效 voice 时忽略，回退到默认音色
         }
       }
-      w.speechSynthesis.speak(u);
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(
+          finish,
+          2_000 + (text.length * 90) / Math.max(rate, 0.1)
+        );
+        u.onend = finish;
+        u.onerror = finish;
+        u.onboundary = (event) => {
+          if (!onBoundary) return;
+          onBoundary({
+            charIndex: event.charIndex,
+            charLength: event.charLength ?? 0,
+          });
+        };
+        w.speechSynthesis?.speak(u);
+      });
     }
     return;
   }
