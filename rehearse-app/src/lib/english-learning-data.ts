@@ -1128,7 +1128,7 @@ const SCENARIOS: CoachScenario[] = [
     "max_turns": 3,
     "dialogue": [
       {
-        "role": "coach",
+        "role": "user",
         "content": "Tomorrow morning at 10 o’clock is OK."
       },
       {
@@ -1162,7 +1162,7 @@ const SCENARIOS: CoachScenario[] = [
     "max_turns": 3,
     "dialogue": [
       {
-        "role": "coach",
+        "role": "user",
         "content": "Good. Have you told all team members?"
       },
       {
@@ -1196,7 +1196,7 @@ const SCENARIOS: CoachScenario[] = [
     "max_turns": 3,
     "dialogue": [
       {
-        "role": "coach",
+        "role": "user",
         "content": "Hey, could we arrange a Teams meeting for tomorrow to go over the project updates?"
       },
       {
@@ -1204,7 +1204,7 @@ const SCENARIOS: CoachScenario[] = [
         "content": "Sure! What time works for you? I’m free from 10 AM to 1 PM."
       },
       {
-        "role": "coach",
+        "role": "user",
         "content": "11 AM sounds good. Can you send the invite? Let’s include Lisa and Alex too—they need to share their parts."
       },
       {
@@ -1212,7 +1212,7 @@ const SCENARIOS: CoachScenario[] = [
         "content": "Will do. Should I add a brief agenda? Like discussing the timeline and feedback."
       },
       {
-        "role": "coach",
+        "role": "user",
         "content": "Perfect. Thanks! I’ll make sure to join on time."
       },
       {
@@ -1246,7 +1246,7 @@ const SCENARIOS: CoachScenario[] = [
     "max_turns": 3,
     "dialogue": [
       {
-        "role": "coach",
+        "role": "user",
         "content": "Team, the API integration’s throwing unexpected errors. Let’s hop on a Teams call this afternoon to troubleshoot."
       },
       {
@@ -1254,7 +1254,7 @@ const SCENARIOS: CoachScenario[] = [
         "content": "When? I’m clear after 3 PM. I'll prioritize the user data fix till then."
       },
       {
-        "role": "coach",
+        "role": "user",
         "content": "3:30 works for me. The devs can join too; they’re monitoring the logs now."
       },
       {
@@ -1262,7 +1262,7 @@ const SCENARIOS: CoachScenario[] = [
         "content": "3:30 it is. I’ll send a Teams invite—include screen share access so we can walk through the error traces."
       },
       {
-        "role": "coach",
+        "role": "user",
         "content": "Perfect. I’ll prep the crash reports."
       },
       {
