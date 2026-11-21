@@ -69,10 +69,10 @@ type PodcastTranslationsRequest struct {
 
 // PodcastTranslationsResponse 是整集译文。
 type PodcastTranslationsResponse struct {
-	EpisodeID    string                `json:"episode_id"`
-	SourceHash   string                `json:"source_hash"`
-	Translations []PodcastTranslation  `json:"translations"`
-	Cached       bool                  `json:"cached"`
+	EpisodeID    string               `json:"episode_id"`
+	SourceHash   string               `json:"source_hash"`
+	Translations []PodcastTranslation `json:"translations"`
+	Cached       bool                 `json:"cached"`
 }
 
 // PodcastCaptionService 负责播客台词的生成与读取。

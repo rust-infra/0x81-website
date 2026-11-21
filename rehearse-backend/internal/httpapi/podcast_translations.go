@@ -4,9 +4,9 @@
 // 花额度），读是轻操作（一次索引查询）。合成一个端点的话，播放器每次
 // 打开都会在缺译文时触发一次生成，而用户可能只是想听英文。
 //
-//   · `POST /api/rehearse/podcast/translations` 只读已存的整集译文
-//   · `POST /api/rehearse/podcast/translations/generate` 生成（幂等，
-//     已缓存时直接返回）
+//	· `POST /api/rehearse/podcast/translations` 只读已存的整集译文
+//	· `POST /api/rehearse/podcast/translations/generate` 生成（幂等，
+//	  已缓存时直接返回）
 package httpapi
 
 import (
