@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep the commit gate fast: only the Go files staged in this commit.
+# CI still runs `gofmt -l .` over the whole module.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if ! command -v gofmt >/dev/null 2>&1; then
+  echo "pre-commit: gofmt not found; skipping Go format check" >&2
+  exit 0
+fi
+
+bad=()
+while IFS= read -r -d '' file; do
+  [ -f "$file" ] || continue
+  if [ -n "$(gofmt -l "$file")" ]; then
+    bad+=("$file")
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACM -- '*.go')
+
+if [ "${#bad[@]}" -gt 0 ]; then
+  echo "pre-commit: 以下 Go 文件未格式化（gofmt）：" >&2
+  printf '  %s\n' "${bad[@]}" >&2
+  echo "" >&2
+  echo "修复后重新提交：" >&2
+  printf '  gofmt -w' >&2
+  printf ' %q' "${bad[@]}" >&2
+  echo "" >&2
+  exit 1
+fi
