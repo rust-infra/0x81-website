@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Segmented from '../../components/Segmented';
@@ -14,6 +14,10 @@ import {
   getSpeechSettings,
   saveSpeechSettings,
 } from '../../lib/speech';
+import {
+  loadPodcastProgress,
+  type PodcastProgress,
+} from '../../lib/podcast-progress';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
@@ -30,7 +34,15 @@ export default function PodcastScreen() {
   const [deck, setDeck] = useState<Deck>('第一册');
   const [cacheEnabled, setCacheEnabled] = useState(true);
   const [voiceProvider, setVoiceProvider] = useState('webspeech');
+  const [resume, setResume] = useState<PodcastProgress | null>(null);
   const episodes = useMemo(() => buildPodcastEpisodes(deck), [deck]);
+  const resumeEpisode = useMemo(() => {
+    if (!resume) return undefined;
+    return (
+      episodes.find((episode) => episode.id === resume.episodeId) ??
+      episodes[resume.episodeIndex]
+    );
+  }, [episodes, resume]);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -45,6 +57,22 @@ export default function PodcastScreen() {
       })
       .catch(() => {});
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      loadPodcastProgress(deck)
+        .then((progress) => {
+          if (!cancelled) setResume(progress);
+        })
+        .catch(() => {
+          if (!cancelled) setResume(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [deck])
+  );
 
   const toggleCache = async (value: boolean) => {
     const settings = await getSpeechSettings();
@@ -82,6 +110,18 @@ export default function PodcastScreen() {
     });
   };
 
+  const openResume = () => {
+    if (!resumeEpisode || !resume) return;
+    router.push({
+      pathname: '/rehearse/podcast-player',
+      params: {
+        scenarioId: resumeEpisode.id,
+        deck,
+        turn: String(resume.turnIndex),
+      },
+    });
+  };
+
   const deckOptions = [
     { key: '第一册' as const, label: t('englishDeck1') },
     { key: '第二册' as const, label: t('englishDeck2') },
@@ -89,19 +129,72 @@ export default function PodcastScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
+      <View style={styles.shell}>
       <CoachHeader title={t('podcastTitle')} onBack={goBack} />
       <View style={styles.deckRow}>
         <Segmented options={deckOptions} value={deck} onChange={setDeck} style={styles.deckSegmented} />
       </View>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {resumeEpisode && resume ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={openResume}
+            style={[styles.resumeCard, { backgroundColor: c.card, borderColor: c.border }]}
+          >
+            <View style={[styles.resumeDot, { backgroundColor: c.accentLight }]}>
+              <CoachGlyph name="arrowRight" color={c.accent} size={16} />
+            </View>
+            <View style={styles.resumeBody}>
+              <Text style={[styles.resumeLabel, { color: c.accent }]}>
+                {t('podcastResume')}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.resumeTitle, { color: c.ink }]}
+              >
+                {resumeEpisode.title}
+              </Text>
+              <Text style={[styles.resumeMeta, { color: c.inkMuted }]}>
+                {t('podcastLinePosition', {
+                  current: Math.min(
+                    resume.turnIndex + 1,
+                    resumeEpisode.turns.length
+                  ),
+                  total: resumeEpisode.turns.length,
+                })}
+              </Text>
+            </View>
+            <CoachGlyph name="arrowRight" color={c.inkMuted} size={16} />
+          </Pressable>
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           disabled={episodes.length === 0}
           onPress={() => episodes[0] && open(episodes[0])}
-          style={[styles.playAll, { backgroundColor: c.buttonBg }]}
+          style={[
+            styles.playAll,
+            resumeEpisode
+              ? { borderWidth: 1, borderColor: c.border, backgroundColor: c.card }
+              : { backgroundColor: c.buttonBg },
+          ]}
         >
-          <Text style={[styles.playAllIcon, { color: c.buttonText }]}>▶</Text>
-          <Text style={[styles.playAllText, { color: c.buttonText }]}>{t('podcastPlayAll')}</Text>
+          <Text
+            style={[
+              styles.playAllIcon,
+              { color: resumeEpisode ? c.ink : c.buttonText },
+            ]}
+          >
+            ▶
+          </Text>
+          <Text
+            style={[
+              styles.playAllText,
+              { color: resumeEpisode ? c.ink : c.buttonText },
+            ]}
+          >
+            {t(resumeEpisode ? 'podcastPlayAllFromStart' : 'podcastPlayAll')}
+          </Text>
         </Pressable>
 
         {groups.map((group) => (
@@ -167,12 +260,14 @@ export default function PodcastScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  shell: { flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' },
   deckRow: { paddingHorizontal: 20, paddingBottom: 12 },
   deckSegmented: { alignSelf: 'flex-start', minWidth: 200 },
   body: { paddingHorizontal: 16, paddingBottom: 32, gap: 16 },
@@ -186,6 +281,26 @@ const styles = StyleSheet.create({
   },
   playAllIcon: { fontSize: 14 },
   playAllText: { fontSize: 14, fontWeight: '700' },
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+  },
+  resumeDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resumeBody: { flex: 1, minWidth: 0, gap: 2 },
+  resumeLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  resumeTitle: { fontSize: 13.5, fontWeight: '700' },
+  resumeMeta: { fontSize: 11, fontVariant: ['tabular-nums'] },
   group: { gap: 7 },
   lessonLabel: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.4, paddingHorizontal: 4 },
   card: { borderWidth: 1, borderRadius: 14, overflow: 'hidden' },

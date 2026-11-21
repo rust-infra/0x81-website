@@ -170,8 +170,25 @@ make migrate-pending    # 只打印待应用的版本（dry-run）
 | `POST /api/rehearse/scenario/draft` | 场景草稿（强制 `source=custom`） |
 | `POST /api/rehearse/material/text` | PDF / DOCX / 图片 → 文本 |
 | `POST /api/rehearse/material/profile` | 文本 → 紧凑面试档案 |
+| `POST /api/rehearse/interpret/translate` | 同传字幕：一句实时翻译 |
+| `POST /api/rehearse/podcast/translations` | 播客整集中文字幕：**只读**已存译文 |
+| `POST /api/rehearse/podcast/translations/generate` | 播客整集中文字幕：生成并入库（幂等） |
 | `GET\|PUT /api/admin/settings/rehearse` | 配额 + LLM 配置（`X-Admin-Token`） |
 | `GET /health`、`GET /api/rehearse/whoami` | 后者是阶段 2 的冒烟端点，**不在 §7.5 表里** |
+
+**播客字幕为什么是「整集离线生成」而不是「播放时逐句翻译」**：逐句实时翻，
+模型每次只看到一句话，看不到谁在对谁说，称呼、术语和语气前后对不齐；整集
+一次请求则能让模型看完整段对话。台词是固定的本地课程数据，译一次就够，
+落库后播放只读（`rehearse_podcast_translations`，迁移 `0003`）。台词指纹
+`source_hash` 变了旧译文整体作废。上线前跑一遍预生成：
+
+```sh
+cd rehearse-app
+npm test   # 生成 .test-dist，脚本从这里读课程数据
+API_URL=https://rehearse.0x81.uk TOKEN=<jwt> npm run prefetch:translations
+```
+
+同传页（用户现场说话）仍然走逐句实时翻译，那条路径必须实时。
 
 **已知限制：中文演练属阶段 7。** 选 `language: "zh-CN"` 会拿到 400（中文
 prompt 模板还没做，见 `internal/coach/prompts.go` 的 `ErrChinesePromptNotReady`）。

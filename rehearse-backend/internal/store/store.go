@@ -76,6 +76,31 @@ type Store interface {
 	// UserSettingsPut 全量覆盖某用户的设置文档（upsert）。
 	// `settings` 必须是合法 JSON——形状校验在 httpapi，存储层只保证存得进去、读得回来。
 	UserSettingsPut(ctx context.Context, userSub, settings string) error
+
+	// PodcastTranslationsGet 读一集台词的译文，按 `turn_index` 升序。
+	//
+	// 只有 `source_hash` 与当前台词一致的行才算数：台词改了指纹就变，
+	// 旧译文应当整体作废，而不是逐句混着用。返回空切片表示「这一集还没译」，
+	// 不是错误——调用方据此决定是否预生成。
+	PodcastTranslationsGet(ctx context.Context, episodeID, sourceHash string) ([]PodcastTranslation, error)
+	// PodcastTranslationsPutReplace 用一批译文**整体替换**某一集的缓存。
+	//
+	// 整集替换而不是逐句 upsert：译文是整集一次性生成的，一次生成的结果
+	// 内部才自洽（称呼、术语前后一致）。逐句合并会把两次生成的产物拼在一起，
+	// 那正是要避免的东西。
+	PodcastTranslationsPutReplace(ctx context.Context, episodeID string, rows []PodcastTranslation) error
+}
+
+// PodcastTranslation 是一句台词的译文。
+//
+// 不带 `updated_at`：它只给运维看，业务层从来不读——进接口只会让两条
+// 实现各自维护一个没人用的字段。
+type PodcastTranslation struct {
+	TurnIndex   int
+	SourceHash  string
+	Speaker     string
+	SourceText  string
+	Translation string
 }
 
 // Migrator 是 `cmd/migrate` 需要的存储能力。

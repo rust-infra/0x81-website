@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -236,6 +237,13 @@ func (c *Client) chatCompletion(
 	}
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		// 上游的 401/403 常是配置问题（team key、过期 key），而 coach 层
+		// 对外统一收成 503。把状态码和截断后的原因写进服务端日志，排障时
+		// 才不用靠猜；不记录请求体/提示词。
+		slog.Warn("llm upstream rejected request",
+			"status", response.StatusCode,
+			"detail", truncate(string(raw), 300),
+		)
 		return "", &ErrUpstream{
 			StatusCode: response.StatusCode,
 			Detail:     truncate(string(raw), maxDetailChars),

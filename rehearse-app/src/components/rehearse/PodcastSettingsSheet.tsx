@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,6 +42,10 @@ export function PodcastSettingsSheet({
   onRate,
   autoplay,
   onAutoplay,
+  pauseEachLine,
+  onPauseEachLine,
+  loopLine,
+  onLoopLine,
   translation,
   onTranslation,
   generating,
@@ -52,6 +57,10 @@ export function PodcastSettingsSheet({
   onRate: (rate: number) => void;
   autoplay: boolean;
   onAutoplay: (value: boolean) => void;
+  pauseEachLine: boolean;
+  onPauseEachLine: (value: boolean) => void;
+  loopLine: boolean;
+  onLoopLine: (value: boolean) => void;
   translation: boolean;
   onTranslation: (value: boolean) => void;
   generating: boolean;
@@ -62,12 +71,47 @@ export function PodcastSettingsSheet({
   const c = theme.colors;
   const { height } = useWindowDimensions();
   const anim = useRef(new Animated.Value(0)).current;
+  const panY = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 4,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_, gesture) => {
+          if (gesture.dy > 0) panY.setValue(gesture.dy);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 80 || gesture.vy > 0.8) {
+            Animated.timing(panY, {
+              toValue: 360,
+              duration: 160,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }).start(() => {
+              panY.setValue(0);
+              onClose();
+            });
+            return;
+          }
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+            speed: 20,
+          }).start();
+        },
+      }),
+    [onClose, panY]
+  );
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
       anim.setValue(0);
+      panY.setValue(0);
       requestAnimationFrame(() => {
         Animated.timing(anim, {
           toValue: 1,
@@ -107,10 +151,23 @@ export function PodcastSettingsSheet({
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor: c.card, maxHeight, transform: [{ translateY }] },
+            {
+              backgroundColor: c.card,
+              maxHeight,
+              transform: [
+                { translateY: Animated.add(translateY, panY) },
+              ],
+            },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: c.divider }]} />
+          <View
+            {...panResponder.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel={t('podcastSwipeToClose')}
+            style={styles.dragZone}
+          >
+            <View style={[styles.handle, { backgroundColor: c.divider }]} />
+          </View>
           <Text style={[styles.title, { color: c.ink, fontFamily: serif }]}>
             {t('podcastSettings')}
           </Text>
@@ -166,15 +223,47 @@ export function PodcastSettingsSheet({
                 </View>
               </View>
               <View style={[styles.divider, { backgroundColor: c.border }]} />
-              <View style={styles.row}>
+              <View
+                style={[
+                  styles.row,
+                  pauseEachLine || loopLine ? styles.rowDisabled : null,
+                ]}
+              >
                 <Text style={[styles.label, { color: c.inkMuted }]}>
                   {t('podcastAutoplay')}
                 </Text>
                 <Switch
+                  disabled={pauseEachLine || loopLine}
                   value={autoplay}
                   onValueChange={onAutoplay}
                   trackColor={{ false: c.border, true: c.accentLight }}
                   thumbColor={autoplay ? c.accent : c.inkMuted}
+                />
+              </View>
+              <View style={[styles.divider, { backgroundColor: c.border }]} />
+              <View style={styles.row}>
+                <Text style={[styles.label, { color: c.inkMuted }]}>
+                  {t('podcastPauseEachLine')}
+                </Text>
+                <Switch
+                  accessibilityLabel={`${t('podcastPauseEachLine')} switch`}
+                  value={pauseEachLine}
+                  onValueChange={onPauseEachLine}
+                  trackColor={{ false: c.border, true: c.accentLight }}
+                  thumbColor={pauseEachLine ? c.accent : c.inkMuted}
+                />
+              </View>
+              <View style={[styles.divider, { backgroundColor: c.border }]} />
+              <View style={styles.row}>
+                <Text style={[styles.label, { color: c.inkMuted }]}>
+                  {t('podcastLoopLine')}
+                </Text>
+                <Switch
+                  accessibilityLabel={`${t('podcastLoopLine')} switch`}
+                  value={loopLine}
+                  onValueChange={onLoopLine}
+                  trackColor={{ false: c.border, true: c.accentLight }}
+                  thumbColor={loopLine ? c.accent : c.inkMuted}
                 />
               </View>
               <View style={[styles.divider, { backgroundColor: c.border }]} />
@@ -190,6 +279,15 @@ export function PodcastSettingsSheet({
                 />
               </View>
             </View>
+            {loopLine ? (
+              <Text style={[styles.hint, styles.shadowingHint, { color: c.inkMuted }]}>
+                {t('podcastLoopLineHint')}
+              </Text>
+            ) : pauseEachLine ? (
+              <Text style={[styles.hint, styles.shadowingHint, { color: c.inkMuted }]}>
+                {t('podcastShadowingHint')}
+              </Text>
+            ) : null}
             <Text style={[styles.sectionLabel, { color: c.inkMuted }]}>
               {t('podcastDigitalHumanSection')}
             </Text>
@@ -228,6 +326,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   mask: { backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 20,
@@ -237,6 +338,14 @@ const styles = StyleSheet.create({
   },
   scroll: { flexShrink: 1 },
   content: { gap: 8, paddingTop: 2, paddingBottom: 2 },
+  dragZone: {
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -4,
+    marginBottom: 2,
+    userSelect: 'none',
+  },
   handle: { width: 44, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 2 },
   title: { fontSize: 17, fontWeight: '700' },
   sectionLabel: { fontSize: 10.5, fontWeight: '600', letterSpacing: 0.4, marginTop: 2 },
@@ -248,6 +357,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 9,
   },
+  rowDisabled: { opacity: 0.45 },
   divider: { height: StyleSheet.hairlineWidth },
   label: { fontSize: 13 },
   speedControl: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -272,6 +382,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   hint: { fontSize: 11, textAlign: 'center', paddingBottom: 10 },
+  shadowingHint: {
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'left',
+    paddingHorizontal: 4,
+    paddingBottom: 0,
+  },
   done: {
     alignItems: 'center',
     borderRadius: 14,

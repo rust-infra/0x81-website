@@ -62,6 +62,39 @@ export interface InterpretTranslateResponse {
   translation: string;
 }
 
+/** 播客一集里的一句台词，用于整集译文的请求。 */
+export interface PodcastTranslationTurnRequest {
+  speaker: string;
+  text: string;
+}
+
+/**
+ * 播客整集译文的请求体。
+ *
+ * `source_hash` 是整集台词的指纹，由 `podcastSourceHash()` 计算：台词改了
+ * 指纹就变，服务端据此把旧译文整体作废。客户端与后端必须用同一套算法。
+ */
+export interface PodcastTranslationsRequest {
+  episode_id: string;
+  source_hash: string;
+  title?: string;
+  turns: PodcastTranslationTurnRequest[];
+}
+
+export interface PodcastTranslationItem {
+  turn_index: number;
+  speaker: string;
+  source_text: string;
+  translation: string;
+}
+
+export interface PodcastTranslationsResponse {
+  episode_id: string;
+  source_hash: string;
+  translations: PodcastTranslationItem[];
+  cached: boolean;
+}
+
 /** 挂载的材料（原 `InterviewContext`，§7.6 改名）。 */
 export interface MaterialContext {
   kind: MaterialKind | 'resume_job';

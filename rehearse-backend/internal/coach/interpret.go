@@ -50,6 +50,12 @@ type interpretWindow struct {
 // allow 是单进程的每分钟滑窗计数。多副本部署时每个副本各自计数，
 // 它是成本兜底，不是计费边界。
 func (l *interpretLimiter) allow(userID string, now time.Time) bool {
+	return l.allowWith(userID, interpretPerMinute, now)
+}
+
+// allowWith 是带自定义上限的滑窗，给整集字幕生成这类「单次更贵」的
+// 路径用（同传 60 次/分钟，整集生成 6 次/分钟）。
+func (l *interpretLimiter) allowWith(userID string, limit int, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.windows == nil {
@@ -66,7 +72,7 @@ func (l *interpretLimiter) allow(userID string, now time.Time) bool {
 	if window.start.IsZero() || now.Sub(window.start) >= time.Minute {
 		window = interpretWindow{start: now}
 	}
-	if window.count >= interpretPerMinute {
+	if window.count >= limit {
 		l.windows[userID] = window
 		return false
 	}

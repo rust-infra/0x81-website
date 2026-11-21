@@ -10,20 +10,29 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
+} from 'react-native';
+import type {
+  GestureResponderEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Polygon, Rect } from 'react-native-svg';
-import { CoachAvatar } from '../../components/rehearse/CoachAvatar';
 import { CoachHeader } from '../../components/rehearse/CoachUi';
+import { PodcastFoxAvatar } from '../../components/rehearse/PodcastFoxAvatar';
+import { PodcastLearnerAvatar } from '../../components/rehearse/PodcastLearnerAvatar';
 import { PodcastSettingsSheet } from '../../components/rehearse/PodcastSettingsSheet';
 import { useAuth } from '../../lib/auth';
+import { bundledEpisodeTranslations } from '../../data/podcast-translations';
 import { getApiBase } from '../../lib/config';
 import {
   buildPodcastEpisodes,
   createPodcastPlayer,
   episodeMinutes,
   estimateWordRange,
+  splitEpisodeTitle,
   type WordRange,
   type PodcastPlayer,
   type PodcastState,
@@ -33,35 +42,82 @@ import {
   resolvePodcastClipSource,
   type PodcastClipSource,
 } from '../../lib/podcast-video';
+import { loadPodcastProgress, savePodcastProgress } from '../../lib/podcast-progress';
 import {
-  getCachedPodcastTranslation,
-  translatePodcastLines,
-} from '../../lib/podcast-translation';
+  episodeSourceLines,
+  episodeSpeakers,
+  podcastSourceHash,
+} from '../../lib/podcast-source-hash';
 import {
+  generatePodcastTranslations,
+  getPodcastTranslations,
   requestPodcastClip,
-  translateInterpretText,
 } from '../../lib/rehearse-api-runtime';
-import { getSpeechSettings, speak, stopSpeaking } from '../../lib/speech';
+import {
+  getSpeechSettings,
+  pickPodcastVoice,
+  speak,
+  stopSpeaking,
+} from '../../lib/speech';
 import { useI18n } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme-context';
 import { useToast } from '../../lib/toast';
 import { serif } from '../../lib/ui';
 
+// 服务端返回整集译文（按 turn_index 对齐），这里转成「集 id + 序号」的
+// 查找表：渲染时每个气泡只查自己的键，不依赖数组下标一致。
+function indexTranslations(
+  items: Array<{ turn_index: number; translation: string }>,
+  episodeID: string
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of items) {
+    if (item.translation) out[`${episodeID}:${item.turn_index}`] = item.translation;
+  }
+  return out;
+}
+
+const QUICK_SPEEDS = [0.75, 1, 1.25, 1.5] as const;
+
+function nextPlaybackSpeed(rate: number): number {
+  const index = QUICK_SPEEDS.findIndex((value) => Math.abs(value - rate) < 0.01);
+  return QUICK_SPEEDS[(index + 1) % QUICK_SPEEDS.length]!;
+}
+
+function formatPlaybackSpeed(rate: number): string {
+  return `${Number.isInteger(rate) ? rate.toFixed(1) : String(rate)}×`;
+}
+
 export default function PodcastPlayerScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ scenarioId?: string; deck?: string }>();
+  const params = useLocalSearchParams<{
+    scenarioId?: string;
+    deck?: string;
+    turn?: string;
+  }>();
   const { t } = useI18n();
   const { theme } = useTheme();
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const { token } = useAuth();
+  const { height } = useWindowDimensions();
   const c = theme.colors;
+  const tRef = useRef(t);
+  tRef.current = t;
   const deck = params.deck || '第一册';
   const episodes = useMemo(() => buildPodcastEpisodes(deck), [deck]);
   const initialIndex = Math.max(
     0,
     episodes.findIndex((episode) => episode.id === params.scenarioId)
   );
+  const requestedTurn = Math.max(0, Number.parseInt(params.turn ?? '0', 10) || 0);
+  const initialTurn = Math.min(
+    requestedTurn,
+    Math.max(0, (episodes[initialIndex]?.turns.length ?? 1) - 1)
+  );
   const initialIndexRef = useRef(initialIndex);
+  const initialTurnRef = useRef(initialTurn);
   const [stageOpen, setStageOpen] = useState(false);
   const [videoActive, setVideoActive] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -80,32 +136,55 @@ export default function PodcastPlayerScreen() {
   });
   const [playback, setPlayback] = useState<PodcastState>({
     episodeIndex: initialIndex,
-    turnIndex: 0,
+    turnIndex: initialTurn,
     playing: false,
+    finished: false,
     rate: 1,
     autoplay: true,
+    pauseEachLine: false,
+    loopLine: false,
   });
   const [transportVisible, setTransportVisible] = useState(!playback.autoplay);
+  // 用户手动收起/展开过播放条之后，自动连播不再收回它：自动隐藏与用户的
+  // 显式选择冲突时用户赢。`manualPinned` 只表达「暂停时保持展开」，
+  // 用它兼管手动收起会让两种意图互相覆盖。
+  const [transportPinned, setTransportPinned] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [translationEnabled, setTranslationEnabled] = useState(true);
   const [translations, setTranslations] = useState<Record<string, string>>({});
+  // 这一集的译文还没生成（库里没有）。播放器只显示状态，绝不实时补翻。
+  const [translationMissing, setTranslationMissing] = useState(false);
+  const [translatingEpisode, setTranslatingEpisode] = useState(false);
   const [manualPinned, setManualPinned] = useState(false);
+  const [following, setFollowing] = useState(true);
+  const [progressWidth, setProgressWidth] = useState(0);
+  const progressRef = useRef<View>(null);
   const [wordRange, setWordRange] = useState<
     (WordRange & { turnIndex: number }) | null
   >(null);
   const playerRef = useRef<PodcastPlayer | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const turnLayoutRef = useRef<Record<number, { y: number; height: number }>>({});
-  const chatOffsetRef = useRef(0);
   const [layoutTick, setLayoutTick] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const activeTextRef = useRef<{ turnIndex: number; text: string } | null>(null);
   const startedRef = useRef(false);
+  const autoScrollUntilRef = useRef(0);
+  const hasAutoScrolledRef = useRef(false);
+  const lastOffsetRef = useRef(0);
+  const autoScrollTargetRef = useRef<number | null>(null);
+  const autoScrollSettledRef = useRef(true);
+  const lastUrlKeyRef = useRef('');
   const transportAnim = useRef(new Animated.Value(transportVisible ? 1 : 0)).current;
+  // 演播室卡片展开/收起的进度。条件渲染（`stageOpen ? ... : ...`）会在
+  // 一帧内换掉整棵子树，没有过渡；改成两条各自淡入淡出的同时，卡片高度
+  // 也跟着缓动，看起来才是「展开」而不是「跳变」。
+  const stageAnim = useRef(new Animated.Value(stageOpen ? 1 : 0)).current;
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
+    let successes = 0;
     loadPodcastPoster(token, getApiBase())
       .then((uri) => {
         if (!cancelled) setPosterUri(uri);
@@ -122,6 +201,42 @@ export default function PodcastPlayerScreen() {
     AsyncStorage.getItem('podcast_translation_enabled')
       .then((value) => {
         if (value === '0') setTranslationEnabled(false);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem('podcast_autoplay'),
+      AsyncStorage.getItem('podcast_rate'),
+      AsyncStorage.getItem('podcast_pause_each_line'),
+      AsyncStorage.getItem('podcast_loop_line'),
+    ])
+      .then(([autoplay, rate, pauseEachLine, loopLine]) => {
+        if (loopLine === '1') {
+          playerRef.current?.setLoopLine(true);
+          AsyncStorage.multiSet([
+            ['podcast_pause_each_line', '0'],
+            ['podcast_autoplay', '0'],
+          ]).catch(() => {});
+        } else if (pauseEachLine === '1') {
+          playerRef.current?.setPauseEachLine(true);
+          AsyncStorage.multiSet([
+            ['podcast_loop_line', '0'],
+            ['podcast_autoplay', '0'],
+          ]).catch(() => {});
+        } else if (autoplay === '0') {
+          playerRef.current?.setAutoplay(false);
+        }
+        const value = Number(rate);
+        if (
+          rate &&
+          Number.isFinite(value) &&
+          value >= 0.5 &&
+          value <= 2
+        ) {
+          playerRef.current?.setRate(value);
+        }
       })
       .catch(() => {});
   }, []);
@@ -198,7 +313,7 @@ export default function PodcastPlayerScreen() {
 
   const playTurn = async (
     text: string,
-    opts: { rate: number; language?: string }
+    opts: { rate: number; language?: string; role?: 'coach' | 'user' }
   ) => {
     const turnIndex = playerRef.current?.state().turnIndex ?? 0;
     activeTextRef.current = { turnIndex, text };
@@ -222,11 +337,13 @@ export default function PodcastPlayerScreen() {
     }
     setVideoActive(false);
     const settings = await getSpeechSettings();
+    const isZh = /[\u4e00-\u9fff]/.test(text);
+    const voiceId = isZh
+      ? settings.speech_zh_voice
+      : await pickPodcastVoice(opts.role ?? 'coach', settings);
     await speak(text, {
       ...opts,
-      voiceId: /[\u4e00-\u9fff]/.test(text)
-        ? settings.speech_zh_voice
-        : settings.speech_voice,
+      voiceId,
       onBoundary: (event) =>
         setWordRange({
           turnIndex,
@@ -245,6 +362,9 @@ export default function PodcastPlayerScreen() {
       speak: (text, opts) => handlersRef.current.playTurn(text, opts),
       stop: () => handlersRef.current.stopPlayback(),
       onState: setPlayback,
+      onError: () => {
+        toastRef.current(tRef.current('podcastAudioUnavailable'));
+      },
       initialRate: 1,
     });
   }
@@ -294,39 +414,94 @@ export default function PodcastPlayerScreen() {
       if (startedRef.current) setTransportVisible(true);
       return;
     }
+    if (transportPinned) return;
     if (playback.autoplay && !manualPinned) setTransportVisible(false);
     else setTransportVisible(true);
-  }, [playback.playing, playback.autoplay, manualPinned]);
+  }, [playback.playing, playback.autoplay, manualPinned, transportPinned]);
 
   useEffect(() => {
     Animated.timing(transportAnim, {
       toValue: transportVisible ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
+      duration: 280,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
       useNativeDriver: false,
     }).start();
   }, [transportAnim, transportVisible]);
 
   useEffect(() => {
+    Animated.timing(stageAnim, {
+      toValue: stageOpen ? 1 : 0,
+      duration: stageOpen ? 360 : 240,
+      easing: stageOpen
+        ? Easing.bezier(0.22, 1, 0.36, 1)
+        : Easing.bezier(0.4, 0, 1, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [stageAnim, stageOpen]);
+
+  useEffect(() => {
     setWordRange(null);
   }, [playback.turnIndex, playback.episodeIndex]);
 
+  const scrollToActiveTurn = useCallback(
+    (animated = true) => {
+      const layout = turnLayoutRef.current[playback.turnIndex];
+      if (!layout || viewportHeight <= 0) return;
+      const target = Math.max(
+        0,
+        layout.y + layout.height / 2 - viewportHeight / 2
+      );
+      const distance = Math.abs(target - lastOffsetRef.current);
+      autoScrollUntilRef.current =
+        Date.now() + Math.min(2400, 500 + distance * 0.3);
+      autoScrollTargetRef.current = target;
+      autoScrollSettledRef.current = distance < 6;
+      scrollRef.current?.scrollTo({ y: target, animated });
+      hasAutoScrolledRef.current = true;
+    },
+    [playback.turnIndex, viewportHeight]
+  );
+
   useEffect(() => {
-    const layout = turnLayoutRef.current[playback.turnIndex];
-    if (!layout || viewportHeight <= 0) return;
-    const timer = setTimeout(() => {
-      const target =
-        chatOffsetRef.current +
-        layout.y +
-        layout.height / 2 -
-        viewportHeight / 2;
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, target),
-        animated: true,
-      });
-    }, 220);
+    if (!following) return;
+    const timer = setTimeout(
+      () => scrollToActiveTurn(hasAutoScrolledRef.current),
+      220
+    );
     return () => clearTimeout(timer);
-  }, [playback.turnIndex, playback.episodeIndex, layoutTick, viewportHeight]);
+  }, [
+    playback.turnIndex,
+    playback.episodeIndex,
+    following,
+    layoutTick,
+    viewportHeight,
+    stageOpen,
+    scrollToActiveTurn,
+  ]);
+
+  useEffect(() => {
+    // 连播进入下一集时重新跟随；用户手动翻看旧内容时不抢滚动。
+    setFollowing(true);
+    hasAutoScrolledRef.current = false;
+  }, [playback.episodeIndex]);
+
+  useEffect(() => {
+    if (!playback.playing && !startedRef.current) return;
+    const episode = episodes[playback.episodeIndex];
+    if (!episode) return;
+    savePodcastProgress(deck, {
+      episodeId: episode.id,
+      episodeIndex: playback.episodeIndex,
+      turnIndex: playback.finished ? 0 : playback.turnIndex,
+    }).catch(() => {});
+  }, [
+    deck,
+    episodes,
+    playback.finished,
+    playback.episodeIndex,
+    playback.turnIndex,
+    playback.playing,
+  ]);
 
   const handleTurnLayout = useCallback((index: number, y: number, height: number) => {
     turnLayoutRef.current[index] = { y, height };
@@ -336,7 +511,12 @@ export default function PodcastPlayerScreen() {
   useEffect(() => {
     const player = playerRef.current;
     if (!player || episodes.length === 0) return;
-    player.play(initialIndexRef.current);
+    if (initialTurnRef.current > 0) {
+      player.seek(initialIndexRef.current, initialTurnRef.current);
+      player.play();
+    } else {
+      player.play(initialIndexRef.current);
+    }
     return () => {
       player.pause();
       void stopSpeaking();
@@ -344,50 +524,117 @@ export default function PodcastPlayerScreen() {
   }, [episodes.length]);
 
   const episode = episodes[playback.episodeIndex];
+  const titleParts = splitEpisodeTitle(episode?.title ?? '—');
   const anchorName = t('podcastAnchorName');
   const progress =
     episode && episode.turns.length > 0
       ? (playback.turnIndex + 1) / episode.turns.length
       : 0;
-  const atEpisodeEnd =
-    !!episode &&
-    !playback.playing &&
-    playback.turnIndex === episode.turns.length - 1;
+  const atEpisodeEnd = playback.finished;
+  const activeTurn = episode?.turns[playback.turnIndex];
+  const activeTranslation =
+    translationEnabled && episode
+      ? translations[`${episode.id}:${playback.turnIndex}`]
+      : undefined;
 
   useEffect(() => {
     if (!episode) return;
-    const cached: Record<string, string> = {};
-    const pending: Array<{ key: string; text: string }> = [];
-    episode.turns.forEach((turn, index) => {
-      const key = `${episode.id}:${index}`;
-      const hit = getCachedPodcastTranslation(key);
-      if (hit) cached[key] = hit;
-      else if (translationEnabled && !/[\u4e00-\u9fff]/.test(turn.content)) {
-        pending.push({ key, text: turn.content });
-      }
+    const key = `${episode.id}:${playback.turnIndex}`;
+    if (lastUrlKeyRef.current === key) return;
+    lastUrlKeyRef.current = key;
+    router.setParams({
+      scenarioId: episode.id,
+      turn: String(playback.turnIndex),
     });
-    if (Object.keys(cached).length > 0) {
-      setTranslations((prev) => ({ ...prev, ...cached }));
-    }
-    if (!translationEnabled || pending.length === 0) return;
+  }, [episode, playback.turnIndex, router]);
+
+  // 译文只在进入某一集时从服务端读一次。**播放期间绝不调 LLM**：
+  // 台词是固定的课程数据，译文由预生成任务整集写库（带上下文，一次
+  // 请求看完整段对话），逐句实时翻译的译文会因看不到上下文而发飘。
+  // 缓存缺失时显示「待生成」，由用户点按钮触发一次整集生成。
+  useEffect(() => {
+    if (!episode) return;
     let cancelled = false;
-    void translatePodcastLines(
-      pending,
-      async (text) => (await translateInterpretText(text)).translation,
-      (key, text) => {
-        if (!cancelled) setTranslations((prev) => ({ ...prev, [key]: text }));
-      }
+    const bundled = bundledEpisodeTranslations(
+      episode.id,
+      episode.turns.length
     );
+    const bundledCount = Object.keys(bundled).length;
+    setTranslationMissing(false);
+    if (bundledCount > 0) setTranslations(bundled);
+    // 课程台词是固定的；随包预生成的整集译文优先，不再请求 LLM。
+    if (bundledCount >= episode.turns.length) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const lines = episodeSourceLines(episode);
+    const speakers = episodeSpeakers(episode);
+    const request = {
+      episode_id: episode.id,
+      source_hash: podcastSourceHash(lines),
+      title: episode.title,
+      turns: lines.map((text, index) => ({ speaker: speakers[index], text })),
+    };
+    getPodcastTranslations(request)
+      .then((out) => {
+        if (cancelled) return;
+        const merged = {
+          ...bundled,
+          ...indexTranslations(out.translations, episode.id),
+        };
+        if (Object.keys(merged).length === 0) {
+          setTranslations({});
+          setTranslationMissing(true);
+          return;
+        }
+        setTranslations(merged);
+        setTranslationMissing(false);
+      })
+      .catch(() => {
+        // 读不到就当没有：显示「待生成」，而不是静默地逐句补翻。
+        if (!cancelled && bundledCount === 0) setTranslationMissing(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [episode, translationEnabled]);
+  }, [episode]);
+
+  const generateCaptions = async () => {
+    if (!episode || translatingEpisode) return;
+    setTranslatingEpisode(true);
+    const lines = episodeSourceLines(episode);
+    const speakers = episodeSpeakers(episode);
+    try {
+      const out = await generatePodcastTranslations({
+        episode_id: episode.id,
+        source_hash: podcastSourceHash(lines),
+        title: episode.title,
+        turns: lines.map((text, index) => ({ speaker: speakers[index], text })),
+      });
+      setTranslations(indexTranslations(out.translations, episode.id));
+      setTranslationMissing(false);
+      toast(t('podcastTranscriptReady'));
+    } catch {
+      toast(t('podcastTranscriptFailed'));
+    } finally {
+      setTranslatingEpisode(false);
+    }
+  };
 
   const changeTranslation = (value: boolean) => {
     setTranslationEnabled(value);
     AsyncStorage.setItem('podcast_translation_enabled', value ? '1' : '0').catch(
       () => {}
     );
+  };
+
+  const changeSpeed = (rate: number, restartCurrent: boolean) => {
+    playerRef.current?.setRate(rate);
+    AsyncStorage.setItem('podcast_rate', String(rate)).catch(() => {});
+    if (restartCurrent && playback.playing) {
+      playerRef.current?.seek(playback.episodeIndex, playback.turnIndex);
+    }
   };
 
   const generateEpisode = async () => {
@@ -407,314 +654,762 @@ export default function PodcastPlayerScreen() {
     }
   };
 
+  const seekToTurn = (index: number) => {
+    const player = playerRef.current;
+    if (!player) return;
+    setManualPinned(true);
+    setTransportVisible(true);
+    setFollowing(true);
+    player.seek(playback.episodeIndex, index);
+    if (!playback.playing) player.play();
+  };
+
+  const handleProgressPress = (event: GestureResponderEvent) => {
+    if (!episode || progressWidth <= 0) return;
+    const seekAt = (localX: number) => {
+      if (!Number.isFinite(localX)) return;
+      const ratio = Math.min(Math.max(localX / progressWidth, 0), 1);
+      const index = Math.min(
+        episode.turns.length - 1,
+        Math.floor(ratio * episode.turns.length)
+      );
+      if (!Number.isFinite(index)) return;
+      setFollowing(true);
+      playerRef.current?.seek(playback.episodeIndex, index);
+    };
+    const native = event.nativeEvent as typeof event.nativeEvent & {
+      pageX?: number;
+    };
+    if (Number.isFinite(native.locationX)) {
+      seekAt(native.locationX);
+      return;
+    }
+    if (typeof native.pageX === 'number') {
+      progressRef.current?.measureInWindow((x, _y, width) => {
+        seekAt(native.pageX! - x);
+        if (width > 0 && Math.abs(width - progressWidth) > 1) {
+          setProgressWidth(width);
+        }
+      });
+    }
+  };
+
+  const handleTranscriptScroll = (
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => {
+    lastOffsetRef.current = event.nativeEvent.contentOffset.y;
+    if (!following) return;
+    if (Date.now() < autoScrollUntilRef.current) return;
+    const offset = event.nativeEvent.contentOffset.y;
+    const target = autoScrollTargetRef.current;
+    if (
+      target != null &&
+      !autoScrollSettledRef.current &&
+      Math.abs(offset - target) <= 6
+    ) {
+      autoScrollSettledRef.current = true;
+      return;
+    }
+    if (target != null && autoScrollSettledRef.current && Math.abs(offset - target) > 96) {
+      setFollowing(false);
+    }
+  };
+
+  const resumeFollowing = () => {
+    setFollowing(true);
+    requestAnimationFrame(() => scrollToActiveTurn());
+  };
+
+  // 播放条的手动收起/展开。用户一旦手动操作过，就固定成用户选的那个状态，
+  // 自动连播不会再把它收回（见 transportPinned 的注释）。
+  const collapseTransport = () => {
+    setTransportPinned(true);
+    setTransportVisible(false);
+  };
+
+  const expandTransport = () => {
+    setTransportPinned(true);
+    setTransportVisible(true);
+  };
+
+  const maxStageHeight = Math.round(height * 0.32);
+  const preferredAvatar = height >= 780 ? 180 : height >= 680 ? 160 : 140;
+  const stageAvatarSize = Math.max(
+    112,
+    Math.min(preferredAvatar, Math.floor((maxStageHeight - 64) * 0.75))
+  );
+  const stageVideoHeight = Math.round((stageAvatarSize * 4) / 3);
+  const stageHaloSize = Math.round(stageAvatarSize * 0.86);
+  // 两层都用 absoluteFill，onLayout 量到的是外层动画容器的高度，
+  // 不是内容本身的高度；展开高度必须按内容算，否则会一直量到折叠高度。
+  const expandedStageHeight = stageVideoHeight + 64;
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: c.paper }]} edges={['top', 'bottom']}>
-      <CoachHeader title={t('podcastTitle')} onBack={goBack} />
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.body}
-        onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.metaRow}>
-          <Text style={[styles.lesson, { color: c.inkMuted }]}>
-            Lesson {episode?.lessonNumber ?? 0} · {episode?.lessonTitle ?? ''}
-          </Text>
-          <Text style={[styles.duration, { color: c.inkMuted }]}>
-            {episode ? `~${episodeMinutes(episode.turns)} min` : ''}
-          </Text>
-        </View>
-        <Text
-          numberOfLines={2}
-          style={[styles.episodeTitle, { color: c.ink, fontFamily: serif }]}
-        >
-          {episode?.title ?? '—'}
-        </Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            stageOpen ? t('podcastCollapseStage') : t('podcastExpandStage')
-          }
-          onPress={() => setStageOpen((open) => !open)}
-          style={
-            stageOpen
-              ? [styles.stage, { backgroundColor: c.card, borderColor: c.border }]
-              : [styles.anchorStrip, { backgroundColor: c.card, borderColor: c.border }]
-          }
-        >
-          {stageOpen ? (
-            <>
-              <View
-                pointerEvents="none"
-                style={[styles.stageClose, { backgroundColor: c.inputBg }]}
+      <View style={styles.shell}>
+        <CoachHeader title={t('podcastTitle')} onBack={goBack} />
+        <View style={[styles.headerBlock, { borderBottomColor: c.border }]}>
+          <View style={styles.metaRow}>
+            <Text
+              numberOfLines={1}
+              style={[styles.lesson, { color: c.inkMuted }]}
+            >
+              Lesson {episode?.lessonNumber ?? 0} · {episode?.lessonTitle ?? ''}
+            </Text>
+            {playback.loopLine || playback.pauseEachLine ? (
+              <Text
+                style={[
+                  styles.shadowBadge,
+                  { color: c.accent, backgroundColor: c.accentLight },
+                ]}
               >
-                <StageChevron up color={c.inkMuted} />
-              </View>
-              <View style={styles.stageAvatar}>
-                <View style={[styles.stageHalo, { backgroundColor: c.accentLight }]} />
-                <CoachAvatar
-                  state={playback.playing ? 'speaking' : 'idle'}
-                  mood="friendly"
-                  size={210}
-                />
-                {/* 同一个 VideoView 连续 replace 会丢帧变黑，按句子重挂让新片段重新绑定表面。 */}
-                <VideoView
-                  key={`${playback.episodeIndex}-${playback.turnIndex}`}
-                  player={videoPlayer}
-                  style={[
-                    styles.stageVideo,
-                    { opacity: videoActive || posterSource ? 1 : 0 },
-                  ]}
-                  contentFit="cover"
-                  nativeControls={false}
-                  onFirstFrameRender={() => setVideoActive(true)}
-                  pointerEvents="none"
-                  surfaceType="textureView"
-                />
-                {posterSource && !videoActive ? (
-                  <Image
-                    fadeDuration={0}
-                    resizeMode="cover"
-                    source={posterSource}
-                    style={[styles.stageVideo, { zIndex: 2 }]}
-                  />
-                ) : null}
-              </View>
-              <View style={styles.stageCopy}>
-                <View style={styles.onAirRow}>
-                  <LiveDot on={playback.playing} />
+                {playback.loopLine
+                  ? t('podcastLoop')
+                  : t('podcastShadowing')}
+              </Text>
+            ) : null}
+            <Text style={[styles.duration, { color: c.inkMuted }]}>
+              {episode ? `~${episodeMinutes(episode.turns)} min` : ''}
+            </Text>
+          </View>
+          <Text
+            numberOfLines={2}
+            style={[styles.episodeTitle, { color: c.ink, fontFamily: serif }]}
+          >
+            {titleParts.title}
+          </Text>
+          {titleParts.subtitle ? (
+            <Text style={[styles.episodeSubtitle, { color: c.inkMuted }]}>
+              {titleParts.subtitle}
+            </Text>
+          ) : null}
+
+          <Animated.View
+            style={{
+              height: stageAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [70, expandedStageHeight],
+              }),
+              overflow: 'hidden',
+            }}
+          >
+            <Animated.View
+              pointerEvents={stageOpen ? 'none' : 'auto'}
+              style={[
+                styles.stageLayer,
+                {
+                  opacity: stageAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 0],
+                  }),
+                  transform: [
+                    {
+                      translateY: stageAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -10],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+            <View
+              style={[
+                styles.anchorStrip,
+                { backgroundColor: c.card, borderColor: c.border },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastExpandStage')}
+                onPress={() => setStageOpen(true)}
+                style={styles.stripMain}
+              >
+                <PodcastFoxAvatar variant="head" size={56} />
+                <View style={styles.anchorBody}>
+                  <View style={styles.onAirRow}>
+                    <LiveDot on={playback.playing} />
+                    <Text
+                      style={[
+                        styles.onAirText,
+                        { color: playback.playing ? c.accent : c.inkMuted },
+                      ]}
+                    >
+                      {playback.playing ? t('podcastOnAir') : t('podcastStandby')}
+                    </Text>
+                    <Text style={[styles.anchorRole, { color: c.inkMuted }]}>
+                      · {t('podcastAnchorRole')}
+                    </Text>
+                  </View>
                   <Text
-                    style={[
-                      styles.onAirText,
-                      { color: playback.playing ? c.accent : c.inkMuted },
-                    ]}
+                    numberOfLines={1}
+                    style={[styles.anchorName, { color: c.ink, fontFamily: serif }]}
                   >
-                    {playback.playing ? t('podcastOnAir') : t('podcastStandby')}
-                  </Text>
-                  <Text style={[styles.anchorRole, { color: c.inkMuted }]}>
-                    · {t('podcastAnchorRole')}
+                    {anchorName}
                   </Text>
                 </View>
-                <Text style={[styles.stageName, { color: c.ink, fontFamily: serif }]}>
-                  {anchorName}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('podcastSettings')}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    setSheetOpen(true);
-                  }}
-                  style={styles.stageSettings}
-                >
-                  <SlidersIcon color={c.inkMuted} />
-                  <Text style={[styles.stageSettingsText, { color: c.inkMuted }]}>
-                    {t('podcastSettings')}
-                  </Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <>
-              <CoachAvatar
-                state={playback.playing ? 'speaking' : 'idle'}
-                mood="friendly"
-                size={56}
-              />
-              <View style={styles.anchorBody}>
-                <View style={styles.onAirRow}>
-                  <LiveDot on={playback.playing} />
-                  <Text
-                    style={[
-                      styles.onAirText,
-                      { color: playback.playing ? c.accent : c.inkMuted },
-                    ]}
-                  >
-                    {playback.playing ? t('podcastOnAir') : t('podcastStandby')}
-                  </Text>
-                  <Text style={[styles.anchorRole, { color: c.inkMuted }]}>
-                    · {t('podcastAnchorRole')}
-                  </Text>
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.anchorName, { color: c.ink, fontFamily: serif }]}
-                >
-                  {anchorName}
-                </Text>
-              </View>
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('podcastSettings')}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setSheetOpen(true);
-                }}
+                onPress={() => setSheetOpen(true)}
                 style={styles.stripAction}
               >
                 <SlidersIcon color={c.inkMuted} />
               </Pressable>
-              <StageChevron up={false} color={c.inkMuted} />
-            </>
-          )}
-        </Pressable>
-
-        <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
-          <View
-            style={[
-              styles.progressFill,
-              { backgroundColor: c.accent, width: `${progress * 100}%` },
-            ]}
-          />
-        </View>
-
-        <View
-          style={styles.chat}
-          onLayout={(event) => {
-            chatOffsetRef.current = event.nativeEvent.layout.y;
-          }}
-        >
-          {episode?.turns.map((item, index) => (
-            <ChatTurn
-              key={`${episode.id}-${index}`}
-              index={index}
-              role={item.role}
-              speaker={episode.coachName || t('podcastCoach')}
-              content={item.content}
-              active={index === playback.turnIndex}
-              playing={playback.playing}
-              highlight={wordRange?.turnIndex === index ? wordRange : null}
-              translation={
-                translationEnabled ? translations[`${episode.id}:${index}`] : undefined
-              }
-              colors={c}
-              youLabel={t('podcastYou')}
-              onLayout={handleTurnLayout}
-            />
-          ))}
-        </View>
-
-        <View style={{ height: Math.max(0, viewportHeight * 0.4) }} />
-
-        {atEpisodeEnd ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => playerRef.current?.play(playback.episodeIndex)}
-            style={[styles.replay, { borderColor: c.border }]}
-          >
-            <Text style={{ color: c.ink, fontWeight: '700' }}>{t('podcastReplay')}</Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
-      <Animated.View
-        style={[
-          styles.transportShell,
-          {
-            backgroundColor: c.paper,
-            borderTopColor: c.border,
-            height: transportAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [26, 76],
-            }),
-          },
-        ]}
-      >
-        <Animated.View
-          pointerEvents={transportVisible ? 'auto' : 'none'}
-          style={[
-            styles.transportFull,
-            {
-              opacity: transportAnim,
-              transform: [
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastExpandStage')}
+                onPress={() => setStageOpen(true)}
+                style={styles.stripAction}
+              >
+                <StageChevron up={false} color={c.inkMuted} />
+              </Pressable>
+            </View>
+            </Animated.View>
+            <Animated.View
+              pointerEvents={stageOpen ? 'auto' : 'none'}
+              style={[
+                styles.stageLayer,
                 {
-                  translateY: transportAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [10, 0],
-                  }),
+                  opacity: stageAnim,
+                  transform: [
+                    {
+                      translateY: stageAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [12, 0],
+                      }),
+                    },
+                  ],
                 },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.controls}>
-            <Control
-              icon="prevEpisode"
-              hint={t('podcastPrevEpisode')}
-              onPress={() => playerRef.current?.prevEpisode()}
-              color={c.ink}
-            />
-            <Control
-              icon="prevLine"
-              hint={t('podcastPrevLine')}
-              onPress={() => playerRef.current?.prevTurn()}
-              color={c.ink}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={playback.playing ? t('podcastPause') : t('podcastPlay')}
-              onPress={() => {
-                setManualPinned(true);
-                setTransportVisible(true);
-                playerRef.current?.toggle();
-              }}
-              style={[styles.playButton, { backgroundColor: c.buttonBg }]}
+              ]}
             >
-              <TransportIcon
-                name={playback.playing ? 'pause' : 'play'}
-                color={c.buttonText}
-                size={26}
+            <View
+              style={[styles.stage, { backgroundColor: c.card, borderColor: c.border }]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastCollapseStage')}
+                onPress={() => setStageOpen(false)}
+                style={styles.stageMain}
+              >
+                <View
+                  pointerEvents="none"
+                  style={[styles.stageClose, { backgroundColor: c.inputBg }]}
+                >
+                  <StageChevron up color={c.inkMuted} />
+                </View>
+                <View
+                  style={[
+                    styles.stageAvatar,
+                    { width: stageAvatarSize + 10, height: stageVideoHeight },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.stageHalo,
+                      {
+                        backgroundColor: c.accentLight,
+                        width: stageHaloSize,
+                        height: stageHaloSize,
+                        borderRadius: stageHaloSize / 2,
+                        top: (stageVideoHeight - stageHaloSize) / 2,
+                        left: (stageAvatarSize + 10 - stageHaloSize) / 2,
+                      },
+                    ]}
+                  />
+                  <PodcastFoxAvatar
+                    variant="stage"
+                    width={stageAvatarSize}
+                    height={stageVideoHeight}
+                  />
+                  {/* 同一个 VideoView 连续 replace 会丢帧变黑，按句子重挂让新片段重新绑定表面。 */}
+                  <VideoView
+                    key={`${playback.episodeIndex}-${playback.turnIndex}`}
+                    player={videoPlayer}
+                    style={[
+                      styles.stageVideo,
+                      {
+                        width: stageAvatarSize,
+                        height: stageVideoHeight,
+                        opacity: videoActive || posterSource ? 1 : 0,
+                      },
+                    ]}
+                    contentFit="cover"
+                    nativeControls={false}
+                    onFirstFrameRender={() => setVideoActive(true)}
+                    pointerEvents="none"
+                    surfaceType="textureView"
+                  />
+                  {posterSource && !videoActive ? (
+                    <Image
+                      fadeDuration={0}
+                      resizeMode="cover"
+                      source={posterSource}
+                      style={[
+                        styles.stageVideo,
+                        {
+                          width: stageAvatarSize,
+                          height: stageVideoHeight,
+                          zIndex: 2,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </View>
+                <View style={styles.stageCopy}>
+                  <View style={styles.onAirRow}>
+                    <LiveDot on={playback.playing} />
+                    <Text
+                      style={[
+                        styles.onAirText,
+                        { color: playback.playing ? c.accent : c.inkMuted },
+                      ]}
+                    >
+                      {playback.playing ? t('podcastOnAir') : t('podcastStandby')}
+                    </Text>
+                    <Text style={[styles.anchorRole, { color: c.inkMuted }]}>
+                      · {t('podcastAnchorRole')}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[styles.stageName, { color: c.ink, fontFamily: serif }]}
+                  >
+                    {anchorName}
+                  </Text>
+                </View>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastSettings')}
+                onPress={() => setSheetOpen(true)}
+                style={[styles.stageSettings, { backgroundColor: c.inputBg }]}
+              >
+                <SlidersIcon color={c.inkMuted} />
+              </Pressable>
+            </View>
+            </Animated.View>
+          </Animated.View>
+          {translationEnabled && translationMissing ? (
+            <View
+              style={[
+                styles.captionNotice,
+                { backgroundColor: c.accentLight, borderColor: c.border },
+              ]}
+            >
+              <Text style={[styles.captionNoticeText, { color: c.inkMuted }]}>
+                {t('podcastTranscriptMissing')}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={translatingEpisode}
+                onPress={() => void generateCaptions()}
+                style={[
+                  styles.captionNoticeAction,
+                  { borderColor: c.border, opacity: translatingEpisode ? 0.5 : 1 },
+                ]}
+              >
+                <Text style={[styles.captionNoticeActionText, { color: c.accent }]}>
+                  {translatingEpisode
+                    ? t('podcastTranslating')
+                    : t('podcastTranscriptGenerate')}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={styles.progressRow}>
+            <Pressable
+              ref={progressRef}
+              accessibilityRole="adjustable"
+              accessibilityLabel={t('podcastProgressLabel')}
+              accessibilityValue={{
+                min: 1,
+                max: Math.max(1, episode?.turns.length ?? 1),
+                now: playback.turnIndex + 1,
+              }}
+              onLayout={(event) => setProgressWidth(event.nativeEvent.layout.width)}
+              onPress={handleProgressPress}
+              style={styles.progressHit}
+            >
+              <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { backgroundColor: c.accent, width: `${progress * 100}%` },
+                  ]}
+                />
+              </View>
+              <View
+                style={[
+                  styles.progressThumb,
+                  { backgroundColor: c.accent, left: `${progress * 100}%` },
+                ]}
               />
             </Pressable>
-            <Control
-              icon="nextLine"
-              hint={t('podcastNextLine')}
-              onPress={() => playerRef.current?.nextTurn()}
-              color={c.ink}
-            />
-            <Control
-              icon="nextEpisode"
-              hint={t('podcastNextEpisode')}
-              onPress={() => playerRef.current?.nextEpisode()}
-              color={c.ink}
-            />
+            <Text style={[styles.progressCount, { color: c.inkMuted }]}>
+              {t('podcastLinePosition', {
+                current: playback.turnIndex + 1,
+                total: episode?.turns.length ?? 0,
+              })}
+            </Text>
           </View>
-        </Animated.View>
+        </View>
+
+        {stageOpen ? (
+          <View style={styles.studioCaptionShell}>
+            <ScrollView
+              key={`${episode?.id ?? 'episode'}-${playback.turnIndex}`}
+              contentContainerStyle={styles.studioCaptionContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${t('podcastPlay')}: ${activeTurn?.content ?? ''}`}
+                onPress={() => seekToTurn(playback.turnIndex)}
+                style={[
+                  styles.studioCaption,
+                  { backgroundColor: c.card, borderColor: c.accent },
+                ]}
+              >
+                <Text style={[styles.studioCaptionSpeaker, { color: c.accent }]}>
+                  {activeTurn?.role === 'user'
+                    ? t('podcastYou')
+                    : episode?.coachName || t('podcastCoach')}
+                </Text>
+                <Text style={[styles.studioCaptionText, { color: c.ink }]}>
+                  {activeTurn?.content ?? ''}
+                </Text>
+                {activeTranslation ? (
+                  <Text
+                    style={[styles.studioCaptionTranslation, { color: c.inkMuted }]}
+                  >
+                    {activeTranslation}
+                  </Text>
+                ) : null}
+              </Pressable>
+            </ScrollView>
+            <View style={styles.studioActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => seekToTurn(playback.turnIndex)}
+                style={[styles.studioAction, { borderColor: c.border }]}
+              >
+                <Text style={[styles.studioActionText, { color: c.ink }]}>
+                  {t('podcastReplayLine')}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('podcastCollapseStage')}
+                onPress={() => setStageOpen(false)}
+                style={[styles.studioAction, { borderColor: c.border }]}
+              >
+                <Text style={[styles.studioActionText, { color: c.ink }]}>
+                  {t('podcastFullTranscript')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+        <View
+          style={styles.transcriptShell}
+          onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+        >
+          <ScrollView
+            ref={scrollRef}
+            style={styles.transcript}
+            contentContainerStyle={styles.transcriptContent}
+            onScroll={handleTranscriptScroll}
+            onScrollBeginDrag={() => setFollowing(false)}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.chat}>
+              {episode?.turns.map((item, index) => {
+                const key = `${episode.id}:${index}`;
+                const translation = translationEnabled ? translations[key] : undefined;
+                return (
+                  <ChatTurn
+                    key={`${episode.id}-${index}`}
+                    index={index}
+                    role={item.role}
+                    speaker={episode.coachName || t('podcastCoach')}
+                    content={item.content}
+                    active={index === playback.turnIndex}
+                    playing={playback.playing}
+                    highlight={wordRange?.turnIndex === index ? wordRange : null}
+                    translation={translation}
+                    colors={c}
+                    youLabel={t('podcastYou')}
+                    onLayout={handleTurnLayout}
+                    onSeek={seekToTurn}
+                  />
+                );
+              })}
+            </View>
+            <View style={{ height: Math.max(28, viewportHeight * 0.36) }} />
+          </ScrollView>
+
+          {!following && episode ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={resumeFollowing}
+              style={[
+                styles.followPill,
+                { backgroundColor: c.card, borderColor: c.border },
+              ]}
+            >
+              <Text style={[styles.followPillText, { color: c.ink }]}>
+                {t('podcastBackToCurrent')}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {atEpisodeEnd && following ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setFollowing(true);
+                playerRef.current?.play();
+              }}
+              style={[
+                styles.replayOverlay,
+                { backgroundColor: c.card, borderColor: c.border },
+              ]}
+            >
+              <Text style={{ color: c.ink, fontWeight: '700' }}>
+                {t('podcastReplay')}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+        )}
+
         <Animated.View
-          pointerEvents={transportVisible ? 'none' : 'auto'}
           style={[
-            styles.transportHandle,
+            styles.transportShell,
             {
-              opacity: transportAnim.interpolate({
+              backgroundColor: c.paper,
+              borderTopColor: c.border,
+              height: transportAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [1, 0],
+                outputRange: [44, 108],
               }),
             },
           ]}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('podcastShowControls')}
-            onPress={() => {
-              setManualPinned(true);
-              setTransportVisible(true);
-            }}
-            style={styles.handleTouch}
+          <Animated.View
+            pointerEvents={transportVisible ? 'auto' : 'none'}
+            style={[
+              styles.transportFull,
+              {
+                opacity: transportAnim,
+                transform: [
+                  {
+                    translateY: transportAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [24, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
           >
-            <View style={[styles.handleBar, { backgroundColor: c.border }]} />
-          </Pressable>
+            {/* 手动收起：只有用户点这里或向下滑，自动连播才不会把它收回去。 */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('podcastHideControls')}
+              onPress={() => collapseTransport()}
+              style={styles.transportGrabberHit}
+            >
+              <View
+                style={[styles.transportGrabber, { backgroundColor: c.border }]}
+              />
+            </Pressable>
+            <View style={styles.controls}>
+              <Control
+                icon="prevEpisode"
+                hint={t('podcastPrevEpisode')}
+                onPress={() => {
+                  setFollowing(true);
+                  playerRef.current?.prevEpisode();
+                }}
+                color={c.ink}
+              />
+              <Control
+                icon="prevLine"
+                hint={t('podcastPrevLine')}
+                onPress={() => {
+                  setFollowing(true);
+                  playerRef.current?.prevTurn();
+                }}
+                color={c.ink}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={playback.playing ? t('podcastPause') : t('podcastPlay')}
+                onPress={() => {
+                  setManualPinned(true);
+                  setTransportVisible(true);
+                setFollowing(true);
+                  playerRef.current?.toggle();
+                }}
+                style={[styles.playButton, { backgroundColor: c.buttonBg }]}
+              >
+                <TransportIcon
+                  name={playback.playing ? 'pause' : 'play'}
+                  color={c.buttonText}
+                  size={26}
+                />
+              </Pressable>
+              <Control
+                icon="nextLine"
+                hint={t('podcastNextLine')}
+                onPress={() => {
+                  setFollowing(true);
+                  playerRef.current?.nextTurn();
+                }}
+                color={c.ink}
+              />
+              <Control
+                icon="nextEpisode"
+                hint={t('podcastNextEpisode')}
+                onPress={() => {
+                  setFollowing(true);
+                  playerRef.current?.nextEpisode();
+                }}
+                color={c.ink}
+              />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents={transportVisible ? 'none' : 'auto'}
+            style={[
+              styles.transportHandle,
+              {
+                opacity: transportAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 0],
+                }),
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                playback.playing ? t('podcastPause') : t('podcastPlay')
+              }
+              onPress={() => {
+                setManualPinned(true);
+                setFollowing(true);
+                playerRef.current?.toggle();
+              }}
+              style={[styles.miniPlay, { backgroundColor: c.buttonBg }]}
+            >
+              <TransportIcon
+                name={playback.playing ? 'pause' : 'play'}
+                color={c.buttonText}
+                size={16}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('podcastShowControls')}
+              onPress={expandTransport}
+              style={styles.miniMain}
+            >
+              <View style={styles.miniText}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.miniTitle, { color: c.ink }]}
+                >
+                  {episode ? titleParts.title : t('podcastTitle')}
+                </Text>
+                <Text style={[styles.miniMeta, { color: c.inkMuted }]}>
+                  {t('podcastLinePosition', {
+                    current: playback.turnIndex + 1,
+                    total: episode?.turns.length ?? 0,
+                  })}
+                  {playback.loopLine
+                    ? ` · ${t('podcastLoop')}`
+                    : playback.pauseEachLine
+                      ? ` · ${t('podcastShadowing')}`
+                      : ''}
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${t('podcastSpeed')} ${formatPlaybackSpeed(
+                playback.rate
+              )}`}
+              onPress={() =>
+                changeSpeed(nextPlaybackSpeed(playback.rate), true)
+              }
+              style={[styles.speedPill, { borderColor: c.border }]}
+            >
+              <Text style={[styles.speedPillText, { color: c.inkMuted }]}>
+                {formatPlaybackSpeed(playback.rate)}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('podcastShowControls')}
+              onPress={expandTransport}
+              style={styles.miniExpand}
+            >
+              <StageChevron up color={c.inkMuted} />
+            </Pressable>
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
+      </View>
       <PodcastSettingsSheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
         rate={playback.rate}
-        onRate={(rate) => playerRef.current?.setRate(rate)}
+        onRate={(rate) => {
+          changeSpeed(rate, false);
+        }}
         autoplay={playback.autoplay}
         onAutoplay={(value) => {
           playerRef.current?.setAutoplay(value);
+          AsyncStorage.setItem(
+            'podcast_autoplay',
+            value ? '1' : '0'
+          ).catch(() => {});
           setManualPinned(false);
           if (!value) setTransportVisible(true);
+        }}
+        pauseEachLine={playback.pauseEachLine}
+        onPauseEachLine={(value) => {
+          playerRef.current?.setPauseEachLine(value);
+          AsyncStorage.setItem(
+            'podcast_pause_each_line',
+            value ? '1' : '0'
+          ).catch(() => {});
+          if (value) {
+            // 逐句模式与自动连播互斥：开关上的状态要和实际行为一致。
+            playerRef.current?.setAutoplay(false);
+            AsyncStorage.multiSet([
+              ['podcast_loop_line', '0'],
+              ['podcast_autoplay', '0'],
+            ]).catch(() => {});
+          }
+        }}
+        loopLine={playback.loopLine}
+        onLoopLine={(value) => {
+          playerRef.current?.setLoopLine(value);
+          AsyncStorage.setItem(
+            'podcast_loop_line',
+            value ? '1' : '0'
+          ).catch(() => {});
+          if (value) {
+            AsyncStorage.multiSet([
+              ['podcast_pause_each_line', '0'],
+              ['podcast_autoplay', '0'],
+            ]).catch(() => {});
+          }
         }}
         translation={translationEnabled}
         onTranslation={changeTranslation}
@@ -746,6 +1441,7 @@ const ChatTurn = memo(function ChatTurn({
   colors,
   youLabel,
   onLayout,
+  onSeek,
 }: {
   index: number;
   role: 'coach' | 'user';
@@ -758,6 +1454,7 @@ const ChatTurn = memo(function ChatTurn({
   colors: ChatColors;
   youLabel: string;
   onLayout: (index: number, y: number, height: number) => void;
+  onSeek: (index: number) => void;
 }) {
   const mine = role === 'user';
   const valid =
@@ -766,7 +1463,10 @@ const ChatTurn = memo(function ChatTurn({
     highlight.start >= 0 &&
     highlight.start < content.length;
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${mine ? youLabel : speaker}: ${content}`}
+      onPress={() => onSeek(index)}
       onLayout={(event) =>
         onLayout(
           index,
@@ -774,14 +1474,14 @@ const ChatTurn = memo(function ChatTurn({
           event.nativeEvent.layout.height
         )
       }
-      style={[styles.chatRow, mine ? styles.chatRowMine : styles.chatRowOther]}
+      style={({ pressed }) => [
+        styles.chatRow,
+        mine ? styles.chatRowMine : styles.chatRowOther,
+        pressed ? styles.chatRowPressed : null,
+      ]}
     >
       {!mine ? (
-        <CoachAvatar
-          state={active && playing ? 'speaking' : 'idle'}
-          mood="friendly"
-          size={30}
-        />
+        <PodcastFoxAvatar variant="head" size={30} />
       ) : null}
       <View
         style={[
@@ -820,7 +1520,8 @@ const ChatTurn = memo(function ChatTurn({
           </Text>
         ) : null}
       </View>
-    </View>
+      {mine ? <PodcastLearnerAvatar size={30} /> : null}
+    </Pressable>
   );
 });
 
@@ -996,16 +1697,99 @@ function Control({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  body: { paddingHorizontal: 20, paddingBottom: 32, gap: 8 },
+  shell: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+  },
+  // 两层叠加时父容器高度由动画值给，子层就必须绝对定位铺满，
+  // 否则它们会各自撑高父容器、把插值出来的高度覆盖掉。
+  stageLayer: { ...StyleSheet.absoluteFill },
+  captionNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingLeft: 10,
+    paddingRight: 6,
+    marginTop: 6,
+  },
+  captionNoticeText: { flex: 1, fontSize: 11.5, lineHeight: 15 },
+  captionNoticeAction: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  captionNoticeActionText: { fontSize: 11.5, fontWeight: '700' },
+  headerBlock: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  transcriptShell: { flex: 1, minHeight: 0 },
+  transcript: { flex: 1 },
+  transcriptContent: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  studioCaptionShell: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: 6,
+  },
+  studioCaptionContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  studioCaption: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  studioCaptionSpeaker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+  studioCaptionText: { fontSize: 15, lineHeight: 21 },
+  studioCaptionTranslation: { fontSize: 12.5, lineHeight: 18 },
+  studioActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  studioAction: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  studioActionText: { fontSize: 11.5, fontWeight: '700' },
   anchorStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     borderWidth: 1,
     borderRadius: 16,
     paddingVertical: 6,
     paddingLeft: 4,
-    paddingRight: 14,
+    paddingRight: 6,
+  },
+  stripMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 0,
   },
   stage: {
     alignItems: 'center',
@@ -1016,6 +1800,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 2,
   },
+  stageMain: { width: '100%', alignItems: 'center', gap: 2 },
   stageClose: {
     position: 'absolute',
     top: 10,
@@ -1060,16 +1845,54 @@ const styles = StyleSheet.create({
   onAirText: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.8 },
   anchorName: { fontSize: 16, fontWeight: '700' },
   anchorRole: { fontSize: 10.5 },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lesson: { fontSize: 12, fontWeight: '600' },
-  duration: { fontSize: 11.5 },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  lesson: { flex: 1, fontSize: 12, fontWeight: '600' },
+  duration: { flexShrink: 0, fontSize: 11.5 },
+  shadowBadge: {
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: '800',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
   episodeTitle: { fontSize: 19, fontWeight: '700', lineHeight: 25 },
-  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: 1 },
-  progressFill: { height: 3 },
+  episodeSubtitle: { fontSize: 12, lineHeight: 17, marginTop: -4 },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 18,
+  },
+  progressHit: { flex: 1, height: 20, justifyContent: 'center' },
+  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2 },
+  progressThumb: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: -5,
+    top: 5,
+  },
+  progressCount: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    minWidth: 44,
+    textAlign: 'right',
+  },
   chat: { gap: 10, paddingTop: 4, paddingBottom: 8 },
   chatRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
   chatRowMine: { justifyContent: 'flex-end' },
   chatRowOther: { justifyContent: 'flex-start' },
+  chatRowPressed: { opacity: 0.72 },
   bubble: {
     maxWidth: '82%',
     borderWidth: 1,
@@ -1078,51 +1901,109 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     gap: 3,
   },
-  bubbleMine: { borderBottomRightRadius: 5 },
+  bubbleMine: { borderBottomRightRadius: 5, maxWidth: '78%' },
   bubbleOther: { borderBottomLeftRadius: 5 },
   bubbleSpeaker: { fontSize: 10.5, fontWeight: '700' },
   bubbleText: { fontSize: 14.5, lineHeight: 21 },
   bubbleTranslation: { fontSize: 12.5, lineHeight: 18, marginTop: 2 },
   stageSettings: {
-    flexDirection: 'row',
+    position: 'absolute',
+    top: 10,
+    right: 48,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
+    justifyContent: 'center',
+    zIndex: 2,
   },
-  stageSettingsText: { fontSize: 11.5 },
   stripAction: { padding: 8 },
   transportShell: {
     overflow: 'hidden',
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  // 播放条顶部的手柄：一处可点的横条，向下滑/点它收起。
+  transportGrabberHit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  transportGrabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   transportFull: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
-    height: 76,
+    height: 108,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 0,
     paddingBottom: 6,
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   transportHandle: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 26,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  miniPlay: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  handleTouch: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  handleBar: { width: 40, height: 4, borderRadius: 2 },
+  miniMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+    minWidth: 0,
+  },
+  miniText: { flex: 1, minWidth: 0, gap: 1 },
+  miniTitle: { fontSize: 12.5, fontWeight: '700' },
+  miniMeta: { fontSize: 10.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  speedPill: {
+    minWidth: 44,
+    height: 28,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  miniExpand: {
+    width: 24,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 9,
     marginTop: 2,
+    width: '100%',
+    maxWidth: 520,
   },
   control: {
     width: 38,
@@ -1139,8 +2020,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  replay: {
+  followPill: {
+    position: 'absolute',
     alignSelf: 'center',
+    bottom: 10,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  followPillText: { fontSize: 12, fontWeight: '700' },
+  replayOverlay: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 10,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 18,

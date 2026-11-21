@@ -167,6 +167,126 @@ async function getNativeVoiceIds(): Promise<Set<string>> {
   return nativeVoiceIds;
 }
 
+type PodcastVoiceRole = 'coach' | 'user';
+type SystemVoice = { id: string; name: string };
+
+const COACH_VOICE_HINTS = [
+  'alex',
+  'daniel',
+  'aaron',
+  'david',
+  'james',
+  'rishi',
+  'male',
+  // Fred 是模拟器里唯一可用的 en-US 男声，但听感偏机械，放最后兜底。
+  'fred',
+];
+const LEARNER_VOICE_HINTS = [
+  'samantha',
+  'karen',
+  'zira',
+  'tessa',
+  'victoria',
+  'moira',
+  'susan',
+  'female',
+];
+
+function choosePodcastVoice(
+  voices: SystemVoice[],
+  preferredId: string | undefined,
+  hints: string[],
+  avoidId?: string
+): SystemVoice | undefined {
+  if (preferredId) {
+    const exact = voices.find(
+      (voice) => voice.id === preferredId && voice.id !== avoidId
+    );
+    if (exact) return exact;
+  }
+  // 按 hint 的优先级找，而不是按系统返回的 voice 顺序找；否则 Fred
+  // 这种排在 Daniel 前面的机械男声会先命中。
+  for (const hint of hints) {
+    const hinted = voices.find(
+      (voice) =>
+        voice.id !== avoidId && voice.name.toLowerCase().includes(hint)
+    );
+    if (hinted) return hinted;
+  }
+  return voices.find((voice) => voice.id !== avoidId) ?? voices[0];
+}
+
+let podcastVoiceCache: {
+  key: string;
+  coach?: string;
+  learner?: string;
+} | null = null;
+let podcastVoicesLogged = false;
+
+/**
+ * 播客角色的系统声线。Coach 稳、Learner 亮；找不到第二把声音时回退同一把。
+ * 只对 `webspeech` 生效：云端音色的 id 与系统音色不是一个命名空间，
+ * 传过去只会被当成无效 id 丢掉。
+ */
+export async function pickPodcastVoice(
+  role: PodcastVoiceRole,
+  settings: SpeechSettings
+): Promise<string | undefined> {
+  if (settings.provider && settings.provider !== 'webspeech') return undefined;
+
+  let voices: SystemVoice[] = [];
+  if (Platform.OS === 'web') {
+    await ensureWebVoices();
+    const w = window as unknown as {
+      speechSynthesis?: {
+        getVoices?: () => Array<{
+          voiceURI: string;
+          name?: string;
+          lang?: string;
+        }>;
+      };
+    };
+    voices = (w.speechSynthesis?.getVoices?.() ?? [])
+      .filter((voice) => voice.lang?.toLowerCase().startsWith('en'))
+      .map((voice) => ({
+        id: voice.voiceURI,
+        name: voice.name ?? voice.voiceURI,
+      }));
+  } else {
+    const available = await Speech.getAvailableVoicesAsync();
+    voices = available
+      .filter((voice) => voice.language?.toLowerCase().startsWith('en'))
+      .map((voice) => ({
+        id: voice.identifier,
+        name: voice.name ?? voice.identifier,
+      }));
+  }
+
+  if (voices.length === 0) return undefined;
+  if (__DEV__ && !podcastVoicesLogged) {
+    podcastVoicesLogged = true;
+    console.log(
+      `[tts] podcast voices=${voices.map((voice) => voice.name).join(' | ')}`
+    );
+  }
+  const key = voices.map((voice) => voice.id).join('|');
+  if (podcastVoiceCache?.key === key) {
+    return role === 'user'
+      ? podcastVoiceCache.learner
+      : podcastVoiceCache.coach;
+  }
+
+  const coach = choosePodcastVoice(voices, settings.speech_voice, COACH_VOICE_HINTS);
+  const learner = choosePodcastVoice(
+    voices,
+    undefined,
+    LEARNER_VOICE_HINTS,
+    coach?.id
+  );
+  podcastVoiceCache = { key, coach: coach?.id, learner: learner?.id };
+  return role === 'user' ? learner?.id : coach?.id;
+}
+
 // ── 原生朗读的时序（iOS/Android） ────────────────────────────────────────────
 //
 // 症状：每条回复开头被"重复念一小段"再从头念对。

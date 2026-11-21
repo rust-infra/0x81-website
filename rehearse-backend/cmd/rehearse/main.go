@@ -165,6 +165,7 @@ func run() error {
 	quota := coach.NewQuotaService(st)
 	llmSettings := coach.NewLLMSettingsService(st, cfg.LLMFallback)
 	coachService := coach.NewService(quota, llmSettings, catalog, llmClient)
+	podcastCaptions := coach.NewPodcastCaptionService(llmSettings, llmClient, st)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	server := &http.Server{
@@ -180,6 +181,7 @@ func run() error {
 			LLMSettings:        llmSettings,
 			OCR:                material.NewOCRService(quota, llmSettings, llmClient),
 			Profile:            material.NewProfileService(quota, llmSettings, llmClient),
+			PodcastCaptions:    podcastCaptions,
 			DigitalHumanURL:    cfg.DigitalHumanURL,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

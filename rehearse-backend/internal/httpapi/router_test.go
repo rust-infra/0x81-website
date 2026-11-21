@@ -190,11 +190,12 @@ func TestEveryUserRouteRequiresAuth(t *testing.T) {
 
 	// 数量对不上说明路由表变了。新端点也要走上面那条断言——
 	// 顺手把数字改掉是**有意的**动作，不是可以忽略的噪音。
-	// 15 = whoami / scenarios / quota / turn / interpret:translate /
+	// 17 = whoami / scenarios / quota / turn / interpret:translate /
 	//      scenario:draft / material:profile / summary / material:text /
 	//      settings GET / settings PUT / podcast clips POST / podcast clip GET /
-	//      podcast clip video GET / podcast poster GET。
-	require.Equal(t, 15, checked, "用户端点数量变了（%d），确认新端点确实在验签子树下", checked)
+	//      podcast clip video GET / podcast poster GET /
+	//      podcast translations POST / podcast translations generate POST。
+	require.Equal(t, 17, checked, "用户端点数量变了（%d），确认新端点确实在验签子树下", checked)
 
 	// ⚠️ 路由匹配先于中间件：gin（与 Rust/axum 原版一致）先匹配路由，未匹配的
 	// 路径走 NoRoute，组上的 RequireAuth **根本不会执行**。所以「子树下任意路径

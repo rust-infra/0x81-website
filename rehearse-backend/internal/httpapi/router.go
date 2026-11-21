@@ -52,6 +52,9 @@ type Deps struct {
 	LLMSettings        *coach.LLMSettingsService
 	OCR                *material.OCRService
 	Profile            *material.ProfileService
+	// PodcastCaptions 整集字幕的生成与读取。与 `Coach.Translate`
+	// （同传逐句实时翻译）是两条不同的路径，见 internal/coach/podcast.go。
+	PodcastCaptions *coach.PodcastCaptionService
 	// DigitalHumanURL 是数字人片段服务的内部地址。为空时相关端点回 503，
 	// 客户端继续走 TTS。见 internal/httpapi/podcast.go。
 	DigitalHumanURL string
@@ -100,6 +103,10 @@ func NewRouter(deps Deps) http.Handler {
 	// 用户设置文档：客户端全量写、服务端只校验形状（user_settings.go）。
 	api.GET("/settings", userSettingsGetHandler(deps.Store))
 	api.PUT("/settings", userSettingsPutHandler(deps.Store))
+	// 播客中文字幕：整集离线生成、存库，播放时只读。
+	api.POST("/podcast/translations", podcastTranslationsHandler(deps.PodcastCaptions))
+	api.POST("/podcast/translations/generate",
+		podcastTranslationsGenerateHandler(deps.PodcastCaptions))
 	api.POST("/podcast/clips", podcastClipCreateHandler(deps.DigitalHumanURL))
 	api.GET("/podcast/clips/:key", podcastClipStatusHandler(deps.DigitalHumanURL))
 	api.GET("/podcast/clips/:key/video", podcastClipVideoHandler(deps.DigitalHumanURL))

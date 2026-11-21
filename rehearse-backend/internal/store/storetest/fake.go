@@ -24,13 +24,20 @@ type Fake struct {
 	settings map[string]string
 	// userSettings 以 JWT 的 sub 为键，存原始 JSON 文档。
 	userSettings map[string]string
+	// podcast 以 episode_id 为键，存整集译文（替换语义与真库一致）。
+	podcast map[string][]store.PodcastTranslation
 	// PingErr 让 `/health` 的降级路径可测。
 	PingErr error
 }
 
 // New 建一个空的内存 store。
 func New() *Fake {
-	return &Fake{usage: map[string]uint32{}, settings: map[string]string{}, userSettings: map[string]string{}}
+	return &Fake{
+		usage:        map[string]uint32{},
+		settings:     map[string]string{},
+		userSettings: map[string]string{},
+		podcast:      map[string][]store.PodcastTranslation{},
+	}
 }
 
 var _ store.Store = (*Fake)(nil)
@@ -130,5 +137,31 @@ func (f *Fake) UserSettingsPut(_ context.Context, userSub, settings string) erro
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.userSettings[userSub] = settings
+	return nil
+}
+
+// PodcastTranslationsGet 实现 store.Store。只返回指纹一致的行，
+// 与真库的 `WHERE source_hash = ?` 一致。
+func (f *Fake) PodcastTranslationsGet(
+	_ context.Context, episodeID, sourceHash string,
+) ([]store.PodcastTranslation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]store.PodcastTranslation, 0, len(f.podcast[episodeID]))
+	for _, row := range f.podcast[episodeID] {
+		if row.SourceHash == sourceHash {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+// PodcastTranslationsPutReplace 实现 store.Store。整集替换，与真库一致。
+func (f *Fake) PodcastTranslationsPutReplace(
+	_ context.Context, episodeID string, rows []store.PodcastTranslation,
+) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.podcast[episodeID] = append([]store.PodcastTranslation(nil), rows...)
 	return nil
 }

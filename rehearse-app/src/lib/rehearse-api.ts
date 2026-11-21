@@ -9,6 +9,8 @@ import type {
   CoachTurnRequest,
   CoachTurnResponse,
   InterpretTranslateResponse,
+  PodcastTranslationsRequest,
+  PodcastTranslationsResponse,
   InterviewProfileRequest,
   InterviewProfileResponse,
   InterviewTextResult,
@@ -32,6 +34,16 @@ export interface CoachApi {
   turn: (body: CoachTurnRequest, signal?: AbortSignal) => Promise<CoachTurnResponse>;
   summary: (body: CoachSummaryRequest) => Promise<CoachSummaryResponse>;
   translateInterpret: (text: string, signal?: AbortSignal) => Promise<InterpretTranslateResponse>;
+  /** 只读已存的整集译文，绝不生成。播放器走这条。 */
+  getPodcastTranslations: (
+    body: PodcastTranslationsRequest,
+    signal?: AbortSignal
+  ) => Promise<PodcastTranslationsResponse>;
+  /** 生成整集译文（幂等：已缓存时服务端直接返回，不重复调 LLM）。 */
+  generatePodcastTranslations: (
+    body: PodcastTranslationsRequest,
+    signal?: AbortSignal
+  ) => Promise<PodcastTranslationsResponse>;
   extractInterviewText: (body: FormData) => Promise<InterviewTextResult>;
   profile: (body: InterviewProfileRequest) => Promise<InterviewProfileResponse>;
   getSettings: () => Promise<SyncedUserSettings>;
@@ -65,6 +77,18 @@ export function createCoachApi(request: ApiRequest): CoachApi {
       request<InterpretTranslateResponse>('/api/rehearse/interpret/translate', {
         method: 'POST',
         body: JSON.stringify({ text }),
+        signal,
+      }),
+    getPodcastTranslations: (body, signal) =>
+      request<PodcastTranslationsResponse>('/api/rehearse/podcast/translations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal,
+      }),
+    generatePodcastTranslations: (body, signal) =>
+      request<PodcastTranslationsResponse>('/api/rehearse/podcast/translations/generate', {
+        method: 'POST',
+        body: JSON.stringify(body),
         signal,
       }),
     extractInterviewText: (body) =>

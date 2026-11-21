@@ -20,9 +20,12 @@ import (
 // harness 把三件外部依赖都换成可控的假实现：LLM（httptest）、存储（内存）、
 // 场景目录（真实的内嵌数据——它本来就是 go:embed 的常量）。
 type harness struct {
-	service *Service
-	store   *storetest.Fake
-	server  *httptest.Server
+	service     *Service
+	podcast     *PodcastCaptionService
+	store       *storetest.Fake
+	server      *httptest.Server
+	llmSettings *LLMSettingsService
+	client      *llm.Client
 
 	// responses 是脚本化的模型输出，按调用顺序取；用完后重复最后一条。
 	responses []string
@@ -88,7 +91,11 @@ func newHarnessWithLLM(t *testing.T, override config.LLMFallback, responses ...s
 		fallback = override
 	}
 	llmSettings := NewLLMSettingsService(h.store, fallback)
-	h.service = NewService(NewQuotaService(h.store), llmSettings, catalog, llm.New())
+	client := llm.New()
+	h.llmSettings = llmSettings
+	h.client = client
+	h.service = NewService(NewQuotaService(h.store), llmSettings, catalog, client)
+	h.podcast = NewPodcastCaptionService(llmSettings, client, h.store)
 	return h
 }
 

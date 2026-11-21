@@ -168,6 +168,9 @@ services:
       - REHEARSE_LLM_BASE_URL=${REHEARSE_LLM_BASE_URL:-}
       - REHEARSE_LLM_API_KEY=${REHEARSE_LLM_API_KEY:-}
       - REHEARSE_LLM_MODEL=${REHEARSE_LLM_MODEL:-}
+      # 数字人片段服务（可选）。留空时播客回退到 TTS。
+      # 服务跑在宿主机时用 host.docker.internal:8765；跑在 compose 网络里时用服务名。
+      - DIGITAL_HUMAN_URL=${DIGITAL_HUMAN_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       # SQLite 后端（§7.3.5）的数据目录。用 Postgres 时它是空的——compose 没法
